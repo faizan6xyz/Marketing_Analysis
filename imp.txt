@@ -22,7 +22,4 @@ cloudflared tunnel --url http://localhost:5000
 
 
 
-
-
-add the reply botton in gmail and the whatsapp for the mass analytics that they replied 
-add a swithc that switches mails when the email limit hits 
+first mark all thes users as paid , then add the id to the schedular and after 1 month set the paid to 0 in the supabase

@@ -195,7 +195,7 @@ def get_instagram_posts():
             post["thumbnail_url"] = thumb_result["data"]
         else:
             post["thumbnail_url"] = None
-    return jsonify({"count": len(posts), "posts": posts})
+    return jsonify({"count": len(posts), "posts": posts}) , 200
 
 @app.route("/instagram/comments/")
 def get_instagram_comments():
