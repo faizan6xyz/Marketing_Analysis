@@ -90,18 +90,6 @@ if __name__ == "__main__":
                 content = aaaa.get_media_analytics(media_id,access_tok)
                 dpp.append_to_file(token=token, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
-            if typess == "photo":
-                content = aaaa.get_post_analytics(hourss,media_id,access_tok)
-                dpp.append_to_file(token=token, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
-            if typess == "carousel":
-                content = aaaa.get_post_analytics(hourss,media_id,access_tok)
-                dpp.append_to_file(token=token, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
-            if typess == "video":
-                content = aaaa.get_post_analytics(hourss,media_id,access_tok)
-                dpp.append_to_file(token=token, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
         time.sleep(1)
 
 

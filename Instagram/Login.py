@@ -298,7 +298,6 @@ def photo(account_id):
     except Exception as e:
         return jsonify({"success": False, "message": f"Unable to post photo: {e}"}), 500
     if id_post:
-        uploadd.scccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="photo")
         uploadd.xcccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="photo1")
         return jsonify({"success": True, "media_id": id_post}), 200
     else:
@@ -354,7 +353,6 @@ def video():
     except Exception as e:
         return jsonify({"success": False, "message": f"Unable to post video: {e}"}), 500
     if id_post:
-        uploadd.scccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="video")
         uploadd.xcccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="video1")
         return jsonify({"success": True, "media_id": id_post}), 200
     else:
@@ -400,7 +398,6 @@ def carousel():
     except Exception as e:
         return jsonify({"success": False, "message": f"Unable to post carousel: {e}"}), 500
     if id_post:
-        uploadd.scccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="carousel")
         uploadd.xcccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="carousel1")
         return jsonify({"success": True, "media_id": id_post}), 200
     else:

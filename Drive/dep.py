@@ -39,7 +39,7 @@ SUBFOLDERS = ["photos", "videos", "pdf", "documents", "Analytics" ]
 campaigns_content = "email,campaign_id,capaign_name,send_time,recieve_time,interest"
 campaigns_content1 = "phone_no,campaign_id,capaign_name,send_time,recieve_time,interest"
 campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interaction,profile_activity,time,follows,thumbnail,media_id,posted"
-campaigns_content4 = "media_id,views,likes,reach,replies,shares,navigation,follows,profile_activity,hour,story_is,thumbnail,time"
+campaigns_content4 = "media_id,views,reach,replies,shares,navigation,follows,profile_activity,hour,thumbnail,time"
 campaigns_content5 = "media_id,publish_at,impression,likes,comments,shares,clicks,engagements,profile_views,follower_gained,saves,reaction,send"
 
 filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": "{}",},
