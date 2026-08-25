@@ -99,8 +99,7 @@ def get_drive_service(token,user_id):
             return None 
     return build("drive", "v3", credentials=creds)
 
-def authenticate_request():
-    token = request.args.get("token")
+def authenticate_request(token):
     tokench = au.process(token=token)
     if not tokench["status"]:
         return None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
@@ -110,7 +109,7 @@ def authenticate_request():
     return user_id, None
 
 def authenticate_and_get_service(token):
-    user_id, err = authenticate_request()
+    user_id, err = authenticate_request(token)
     if err: return None,  err
     service = get_drive_service(token,user_id)
     if not service:
@@ -248,8 +247,7 @@ def mark_status_done(token, platform, filename, sender_ids, status_col, id_col):
     for sender_id in sender_ids:
         mask = (df[id_col] == sender_id) & (df[status_col] == "receive")
         if not mask.any():
-            results.append({"sender_id": sender_id, "rows_updated": 0,
-                             "message": f"No matching rows found for sender_id={sender_id} with status='receive'"})
+            results.append({"sender_id": sender_id, "rows_updated": 0, "message": f"No matching rows found for sender_id={sender_id} with status='receive'"})
             continue
         last_idx = df[mask].index[-1]
         df.loc[last_idx, status_col] = datetime.now(timezone.utc).isoformat()
@@ -449,7 +447,8 @@ def update_file(token, platform, filename, old_text, new_text, as_json: bool = F
 
 @app.route("/connect-drive")
 def connect_drive():
-    user_id, err = authenticate_request()
+    token = request.args.get("token")
+    user_id, err = authenticate_request(token)
     if err: return err
     flow = build_flow()
     signed_state = serializer.dumps(user_id)
