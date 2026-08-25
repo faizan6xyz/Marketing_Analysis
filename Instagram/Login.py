@@ -197,6 +197,34 @@ def get_instagram_posts():
             post["thumbnail_url"] = None
     return jsonify({"count": len(posts), "posts": posts}) , 200
 
+@app.route("/instagram/stories/")
+def get_instagram_stories():
+    account_id = request.args.get("account_id")
+    access_token, err = get_authenticated_access_token(account_id)
+    if err: return err
+    fields = "id,media_type,media_url,timestamp"
+    url = "https://graph.instagram.com/me/stories"
+    params = {"fields": fields, "access_token": access_token}
+    stories = []
+    while url:
+        resp = requests.get(url, params=params).json()
+        if "error" in resp:
+            return jsonify(resp), 400
+        stories.extend(resp.get("data", []))
+        url = resp.get("paging", {}).get("next")
+        params = None
+    for story in stories:
+        try:
+            thumb_result = uploadd.get_media_thumbnail(access_token=access_token, media_id=story["id"])
+        except Exception as e:
+            story["thumbnail_url"] = None
+            continue
+        if thumb_result["success"]:
+            story["thumbnail_url"] = thumb_result["data"]
+        else:
+            story["thumbnail_url"] = None
+    return jsonify({"count": len(stories), "stories": stories}), 200
+
 @app.route("/instagram/comments/")
 def get_instagram_comments():
     account_id = request.args.get("account_id")
