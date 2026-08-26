@@ -47,9 +47,9 @@ filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": 
           "Instagram": {"workflowmessage.json": "{}","workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
           "Linkedln": {"workflowmessage.json": "{}","workflowcomment.json": "{}", "postanalysis.txt": campaigns_content5 },}
 
-def save_tokens(token, user_id, access_token, refresh_token, expiry):
+def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
-    dbimp.insert_rows(token,table_name, {"id" : user_id , "Timestamp":timestamp ,"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token" : fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.encode()).decode(), "Connected" : 1 , "Scopes" : SCOPES})
+    dbimp.insert_rows(token,table_name, {"id" : user_id , "Timestamp":timestamp ,"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token" : fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.encode()).decode(), "Connected" : 1 , "Scopes" : SCOPES,"Email":mail})
     
 
 def Update_token(token , user_id, access_token, refresh_token, expiry):
@@ -473,7 +473,9 @@ def oauth_callback():
     expire = creds.expiry.isoformat()
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    payload = {"user_id": user_id,"access": creds.token,"expire": expire,"refresh": creds.refresh_token ,"token":token}
+    service = build('gmail', 'v1', credentials=creds)
+    email_addr = service.users().getProfile(userId='me').execute()['emailAddress']
+    payload = {"user_id": user_id,"access": creds.token,"expire": expire,"refresh": creds.refresh_token ,"token":token,"email":email_addr}
     signed_payload = serializer.dumps(payload)
     resp = requests.post(f"{BASE_URL}/auth/drive/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
@@ -488,6 +490,7 @@ def oauth_callbac():
     token = data.get("token")
     user_id = data.get("user_id")
     expire = data.get("expire")
+    mail = data.get("email")
     refresh = data.get("refresh")
     access = data.get("access")
     if not token or not user_id or not expire or not access or not refresh :
@@ -499,7 +502,7 @@ def oauth_callbac():
     except ValueError:
         return jsonify({"status": False, "error": "invalid expire format"}), 400
     try:
-        save_tokens(token, user_id, access, refresh, expire)
+        save_tokens(token, user_id, access, refresh, expire , mail)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
     try:

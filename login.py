@@ -13,6 +13,11 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
 
+def all_values(rows, key):
+    if not rows:
+        return []
+    return [row.get(key) for row in rows]
+
 @app.route("/login", methods=["POST"])
 def login():
     body = request.get_json(silent=True) or {}
@@ -93,9 +98,34 @@ def check_status():
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     try:
-        data = dbimp.select_rows(tokench["toke"],"users", select="user_id", filters={"user_id": user_id})
+        data = dbimp.select_rows(tokench["token"],"users", select="user_id", filters={"user_id": user_id})
     except Exception:
         return jsonify({"status": False, "reason": "unable to check db"}), 401
     if not data:
         return jsonify({"status": False, "reason": "user not found"}), 404
     return jsonify({"status": True, "reason": "verified"}), 200
+
+@app.route("/vrify", methods=["GET"])
+def check_accounts():
+    token = request.args.get("token")
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return jsonify({"status": False, "reason": tokench["reason"]}), 401
+    user_id = tokench["user_id"]
+    if not user_id:
+        return jsonify({"status": False, "reason": "Invalid user_id"}), 401
+    try:
+        data0 = dbimp.select_rows(tokench["token"], "Instagram", select="Account_id", filters={"id": user_id})
+        data1 = dbimp.select_rows(tokench["token"], "Gmail", select="Email", filters={"id": user_id})
+        data2 = dbimp.select_rows(tokench["token"], "Drive", select="Email", filters={"id": user_id})
+        data4 = dbimp.select_rows(tokench["token"], "Whatsapp", select="Account_id", filters={"id": user_id})
+        data5 = dbimp.select_rows(tokench["token"], "Linkedin", select="Account_id", filters={"id": user_id})
+    except Exception:
+        app.logger.exception("Failed to fetch account data for user %s", user_id)
+        return jsonify({"status": False, "reason": "unable to check db"}), 500
+    merged = {"instagram_account_ids": all_values(data0, "Account_id"),
+            "gmail_emails": all_values(data1, "Email"),
+            "drive_emails": all_values(data2, "Email"),
+            "whatsapp_account_ids": all_values(data4, "Account_id"),
+            "linkedin_account_ids": all_values(data5, "Account_id"),  }
+    return jsonify({"status": True, "data": merged}), 200
