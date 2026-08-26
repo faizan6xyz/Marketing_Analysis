@@ -15,12 +15,12 @@ DB = "users.db"
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Set SUPABASE_URL and SUPABASE_KEY in your environment or .env file")
 TABLE_NAME = "users"
-_session_cache: dict[str, Any] = {}
+_session_cache: dict[str, Any] = {}  # its a plain Python dictionary that avoids re-authenticating with Supabase on every single database call.
 
 def _is_session_valid(session) -> bool:
     if session is None:
         return False
-    return session.expires_at is not None and session.expires_at > datetime.now(timezone.utc).timestamp() + 30
+    return session.expires_at is not None and session.expires_at > datetime.now(timezone.utc).timestamp() + 10
 
 def get_authenticated_client(token: str) -> Client:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
