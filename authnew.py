@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 import random
 import os
 import database.UserDB as dbimp
-SECRET_KEY = os.environ.get("token_secret")  
+SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
 
 def random_text(limit):
     password = [ secrets.choice(string.ascii_uppercase), secrets.choice(string.ascii_lowercase), secrets.choice(string.digits),]
@@ -46,10 +46,6 @@ def process(token):
     expected_sign = hmac.new(SECRET_KEY, f"{user_id}.{time}".encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected_sign, sign):
         return {"status" : False, "reason" : "invalid signature"}
-    toks = dbimp.select_rows(token, "users", select="Token", filters={"user_id":user_id})
-    tok = toks[0] if toks and toks[0] else None
-    if not tok or tok != token :
-        return {"status" : False , "reason" : "token mismatch"}
     if datetime.now(timezone.utc) > datetime.fromisoformat(time) :
         time = datetime.now(timezone.utc) + timedelta(hours=1)
         token_new = jsonspoof(user_id=user_id , timestamp=time)
@@ -71,7 +67,8 @@ def paidcheck(token , user_id):  # this will be used in the analytics and locks 
     return True
 
 
-time = datetime.now(timezone.utc) + timedelta(hours=1)
-x = '451d8b58-4575-4b7b-9158-cb39dc3aed1e'
-print(jsonspoof(user_id=x,timestamp=time))
-print(jp(jsonspoof(user_id=x,timestamp=time)))
+# time = datetime.now(timezone.utc) + timedelta(hours=1)
+# x = '451d8b58-4575-4b7b-9158-cb39dc3aed1e'
+# print(jsonspoof(user_id=x,timestamp=time))
+# print(jp(jsonspoof(user_id=x,timestamp=time)))
+# print(process("NDUxZDhiNTgtNDU3NS00YjdiLTkxNTgtY2IzOWRjM2FlZDFl.MjAyNi0wOC0yNiAxMTozMDo1Ny42ODYwNzMrMDA6MDA=.N2E0YzU2NzkwN2Y0ZjMwZWMzZDhmMTNhZmY5MzFkOTVhMjIzOWM1MmI5OGFkYTljYjVmMzFjZTM1YzUxZGI1ZA=="))

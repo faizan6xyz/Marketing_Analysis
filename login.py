@@ -110,7 +110,7 @@ def check_accounts():
     token = request.args.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
-        return jsonify({"status": False, "reason": tokench["reason"]}), 401
+        return jsonify({"status": False, "reason": tokench["reason"]}), 402
     user_id = tokench["user_id"]
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
@@ -129,3 +129,7 @@ def check_accounts():
             "whatsapp_account_ids": all_values(data4, "Account_id"),
             "linkedin_account_ids": all_values(data5, "Account_id"),  }
     return jsonify({"status": True, "data": merged}), 200
+
+
+if __name__ == "__main__":
+    app.run(port=5000, debug=True)
