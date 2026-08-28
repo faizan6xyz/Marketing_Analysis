@@ -314,52 +314,69 @@ def story():
     return jsonify({"success": overall_success, "results": results}), status_code
 
 @app.route("/instagram/upload/photo", methods=["POST"])
-def photo(account_id):
+def photo():
     data = request.get_json(silent=True) or {}
-    account_id = data.get("account_id")
     media_url = data.get("media_url")
     media_size = data.get("media_size")
     publish = data.get("publish")
     caption = data.get("caption", "")
-    timee = data.get("time") or {}
+    timee_raw = data.get("time") or {}
     token = data.get("token")
-    tokench = au.process(token)
-    access_token, err = get_authenticated_access_token(account_id)
-    if err: return err
-    if not media_url or not media_size:
+    usernames = data.get("username")
+    if not isinstance(usernames, list):
+        usernames = [usernames] if usernames else []
+    if not usernames:
+        return jsonify({"error": "at least one username is required"}), 400
+    if not media_url or media_size is None:
         return jsonify({"error": "url and media size is required"}), 400
-    media_size = _coerce_int( media_size)
+    tokench = au.process(token)
+    media_size = _coerce_int(media_size)
     if media_size is None:
         return jsonify({"success": False, "message": "Unable to post photo. due media size int value"}), 400
     try:
-        _validate_int( media_size)
+        _validate_int(media_size)
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee)
+    timee = parse_datetime(timee_raw)
     if timee is None:
-        return {"error": "invalid or missing date/time"}, 400
-    now = datetime.now(timezone.utc) 
-    lb = datetime.now(timezone.utc) + timedelta(seconds=180)
-    up = datetime.now(timezone.utc) + timedelta(hours=23)
-    if timee < lb  or timee < now or timee > up :
-        return {"error": "invalid time for the posting"}, 400
-    try:
-        id_post = uploadd.post_photo( access_token=access_token, ig_user_id=account_id, image_url=media_url, caption=caption, media_size=media_size, publish=publish_now,timmmm=timee)
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Unable to post photo: {e}"}), 500
-    if id_post:
-        uploadd.xcccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="photo1")
-        return jsonify({"success": True, "media_id": id_post}), 200
-    else:
-        return jsonify({"success": False, "message": "Unable to post photo."}), 500
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
+    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["Username"]: row for row in rows}
+    results = []
+    for user in usernames:
+        row = rows_by_username.get(user)
+        if row is None:
+            results.append({"username": user, "success": False, "message": "account not found"})
+            continue
+        account_id = row["Account_id"]
+        access_token, err = get_authenticated_access_token(account_id)
+        if err:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": err})
+            continue
+        try:
+            id_post = uploadd.post_photo(access_token=access_token,ig_user_id=account_id,image_url=media_url,caption=caption,media_size=media_size,publish=publish_now,timmmm=timee,)
+        except Exception as e:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post photo: {e}"})
+            continue
+        if id_post:
+            uploadd.xcccc(user_id=tokench["user_id"], access_token=access_token, media_id=id_post, token=tokench["token"], typee="photo1")
+            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
+        else:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post photo."})
+    overall_success = any(r["success"] for r in results)
+    return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
 @app.route("/instagram/upload/video", methods=["POST"])
 def video():
     data = request.get_json(silent=True) or {}
     media_url = data.get("media_url")
-    account_id = data.get("account_id")
-    cover_url = data.get("cover_url")  # optional now, only valid for reels
+    cover_url = data.get("cover_url")
     media_size = data.get("media_size")
     publish = data.get("publish")
     caption = data.get("caption", "")
@@ -367,92 +384,129 @@ def video():
     height = data.get("height")
     width = data.get("width")
     duration = data.get("duration")
-    timee = data.get("time") or {}
+    timee_raw = data.get("time") or {}
     token = data.get("token")
-    tokench = au.process(token)
-    access_token, err = get_authenticated_access_token(account_id)
-    if err: return err
-    if not media_url or not media_size:
+    usernames = data.get("username")
+    if not isinstance(usernames, list):
+        usernames = [usernames] if usernames else []
+    if not usernames:
+        return jsonify({"error": "at least one username is required"}), 400
+    if not media_url or media_size is None:
         return jsonify({"error": "url and media size is required"}), 400
-    media_size = _coerce_int( media_size)
-    duration = _coerce_int( duration)
-    width = _coerce_int( width)
-    height = _coerce_int( height)
+    tokench = au.process(token)
+    media_size = _coerce_int(media_size)
+    duration = _coerce_int(duration)
+    width = _coerce_int(width)
+    height = _coerce_int(height)
     if None in (media_size, duration, width, height):
         return jsonify({"success": False, "message": "Unable to post video. due to media size / duration / width / height is not int"}), 400
     try:
-        _validate_int( media_size)
-        _validate_int( duration)
-        _validate_int( width)
-        _validate_int( height)
+        _validate_int(media_size)
+        _validate_int(duration)
+        _validate_int(width)
+        _validate_int(height)
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee)
+    timee = parse_datetime(timee_raw)
     if timee is None:
-        return {"error": "invalid or missing date/time"}, 400
-    now = datetime.now(timezone.utc) 
-    lb = datetime.now(timezone.utc) + timedelta(seconds=180)
-    up = datetime.now(timezone.utc) + timedelta(hours=23)
-    if timee < lb  or timee < now or timee > up :
-        return {"error": "invalid time for the posting"}, 400
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
     as_reeel = str(as_reel).strip().lower() == "true"
     if cover_url and not as_reeel:
         return jsonify({"success": False, "message": "cover_url is only supported when as_reel is true"}), 400
-    try:
-        id_post = uploadd.post_video( access_token=access_token, ig_user_id=account_id, video_url=media_url, media_size=media_size, caption=caption, publish=publish_now, cover_url=cover_url if as_reeel else None, as_reel=as_reeel, media_duration=duration, width=width, height=height,timmmm=timee)
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Unable to post video: {e}"}), 500
-    if id_post:
-        uploadd.xcccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="video1")
-        return jsonify({"success": True, "media_id": id_post}), 200
-    else:
-        return jsonify({"success": False, "message": "Unable to post video."}), 500
- 
+    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["Username"]: row for row in rows}
+    results = []
+    for user in usernames:
+        row = rows_by_username.get(user)
+        if row is None:
+            results.append({"username": user, "success": False, "message": "account not found"})
+            continue
+        account_id = row["Account_id"]
+        access_token, err = get_authenticated_access_token(account_id)
+        if err:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": err})
+            continue
+        try:
+            id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,cover_url=cover_url if as_reeel else None, as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,)
+        except Exception as e:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post video: {e}"})
+            continue
+        if id_post:
+            uploadd.xcccc(user_id=tokench["user_id"], access_token=access_token, media_id=id_post, token=tokench["token"], typee="video1")
+            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
+        else:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post video."})
+    overall_success = any(r["success"] for r in results)
+    return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
+
 @app.route("/instagram/upload/carousel", methods=["POST"])
 def carousel():
     data = request.get_json(silent=True) or {}
     publish = data.get("publish")
-    account_id = data.get("account_id")
     caption = data.get("caption", "")
     media_size = data.get("media_size", [])
     media_duration = data.get("media_duration", [])
     media_urls = data.get("media_urls", [])
     is_video = data.get("is_video", [])
-    timee = data.get("time") or {}
+    timee_raw = data.get("time") or {}
     token = data.get("token")
-    tokench = au.process(token)
-    access_token, err = get_authenticated_access_token(account_id)
-    if err: return err
+    usernames = data.get("username")
+    if not isinstance(usernames, list):
+        usernames = [usernames] if usernames else []
+    if not usernames:
+        return jsonify({"error": "at least one username is required"}), 400
     if not media_urls or not is_video or not media_size or not media_duration:
         return jsonify({"success": False, "message": "media_urls, is_video, media_size, and media_duration are all required"}), 400
     if not (len(media_urls) == len(is_video) == len(media_size) == len(media_duration)):
         return jsonify({"success": False, "message": "media_urls, is_video, media_size, and media_duration must all be the same length"}), 400
+    tokench = au.process(token)
     is_videoo = [str(p).strip().lower() == "true" for p in is_video]
-    media_sizee = [_coerce_int( p) for p in media_size]
+    media_sizee = [_coerce_int(p) for p in media_size]
     if any(v is None for v in media_sizee):
         return jsonify({"success": False, "message": "one or more media_size values are not valid ints"}), 400
-    media_durationn = [_coerce_int( p) for p in media_duration]
+    media_durationn = [_coerce_int(p) for p in media_duration]
     if any(v is None for v in media_durationn):
         return jsonify({"success": False, "message": "one or more media_duration values are not valid ints"}), 400
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee)
+    timee = parse_datetime(timee_raw)
     if timee is None:
-        return {"error": "invalid or missing date/time"}, 400
-    now = datetime.now(timezone.utc) 
-    lb = datetime.now(timezone.utc) + timedelta(seconds=180)
-    up = datetime.now(timezone.utc) + timedelta(hours=23)
-    if timee < lb  or timee < now or timee > up :
-        return {"error": "invalid time for the posting"}, 400
-    try:
-        id_post = uploadd.post_carousel( access_token=access_token, ig_user_id=account_id, is_video=is_videoo, media_size=media_sizee, media_duration=media_durationn, media_urls=media_urls, publish=publish_now, caption=caption, timmmm=timee)
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Unable to post carousel: {e}"}), 500
-    if id_post:
-        uploadd.xcccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="carousel1")
-        return jsonify({"success": True, "media_id": id_post}), 200
-    else:
-        return jsonify({"success": False, "message": "Unable to post carousel."}), 500
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
+    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["Username"]: row for row in rows}
+    results = []
+    for user in usernames:
+        row = rows_by_username.get(user)
+        if row is None:
+            results.append({"username": user, "success": False, "message": "account not found"})
+            continue
+        account_id = row["Account_id"]
+        access_token, err = get_authenticated_access_token(account_id)
+        if err:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": err})
+            continue
+        try:
+            id_post = uploadd.post_carousel(access_token=access_token,ig_user_id=account_id,is_video=is_videoo,media_size=media_sizee,media_duration=media_durationn,media_urls=media_urls,publish=publish_now,caption=caption,timmmm=timee, )
+        except Exception as e:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post carousel: {e}"})
+            continue
+        if id_post:
+            uploadd.xcccc(user_id=tokench["user_id"], access_token=access_token, media_id=id_post, token=tokench["token"], typee="carousel1")
+            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
+        else:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post carousel."})
+    overall_success = any(r["success"] for r in results)
+    return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
 @app.route("/instagram/auto", methods=["POST"])
 def get_thumbnail_auto():
