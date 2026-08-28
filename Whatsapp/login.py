@@ -17,7 +17,8 @@ STATE_MAX_AGE = 600  # seconds
 
 @app.route("/auth/whatsapp/login")
 def whatsapp_login():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"] :
         return jsonify({"status": "failed" , "reason": tokench["reason"]})

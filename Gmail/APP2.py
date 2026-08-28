@@ -58,7 +58,8 @@ def is_allowed_file(filename):
 
 @app.route("/connect-gmail")
 def connect_gmail():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     if not token :
         return jsonify({"status":False}) , 403
     tokench = au.process(token=token)
@@ -119,7 +120,8 @@ def oauth_callbac():
 @app.route('/messages', methods=['GET'])
 @limiter.limit("30 per minute")
 def list_messages():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -144,7 +146,8 @@ def list_messages():
 @app.route('/filters', methods=['GET'])
 @limiter.limit("30 per minute")
 def list_filters():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
 
     if not user_id:
@@ -162,7 +165,8 @@ def list_filters():
 @app.route('/filters/create', methods=['POST'])
 @limiter.limit("15 per minute")
 def create_filter():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
 
     if not user_id:
@@ -188,7 +192,8 @@ def create_filter():
 @app.route('/labels', methods=['GET'])
 @limiter.limit("30 per minute")
 def list_labels():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -205,7 +210,8 @@ def list_labels():
 @app.route('/labels/create', methods=['POST'])
 @limiter.limit("15 per minute")
 def create_label():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
 
     if not user_id:
@@ -235,7 +241,8 @@ def create_label():
 @limiter.limit("60 per minute")
 def mark_as_read():
     message_ids = _get_id_list("message_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -265,7 +272,8 @@ def mark_as_read():
 @limiter.limit("60 per minute")
 def mark_as_unread():
     message_ids = _get_id_list("message_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -295,7 +303,8 @@ def mark_as_unread():
 @limiter.limit("15 per minute")
 def delete_filter():
     filter_ids = _get_id_list("filter_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -326,7 +335,8 @@ def delete_filter():
 @limiter.limit("30 per minute")
 def get_label_count():
     label_ids = _get_id_list("label_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -354,7 +364,8 @@ def get_label_count():
 @limiter.limit("30 per minute")
 def get_label_messages():
     label_ids = _get_id_list("label_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400

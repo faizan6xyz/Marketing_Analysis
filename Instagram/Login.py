@@ -67,7 +67,8 @@ def refresh_token(token, user_id, access_token):
     return access_token
 
 def get_authenticated_access_token(account_id):
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
@@ -91,7 +92,8 @@ def get_authenticated_access_token(account_id):
 
 @app.route("/auth/instagram/login")
 def instagram_login():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 200

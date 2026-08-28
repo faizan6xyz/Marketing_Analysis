@@ -265,7 +265,8 @@ limiter = Limiter(get_remote_address, app=app, storage_uri=RATE_LIMIT_STORAGE_UR
 def seed_cart():
     body = request.get_json(silent=True) or {}
     cart_id = body.get("cart_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"] :
         return jsonify({"status": "failed" , "reason": tokench["reason"]})
@@ -283,7 +284,8 @@ def seed_cart():
 def create_payment():
     body = request.get_json(silent=True) or {}
     cart_id = body.get("cart_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"] :
         return jsonify({"status": "failed" , "reason": tokench["reason"]})
@@ -343,7 +345,8 @@ def create_payment():
 @app.route("/api/payment/status/<order_id>", methods=["GET"])
 @limiter.limit("15 per minute")
 def payment_status(order_id):
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"] :
         return jsonify({"status": "failed" , "reason": tokench["reason"]})
@@ -370,7 +373,8 @@ def payment_status(order_id):
 @app.route("/api/payment/capture/<order_id>", methods=["POST"])
 @limiter.limit("10 per minute")
 def capture_payment(order_id):
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"] :
         return jsonify({"status": "failed" , "reason": tokench["reason"]})

@@ -447,7 +447,8 @@ def update_file(token, platform, filename, old_text, new_text, as_json: bool = F
 
 @app.route("/connect-drive")
 def connect_drive():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     user_id, err = authenticate_request(token)
     if err: return err
     flow = build_flow()
@@ -529,6 +530,7 @@ def list_files():
             break
     return jsonify({ "count": len(all_files), "files": all_files })
 
+@app.route("/upload", methods=["POST"])
 def upload_file():
     token= request.args.get("token")
     service, err = authenticate_and_get_service(token)
@@ -546,10 +548,10 @@ def upload_file():
         make_public = True
         file_metadata = {"name": uploaded_file.filename}
         if platform or subfolder:
-            if platform not in PLATFORM_FOLDERS:
-                return jsonify({"error": f"invalid platform, must be one of {PLATFORM_FOLDERS}"}), 400
-            if subfolder not in SUBFOLDERS:
-                return jsonify({"error": f"invalid subfolder, must be one of {SUBFOLDERS}"}), 400
+            if not platform or platform not in PLATFORM_FOLDERS:
+                return jsonify({"error": f"platform required, must be one of {PLATFORM_FOLDERS}"}), 400
+            if not subfolder or subfolder not in SUBFOLDERS:
+                return jsonify({"error": f"subfolder required, must be one of {SUBFOLDERS}"}), 400
             platform_id, _ = get_or_create_folder(service, platform)
             sub_id, _ = get_or_create_folder(service, subfolder, parent_id=platform_id)
             file_metadata["parents"] = [sub_id]
@@ -608,7 +610,8 @@ def read_csv_from_drive(file_id):
     return jsonify({"CSV": df.to_dict(orient="records")}), 200  
 
 def append_csv_to_drive(file_id):
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     if not file_id:
         return jsonify({"error": "File_id is required"}), 500
     service, err = authenticate_and_get_service(token)

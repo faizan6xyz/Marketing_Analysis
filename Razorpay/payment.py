@@ -102,7 +102,8 @@ def checkout_page():
 def create_payment():
     body = request.get_json(silent=True) or {}
     plan_id = body.get("plan_id")
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 401
@@ -158,7 +159,8 @@ def create_payment():
 @limiter.limit("30 per minute")
 def verify_payment():
     body = request.get_json(silent=True) or {}
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 401
@@ -195,7 +197,8 @@ def verify_payment():
 @app.route("/api/payment/status/<payment_id>", methods=["GET"])
 @limiter.limit("30 per minute")
 def payment_status(payment_id):
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 401
@@ -221,7 +224,8 @@ def payment_status(payment_id):
 @app.route("/api/payment/capture/<payment_id>", methods=["POST"])
 @limiter.limit("10 per minute")
 def capture_payment(payment_id):
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 401

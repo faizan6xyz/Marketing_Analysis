@@ -90,7 +90,8 @@ def details():
 
 @app.route("/check", methods=["GET"])
 def check_status():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": False, "reason": tokench["reason"]}), 401
@@ -107,7 +108,8 @@ def check_status():
 
 @app.route("/vrify", methods=["GET"])
 def check_accounts():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": False, "reason": tokench["reason"]}), 402
@@ -115,11 +117,11 @@ def check_accounts():
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     try:
-        data0 = dbimp.select_rows(tokench["token"], "Instagram", select="Account_id", filters={"id": user_id})
+        data0 = dbimp.select_rows(tokench["token"], "Instagram", select="Username", filters={"id": user_id})
         data1 = dbimp.select_rows(tokench["token"], "Gmail", select="Email", filters={"id": user_id})
         data2 = dbimp.select_rows(tokench["token"], "Drive", select="Email", filters={"id": user_id})
-        data4 = dbimp.select_rows(tokench["token"], "Whatsapp", select="Account_id", filters={"id": user_id})
-        data5 = dbimp.select_rows(tokench["token"], "Linkedin", select="Account_id", filters={"id": user_id})
+        data4 = dbimp.select_rows(tokench["token"], "Whatsapp", select="Phone_no", filters={"id": user_id})
+        data5 = dbimp.select_rows(tokench["token"], "Linkedin", select="Username", filters={"id": user_id})
     except Exception:
         app.logger.exception("Failed to fetch account data for user %s", user_id)
         return jsonify({"status": False, "reason": "unable to check db"}), 500
