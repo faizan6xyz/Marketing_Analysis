@@ -517,7 +517,8 @@ def oauth_callbac():
     return jsonify({"status":True,"folders": structure,"filename":filename}),200
     
 def list_files():
-    token= request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token= body.get("token")
     service, err = authenticate_and_get_service(token)
     if err: return err
     all_files = []
@@ -532,7 +533,8 @@ def list_files():
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    token= request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token= body.get("token")
     service, err = authenticate_and_get_service(token)
     if err: return err
     if "file" not in request.files:
@@ -542,9 +544,9 @@ def upload_file():
         uploaded_file.save(tmp.name)
         tmp_path = tmp.name
     try:
-        platform = request.args.get("platform")
-        subfolder = request.args.get("subfolder")
-        parent_id = request.args.get("parent_id")
+        platform = body.get("platform")
+        subfolder = body.get("subfolder")
+        parent_id = body.get("parent_id")
         make_public = True
         file_metadata = {"name": uploaded_file.filename}
         if platform or subfolder:
@@ -569,10 +571,11 @@ def upload_file():
     return jsonify({"file_id": file_id, "name": created_file.get("name"),"mime_type": created_file.get("mimeType"), "url": created_file.get("webViewLink"),"download_url": created_file.get("webContentLink"),  "public": make_public,})   # download url is the media url to pass
 
 def delete_file():
-    token= request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token= body.get("token")
     service, err = authenticate_and_get_service(token)
     if err: return err
-    file_id = request.args.get("file_id")
+    file_id = body.get("file_id")
     if not file_id:
         return jsonify({"error": "file_id required"}), 400
     try:
@@ -585,7 +588,8 @@ def delete_file():
     return jsonify({ "file_id": file_id, "status": "deleted"})
 
 def read_csv_from_drive(file_id):
-    token= request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token= body.get("token")
     if not file_id :
         return jsonify({"error" : "File_id is required "}) , 500
     service, err = authenticate_and_get_service(token)
@@ -658,10 +662,11 @@ def append_csv_to_drive(file_id):
     return jsonify({"status": "ok","rows_added": len(new_df),"total_rows": len(combined_df)}), 200
 
 def get_drive_file_metadata():
-    token= request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token= body.get("token")
     service, err = authenticate_and_get_service(token)
     if err: return err
-    file_id = request.args.get("file_id")
+    file_id = body.get("file_id")
     if not file_id:
         return jsonify({"error": "file_id required"}), 400
     try:

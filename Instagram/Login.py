@@ -173,7 +173,8 @@ def dataget():
 
 @app.route("/instagram/posts/")
 def get_instagram_posts():
-    account_id = request.args.get("account_id")
+    body = request.get_json(silent=True) or {}
+    account_id = body.get("account_id")
     access_token, err = get_authenticated_access_token(account_id)
     if err: return err
     fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"
@@ -201,7 +202,8 @@ def get_instagram_posts():
 
 @app.route("/instagram/stories/")
 def get_instagram_stories():
-    account_id = request.args.get("account_id")
+    body = request.get_json(silent=True) or {}
+    account_id = body.get("account_id")
     access_token, err = get_authenticated_access_token(account_id)
     if err: return err
     fields = "id,media_type,media_url,timestamp"
@@ -229,8 +231,9 @@ def get_instagram_stories():
 
 @app.route("/instagram/comments/")
 def get_instagram_comments():
-    account_id = request.args.get("account_id")
-    media_id = request.args.get("media_id")
+    body = request.get_json(silent=True) or {}
+    account_id = body.get("account_id")
+    media_id = body.get("media_id")
     access_token, err = get_authenticated_access_token(account_id)
     if err: return err
     fields = "id,text,username,timestamp,like_count"
@@ -435,8 +438,9 @@ def carousel():
 
 @app.route("/instagram/auto", methods=["POST"])
 def get_thumbnail_auto():
-    account_id = request.args.get("account_id")
-    media_ids = request.args.getlist("media_id")
+    body = request.get_json(silent=True) or {}
+    account_id = body.get("account_id")
+    media_ids = body.get("media_id")
     if len(media_ids) == 1 and "," in media_ids[0]:
         media_ids = [m.strip() for m in media_ids[0].split(",") if m.strip()]
     access_token, err = get_authenticated_access_token(account_id)
@@ -460,9 +464,10 @@ def get_thumbnail_auto():
 
 @app.route("/instagram/insight", methods=["POST"])
 def insight():
-    is_story = request.args.get("is_story")
-    media_id = request.args.get("media_id")
-    account_id = request.args.get("account_id")
+    body = request.get_json(silent=True) or {}
+    is_story = body.get("is_story")
+    media_id = body.get("media_id")
+    account_id = body.get("account_id")
     access_token, err = get_authenticated_access_token(account_id)
     if err: return err
     is_story = str(is_story).strip().lower() == "true" if is_story else False
@@ -517,7 +522,8 @@ def send_instagram_message():
 
 @app.route("/instagram/followers")
 def get_followers_count_route():
-    account_id = request.args.get("account_id")
+    body = request.get_json(silent=True) or {}
+    account_id = body.get("account_id")
     access_token, err = get_authenticated_access_token(account_id)
     if err: return err
     result = uploadd.get_follower_count(account_id, access_token)

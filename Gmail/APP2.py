@@ -42,12 +42,6 @@ def get_valid_user_id(token):
         return None, None
     return user_id, token
 
-def _get_id_list(param_name):
-    ids = request.args.getlist(param_name)
-    if len(ids) == 1 and "," in ids[0]:
-        ids = [i.strip() for i in ids[0].split(",") if i.strip()]
-    return [i for i in ids if i]
-
 def safe_error(e, status=400):
     logger.exception("request failed")
     return jsonify({"error": "request failed"}), status
@@ -127,13 +121,13 @@ def list_messages():
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
         return jsonify({"status":False}) , 403
-    query = request.args.get('q', 'is:unread')[:200]
+    query = body.get('q', 'is:unread')[:200]
     try:
-        max_results = int(request.args.get('max_results', 10))
+        max_results = int(body.get('max_results', 10))
     except ValueError:
         return jsonify({"error": "'max_results' must be an integer"}), 400
     max_results = max(1, min(max_results, 100))
-    all_pages = request.args.get('all_pages', 'false').lower() == 'true'
+    all_pages = body.get('all_pages', 'false').lower() == 'true'
     try:
         service = gc.get_service(token=token,user_id=user_id)
         if not service:
@@ -240,9 +234,9 @@ def create_label():
 @app.route('/messages/read', methods=['POST'])
 @limiter.limit("60 per minute")
 def mark_as_read():
-    message_ids = _get_id_list("message_id")
     body = request.get_json(silent=True) or {}
     token = body.get("token")
+    message_ids = body.get("message_id")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -271,9 +265,9 @@ def mark_as_read():
 @app.route('/messages/unread', methods=['POST'])
 @limiter.limit("60 per minute")
 def mark_as_unread():
-    message_ids = _get_id_list("message_id")
     body = request.get_json(silent=True) or {}
     token = body.get("token")
+    message_ids = body.get("message_id")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -302,9 +296,9 @@ def mark_as_unread():
 @app.route('/filters/delete', methods=['DELETE'])
 @limiter.limit("15 per minute")
 def delete_filter():
-    filter_ids = _get_id_list("filter_id")
     body = request.get_json(silent=True) or {}
     token = body.get("token")
+    filter_ids = body.get("filter_id")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -334,9 +328,9 @@ def delete_filter():
 @app.route('/labels/count', methods=['GET'])
 @limiter.limit("30 per minute")
 def get_label_count():
-    label_ids = _get_id_list("label_id")
     body = request.get_json(silent=True) or {}
     token = body.get("token")
+    label_ids = body.get("label_id")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -363,9 +357,9 @@ def get_label_count():
 @app.route('/labels/messages', methods=['GET'])
 @limiter.limit("30 per minute")
 def get_label_messages():
-    label_ids = _get_id_list("label_id")
     body = request.get_json(silent=True) or {}
     token = body.get("token")
+    label_ids = body.get("label_id")
     user_id, token = get_valid_user_id(token)
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -373,10 +367,10 @@ def get_label_messages():
         return jsonify({"status": False}), 403
     if not label_ids:
         return jsonify({"error": "at least one valid 'label_id' is required"}), 400
-    max_results = request.args.get("max_results", default=20, type=int)
+    max_results = body.get("max_results", default=20, type=int)
     max_results = max(1, min(max_results, 100))
-    page_token = request.args.get("page_token")
-    include_details = request.args.get("include_details", "false").lower() == "true"
+    page_token = body.get("page_token")
+    include_details = body.get("include_details", "false").lower() == "true"
     try:
         service = gc.get_service(token=token, user_id=user_id)
         if not service:
