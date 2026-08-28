@@ -252,48 +252,66 @@ def get_instagram_comments():
 @app.route("/instagram/upload/story", methods=["POST"])
 def story():
     data = request.get_json(silent=True) or {}
-    account_id = data.get("account_id")
     media_url = data.get("media_url")
     is_video = data.get("is_video")
     media_size = data.get("media_size")
     publish = data.get("publish")
     duration = data.get("duration")
-    timee = data.get("time") or {}
+    usernames = data.get("username")  # expected: list of usernames
+    timee_raw = data.get("time") or {}
     token = data.get("token")
-    tokench = au.process(token)
-    access_token, err = get_authenticated_access_token(account_id)
-    if err: return err
-    if not media_url or not media_size or not token:
+    if not isinstance(usernames, list):
+        usernames = [usernames] if usernames else []
+    if not usernames:
+        return jsonify({"error": "at least one username is required"}), 400
+    if not media_url or media_size is None or not token:
         return jsonify({"error": "url and media size is required"}), 400
-    media_size = _coerce_int( media_size)
-    duration = _coerce_int( duration)
+    tokench = au.process(token)
+    media_size = _coerce_int(media_size)
+    duration = _coerce_int(duration)
     if media_size is None or duration is None:
         return jsonify({"success": False, "message": "Unable to post story. due to duration / media size int value"}), 400
     try:
-        _validate_int( media_size)
-        _validate_int( duration)
+        _validate_int(media_size)
+        _validate_int(duration)
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
     video_type = str(is_video).strip().lower() == "true"
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee)
+    timee = parse_datetime(timee_raw)
     if timee is None:
-        return {"error": "invalid type or missing date/time"}, 400
-    now = datetime.now(timezone.utc) 
-    lb = datetime.now(timezone.utc) + timedelta(seconds=180)
-    up = datetime.now(timezone.utc) + timedelta(hours=23)
-    if timee < lb  or timee < now or timee > up :
-        return {"error": "invalid time for the posting"}, 400
-    try:
-        id_post = uploadd.post_story( access_token=access_token, ig_user_id=account_id, media_size=media_size, media_url=media_url, publish=publish_now, is_video=video_type, media_duration=duration,timmmm=timee )
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Unable to post story: {e}"}), 500
-    if id_post:
-        uploadd.scccc(user_id=tokench["user_id"],access_token=access_token,media_id=id_post,token=tokench["token"],typee="story")
-        return jsonify({"success": True, "media_id": id_post}), 200
-    else:
-        return jsonify({"success": False, "message": "Unable to post story."}), 500
-    # add a scheduler for the futrue data fetching every hour or data in post
+        return jsonify({"error": "invalid type or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
+    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["Username"]: row for row in rows}
+    results = []
+    for user in usernames:
+        row = rows_by_username.get(user)
+        if row is None:
+            results.append({"username": user, "success": False, "message": "account not found"})
+            continue
+        account_id = row["Account_id"]
+        access_token, err = get_authenticated_access_token(account_id)
+        if err:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": err})
+            continue
+        try:
+            id_post = uploadd.post_story(access_token=access_token,ig_user_id=account_id,media_size=media_size,media_url=media_url,publish=publish_now,is_video=video_type,media_duration=duration,timmmm=timee,)
+        except Exception as e:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post story: {e}"})
+            continue
+        if id_post:
+            uploadd.scccc(user_id=tokench["user_id"], access_token=access_token,media_id=id_post,token=tokench["token"],typee="story",)
+            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
+        else:
+            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post story."})
+    overall_success = any(r["success"] for r in results)
+    status_code = 200 if overall_success else 500
+    return jsonify({"success": overall_success, "results": results}), status_code
 
 @app.route("/instagram/upload/photo", methods=["POST"])
 def photo(account_id):
@@ -533,3 +551,17 @@ def get_followers_count_route():
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+#  account id will be hideen and checks by the db 
