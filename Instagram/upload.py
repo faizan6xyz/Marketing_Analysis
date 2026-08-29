@@ -136,7 +136,6 @@ def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, captio
     if not publish:
         sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
         return creation_id
-
     return publish_container(access_token, ig_user_id, creation_id)
 
 def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: int, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, ) -> str:

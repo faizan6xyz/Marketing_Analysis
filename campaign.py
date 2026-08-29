@@ -105,7 +105,7 @@ def campaign():
     elif platform == "whatsapp":
         rows = dbimp.select_rows(token, "Whatsapp", select="Access_token,Account_id,Token_expire", filters={"id": user_id})
         row = rows[0] if rows else None
-        if not row:
+        if not row: 
             return jsonify({"error": "not connected", "connect_url": "/connect-whatsapp"}), 401
         account_id = row["Account_id"]
         acc = row["Access_token"]

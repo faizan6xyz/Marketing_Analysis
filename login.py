@@ -132,6 +132,5 @@ def check_accounts():
             "linkedin": all_values(data5, "Account_id"),  }
     return jsonify({"status": True, "data": merged}), 200
 
-
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
