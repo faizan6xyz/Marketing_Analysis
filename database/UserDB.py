@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from gotrue.errors import AuthApiError
+from supabase_auth.errors import AuthApiError
 import os
 from typing import Any, Optional
 from dotenv import load_dotenv
@@ -172,7 +172,7 @@ def delete_rows_web(table_name: str, filters: dict[str, Any]) -> list[dict]:
 
 if __name__ == "__main__":
     init_db()
-    token = "NDUxZDhiNTgtNDU3NS00YjdiLTkxNTgtY2IzOWRjM2FlZDFl.MjAyNi0wOC0yNiAxMTozMDo1Ny42ODYwNzMrMDA6MDA=.N2E0YzU2NzkwN2Y0ZjMwZWMzZDhmMTNhZmY5MzFkOTVhMjIzOWM1MmI5OGFkYTljYjVmMzFjZTM1YzUxZGI1ZA=="
+    token = "NDUxZDhiNTgtNDU3NS00YjdiLTkxNTgtY2IzOWRjM2FlZDFl.MjAyNi0wOC0zMCAxODozMzoyNy45MDIwNDErMDA6MDA=.ZjU5MDJiMDZjYWM0M2E5MDRhOWExMGU1OWNmYTUyOTE2NzBlZDM1OWVmMTBiYTNiYmVjNTdiOGRkMWRmMzkwNA=="
     insert_user(email, passw, token)
 
 """F
