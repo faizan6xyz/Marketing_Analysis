@@ -19,9 +19,12 @@ import requests
 import database.UserDB as dbimp
 from io import BytesIO
 import hashlib
+from flask_cors import CORS
 import hmac
 import authnew as au
 app = Flask(__name__)
+frontend = os.environ.get("front_end")
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
 SECRET_KEY = os.environ.get("token_secret", "").encode("utf-8")
 CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]

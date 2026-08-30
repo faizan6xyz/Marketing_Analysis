@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography import x509
 from urllib.parse import urlparse
+from flask_cors import CORS
 from datetime import datetime, timezone
 from supabase import create_client, Client
 load_dotenv()
@@ -50,6 +51,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("paypal_app")
 TRUSTED_CERT_HOSTS = ("api.paypal.com", "api.sandbox.paypal.com")
 ACTIVE_ORDER_STATUSES = ("CREATED", "COMPLETED")
+app = Flask(__name__)
+app.secret_key = FLASK_SECRET_KEY
+limiter = Limiter(get_remote_address, app=app, storage_uri=RATE_LIMIT_STORAGE_URI, default_limits=[])
+frontend = os.environ.get("front_end")
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 
 class PayPalError(Exception):
     pass
@@ -255,10 +261,6 @@ def logincheck(token ,user_id):
     except Exception:
         return {"logged_in": False}
     return {"logged_in": bool(found)}
-
-app = Flask(__name__)
-app.secret_key = FLASK_SECRET_KEY
-limiter = Limiter(get_remote_address, app=app, storage_uri=RATE_LIMIT_STORAGE_URI, default_limits=[])
 
 @app.route("/api/demo/seed-cart", methods=["POST"])
 @limiter.limit("10 per minute")

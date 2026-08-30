@@ -8,8 +8,11 @@ from Whatsapp.new import ( WA_APP_ID, WA_REDIRECT_URI, GRAPH_VERSION, SCOPE, APP
 import database.UserDB as dbimp
 import authnew as au
 import Drive.dep as dp
+from flask_cors import CORS
 BASE_URL = ""
 app = Flask(__name__)
+frontend = os.environ.get("front_end")
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
 serializer = URLSafeTimedSerializer(app.secret_key)

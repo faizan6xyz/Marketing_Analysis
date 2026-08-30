@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from datetime import datetime, timezone
 import database.UserDB as dbimp
 import authnew as au
@@ -12,6 +13,8 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Set SUPABASE_URL and SUPABASE_KEY in your environment or .env file")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
+frontend = os.environ.get("front_end")
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 
 def all_values(rows, key):
     if not rows:
@@ -34,7 +37,7 @@ def login():
     created_at = datetime.now(timezone.utc).isoformat()
     token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)
     try:
-        rows = dbimp.select_rows(token ,"users", select="Token", filters={"user_id": res.user.id})
+        rows = dbimp.select_rows(token, "users", select="Token", filters={"user_id": res.user.id})
     except Exception as e:
         return jsonify({"error": "failed to fetch user record", "detail": str(e)}), 500
     if not rows:
@@ -56,10 +59,10 @@ def signup():
         return jsonify({"message": "signup started, check email to confirm"}), 202
     created_at = datetime.now(timezone.utc).isoformat()
     token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)
-    dbimp.insert_user(email=mail,password=passw,token=token)
+    dbimp.insert_user(email=mail, password=passw, token=token)
     insert_error = None
     try:
-        insert = dbimp.insert_rows(token , "users", {"user_id": res.user.id, "created_at": created_at, "Token": token},)
+        insert = dbimp.insert_rows(token, "users", {"user_id": res.user.id, "created_at": created_at, "Token": token})
     except Exception as e:
         insert = None
         insert_error = str(e)
@@ -81,9 +84,9 @@ def details():
     address = body.get("address")
     profession = body.get("profession")
     if not name or not gmail or not address or not phone:
-        return jsonify({"status": False, "reason": "name, gmail, phone, and address are all required",}), 400
+        return jsonify({"status": False, "reason": "name, gmail, phone, and address are all required"}), 400
     try:
-        dbimp.update_rows(tokench["token"] ,"users",{"Name": name,"Phone_number": phone,"Address": address,"Gmail": gmail,"Profession": profession,},{"user_id": user_id},)
+        dbimp.update_rows(tokench["token"], "users", {"Name": name, "Phone_number": phone, "Address": address, "Gmail": gmail, "Profession": profession}, {"user_id": user_id})
     except Exception as e:
         return jsonify({"status": True, "Statusdb": False, "detail": str(e)}), 500
     return jsonify({"status": True, "Statusdb": True}), 200
@@ -99,14 +102,14 @@ def check_status():
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     try:
-        data = dbimp.select_rows(tokench["token"],"users", select="user_id", filters={"user_id": user_id})
+        data = dbimp.select_rows(tokench["token"], "users", select="user_id", filters={"user_id": user_id})
     except Exception:
         return jsonify({"status": False, "reason": "unable to check db"}), 401
     if not data:
         return jsonify({"status": False, "reason": "user not found"}), 404
     return jsonify({"status": True, "reason": "verified"}), 200
 
-@app.route("/vrify", methods=["GET"])
+@app.route("/vrify", methods=["POST"])
 def check_accounts():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -125,12 +128,18 @@ def check_accounts():
     except Exception:
         app.logger.exception("Failed to fetch account data for user %s", user_id)
         return jsonify({"status": False, "reason": "unable to check db"}), 500
-    merged = {"instagram": all_values(data0, "Account_id"),
-            "gmail": all_values(data1, "Email"),
-            "drive": all_values(data2, "Email"),
-            "whatsapp": all_values(data4, "Account_id"),
-            "linkedin": all_values(data5, "Account_id"),  }
+    merged = {
+        "instagram": all_values(data0, "Account_id"),
+        "gmail": all_values(data1, "Email"),
+        "drive": all_values(data2, "Email"),
+        "whatsapp": all_values(data4, "Account_id"),
+        "linkedin": all_values(data5, "Account_id")
+    }
     return jsonify({"status": True, "data": merged}), 200
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
+    # user_id = '451d8b58-4575-4b7b-9158-cb39dc3aed1e'
+    # token = "NDUxZDhiNTgtNDU3NS00YjdiLTkxNTgtY2IzOWRjM2FlZDFl.MjAyNi0wOC0zMCAxMTo1ODowOS41ODg0NTYrMDA6MDA=.NGFiYTVmNGEyYjAxZjM4ZDBmM2M2OTVhODcyMTg2OTQwOTg2OGU0ZmRlNjY2M2ZiNWJhODMzZThiYmJmYjc0ZQ=="
+    # data0 = dbimp.select_rows(token, "Instagram", select="Username", filters={"id": user_id})
+    # print(data0)

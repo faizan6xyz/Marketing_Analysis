@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime, timezone
 import logging
 import authnew as au
-import functools
+from flask_cors import CORS
 from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
 from flask_limiter import Limiter
@@ -18,6 +18,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("payment")
 app = Flask(__name__)
+frontend = os.environ.get("front_end")
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 
 def _now():
     return datetime.now(timezone.utc).isoformat()

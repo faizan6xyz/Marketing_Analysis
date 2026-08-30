@@ -2,17 +2,19 @@ import database.UserDB as dbimp
 import os
 import requests
 from urllib.parse import urlencode
+from flask_cors import CORS
 from flask import Flask, request, redirect, jsonify
 from supabase import create_client, Client
 from datetime import datetime, timezone, timedelta
 import time
 import authnew as au
 import Instagram.upload as uploadd
-import Instagram.schedule_video as scccc
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 app = Flask(__name__)
+frontend = os.environ.get("front_end")
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 IG_APP_ID = os.getenv("IG_APP_ID")

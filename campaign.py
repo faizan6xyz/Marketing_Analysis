@@ -9,8 +9,11 @@ import Gmail.Read_mails as gc
 from flask import Flask,request , jsonify 
 from datetime import datetime , timezone , timedelta
 import os
+from flask_cors import CORS
 import logging
 app = Flask(__name__)
+frontend = os.environ.get("front_end")
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 app.secret_key = os.environ["FLASK_SECRET_KEY"]
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gmail_api")
