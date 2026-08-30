@@ -121,19 +121,19 @@ def check_accounts():
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     try:
         data0 = dbimp.select_rows(tokench["token"], "Instagram", select="Username", filters={"id": user_id})
-        # data1 = dbimp.select_rows(tokench["token"], "Gmail", select="Email", filters={"id": user_id})
-        # data2 = dbimp.select_rows(tokench["token"], "Drive", select="Email", filters={"id": user_id})
-        # data4 = dbimp.select_rows(tokench["token"], "Whatsapp", select="Phone_no", filters={"id": user_id})
-        # data5 = dbimp.select_rows(tokench["token"], "Linkedin", select="Username", filters={"id": user_id})
+        data1 = dbimp.select_rows(tokench["token"], "Gmail", select="Email", filters={"id": user_id})
+        data2 = dbimp.select_rows(tokench["token"], "Drive", select="Email", filters={"id": user_id})
+        data4 = dbimp.select_rows(tokench["token"], "Whatsapp", select="Phone_no", filters={"id": user_id})
+        data5 = dbimp.select_rows(tokench["token"], "Linkedin", select="Username", filters={"id": user_id})
     except Exception:
         app.logger.exception("Failed to fetch account data for user %s", user_id)
         return jsonify({"status": False, "reason": "unable to check db"}), 500
     merged = {
         "instagram": all_values(data0, "Account_id"),
-        # "gmail": all_values(data1, "Email"),
-        # "drive": all_values(data2, "Email"),
-        # "whatsapp": all_values(data4, "Account_id"),
-        # "linkedin": all_values(data5, "Account_id")
+        "gmail": all_values(data1, "Email"),
+        "drive": all_values(data2, "Email"),
+        "whatsapp": all_values(data4, "Account_id"),
+        "linkedin": all_values(data5, "Account_id")
     }
     return jsonify({"status": True, "data": merged}), 200
 
