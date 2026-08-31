@@ -30,7 +30,7 @@ MESSAGE_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{5,50}$')
 USER_ID_RE = re.compile(r'^[a-zA-Z0-9_.@-]{1,100}$')
 PUBSUB_VERIFICATION_TOKEN = os.environ.get("PUBSUB_VERIFICATION_TOKEN")  # set this in env
 LABEL_NAME_RE = re.compile(r'^[\w\s/.-]{1,100}$')
-BASE_URL = ""
+BASE_URL = os.environ.get("baseurl")
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 
 def get_valid_user_id(token):

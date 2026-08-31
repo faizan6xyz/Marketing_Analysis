@@ -1,15 +1,13 @@
 import database.UserDB as dbimp
 from datetime import datetime
-import os , re , time , base64 , mimetypes , json
+import os , re , time , base64 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from typing import Any, Optional
 import requests
 from datetime import datetime, timezone
 from dotenv import load_dotenv
