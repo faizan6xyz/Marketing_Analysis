@@ -534,58 +534,58 @@ def list_files():
             break
     return jsonify({ "count": len(all_files), "files": all_files })
 
-def upload_file():
-    body = request.get_json(silent=True) or {}
-    token= body.get("token")
-    service, err = authenticate_and_get_service(token)
-    if err: return err
-    if "file" not in request.files:
-        return jsonify({"error": "file required (form-data field: file)"}), 400
-    uploaded_file = request.files["file"]
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        uploaded_file.save(tmp.name)
-        tmp_path = tmp.name
-    try:
-        platform = body.get("platform")
-        subfolder = "Upload"
-        parent_id = body.get("parent_id")
-        make_public = True
-        file_metadata = {"name": uploaded_file.filename}
-        if platform or subfolder:
-            if not platform or platform not in PLATFORM_FOLDERS:
-                return jsonify({"error": f"platform required, must be one of {PLATFORM_FOLDERS}"}), 400
-            platform_id, _ = get_or_create_folder(service, platform)
-            sub_id, _ = get_or_create_folder(service, subfolder, parent_id=platform_id)
-            file_metadata["parents"] = [sub_id]
-        elif parent_id:
-            file_metadata["parents"] = [parent_id]
-        media = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
-        created_file = service.files().create(body=file_metadata, media_body=media, fields="id, name, webViewLink, webContentLink, mimeType" ).execute()
-        file_id = created_file["id"]
-        if make_public:
-            service.permissions().create(fileId=file_id, body={"type": "anyone", "role": "reader"}, ).execute()
-    except HttpError as e:
-        return jsonify({"error": "drive upload failed", "detail": str(e)}), 400
-    finally:
-        os.remove(tmp_path)
-    return jsonify({"file_id": file_id, "name": created_file.get("name"),"mime_type": created_file.get("mimeType"), "url": created_file.get("webViewLink"),"download_url": created_file.get("webContentLink"),  "public": make_public,})   # download url is the media url to pass
+# def upload_file():
+#     body = request.get_json(silent=True) or {}
+#     token= body.get("token")
+#     service, err = authenticate_and_get_service(token)
+#     if err: return err
+#     if "file" not in request.files:
+#         return jsonify({"error": "file required (form-data field: file)"}), 400
+#     uploaded_file = request.files["file"]
+#     with tempfile.NamedTemporaryFile(delete=False) as tmp:
+#         uploaded_file.save(tmp.name)
+#         tmp_path = tmp.name
+#     try:
+#         platform = body.get("platform")
+#         subfolder = "Upload"
+#         parent_id = body.get("parent_id")
+#         make_public = True
+#         file_metadata = {"name": uploaded_file.filename}
+#         if platform or subfolder:
+#             if not platform or platform not in PLATFORM_FOLDERS:
+#                 return jsonify({"error": f"platform required, must be one of {PLATFORM_FOLDERS}"}), 400
+#             platform_id, _ = get_or_create_folder(service, platform)
+#             sub_id, _ = get_or_create_folder(service, subfolder, parent_id=platform_id)
+#             file_metadata["parents"] = [sub_id]
+#         elif parent_id:
+#             file_metadata["parents"] = [parent_id]
+#         media = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
+#         created_file = service.files().create(body=file_metadata, media_body=media, fields="id, name, webViewLink, webContentLink, mimeType" ).execute()
+#         file_id = created_file["id"]
+#         if make_public:
+#             service.permissions().create(fileId=file_id, body={"type": "anyone", "role": "reader"}, ).execute()
+#     except HttpError as e:
+#         return jsonify({"error": "drive upload failed", "detail": str(e)}), 400
+#     finally:
+#         os.remove(tmp_path)
+#     return jsonify({"file_id": file_id, "name": created_file.get("name"),"mime_type": created_file.get("mimeType"), "url": created_file.get("webViewLink"),"download_url": created_file.get("webContentLink"),  "public": make_public,})   # download url is the media url to pass
 
-def delete_file():
-    body = request.get_json(silent=True) or {}
-    token= body.get("token")
-    service, err = authenticate_and_get_service(token)
-    if err: return err
-    file_id = body.get("file_id")
-    if not file_id:
-        return jsonify({"error": "file_id required"}), 400
-    try:
-        service.files().delete(fileId=file_id).execute()
-    except HttpError as e:
-        status = e.resp.status if e.resp else 500
-        if status == 404:
-            return jsonify({"error": "file not found"}), 404
-        return jsonify({"error": "drive error", "details": str(e)}), status
-    return jsonify({ "file_id": file_id, "status": "deleted"})
+# def delete_file():
+#     body = request.get_json(silent=True) or {}
+#     token= body.get("token")
+#     service, err = authenticate_and_get_service(token)
+#     if err: return err
+#     file_id = body.get("file_id")
+#     if not file_id:
+#         return jsonify({"error": "file_id required"}), 400
+#     try:
+#         service.files().delete(fileId=file_id).execute()
+#     except HttpError as e:
+#         status = e.resp.status if e.resp else 500
+#         if status == 404:
+#             return jsonify({"error": "file not found"}), 404
+#         return jsonify({"error": "drive error", "details": str(e)}), status
+#     return jsonify({ "file_id": file_id, "status": "deleted"})
 
 def read_csv_from_drive(file_id):
     body = request.get_json(silent=True) or {}
@@ -660,20 +660,6 @@ def append_csv_to_drive(file_id):
     except Exception as e:
         return jsonify({"error": "Failed to write updated CSV to Google Drive", "details": str(e)}), 500
     return jsonify({"status": "ok","rows_added": len(new_df),"total_rows": len(combined_df)}), 200
-
-def get_drive_file_metadata():
-    body = request.get_json(silent=True) or {}
-    token= body.get("token")
-    service, err = authenticate_and_get_service(token)
-    if err: return err
-    file_id = body.get("file_id")
-    if not file_id:
-        return jsonify({"error": "file_id required"}), 400
-    try:
-        file = service.files().get(fileId=file_id,fields="id,name,mimeType,size,videoMediaMetadata,imageMediaMetadata").execute()
-    except HttpError as e:
-        return jsonify({"error": "metadata fetch failed", "detail": str(e)}), 400
-    return jsonify({"file": file})
 
 if __name__ == "__main__":
     # for server        gunicorn -w 4 -b 0.0.0.0:8080 app:app             insread of py app.py
