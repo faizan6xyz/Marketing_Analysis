@@ -1,137 +1,115 @@
 import io
 import os
+import json
 import secrets
-from flask import Flask, request, redirect, session, jsonify
-import Drive.dep as dpp
-import database.UserDB as dbimp
-import authnew as au
+import tempfile
 from datetime import datetime, timezone, timedelta
-from itsdangerous import  BadSignature, SignatureExpired
 import requests
+from flask import Flask, request, redirect, jsonify
+from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import google.auth.transport.requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload , MediaIoBaseUpload ,MediaIoBaseDownload
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from googleapiclient.errors import HttpError
-from flask_cors import CORS
 from google_auth_oauthlib.flow import Flow
-from flask_limiter.util import get_remote_address
-from flask_limiter import Limiter
+import Drive.dep as dpp
+import database.UserDB as dbimp
+import authnew as au
 YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/drive.readonly",]
 CLIENT_SECRETS_FILE = "client_secret.json"
 BASE_URL = os.environ.get("baseurl")
-TOKEN_FILE = "token.json"
-file_size = 30 * 1024 * 1024
 STATE_MAX_AGE = 600  # seconds
+MAX_VIDEO_SIZE = 30 * 1024 * 1024  # 30 MB
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
-REDIRECT_URI = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:5000/oauth2callback")
 frontend = os.environ.get("front_end")
-CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"],)
 TABLE_NAME = "Youtube"
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)
 
-def credentials_to_dict(creds: Credentials) -> dict:
-    return { "token": creds.token, "refresh_token": creds.refresh_token, "token_uri": creds.token_uri, "client_id": creds.client_id, "client_secret": creds.client_secret, "scopes": creds.scopes, }
-
-def load_saved_credentials() -> Credentials | None:
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, YOUTUBE_SCOPES)
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(google.auth.transport.requests.Request())
-            with open(TOKEN_FILE, "w") as f:
-                f.write(creds.to_json())
-        return creds
-    return None
-
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [REDIRECT_URI], }}, scopes=YOUTUBE_SCOPES, redirect_uri=REDIRECT_URI) 
+    return Flow.from_client_config( { "web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/oauth/youtube/callback"], } },         scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/oauth/youtube/callback",    )
 
-def save_tokens(token, user_id, creds, email_addr=None):
-    payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(), "Timestamp": datetime.now(timezone.utc).isoformat()}
-    if email_addr:
-        payload["Email"] = email_addr
-    rows = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})
-    if rows:
-        dbimp.update_rows(token,TABLE_NAME, payload, filters={"id": user_id})
-    else:
-        dbimp.insert_rows(token,TABLE_NAME, {"id": user_id, **payload})
-
-def get_credentials() -> Credentials:
-    creds = None
-    if "credentials" in session:
-        creds = Credentials(**session["credentials"])
-        if creds.expired and creds.refresh_token:
-            creds.refresh(google.auth.transport.requests.Request())
-            session["credentials"] = credentials_to_dict(creds)
-    if not creds or not creds.valid:
-        creds = load_saved_credentials()
-    if not creds or not creds.valid:
-        raise RuntimeError("No valid credentials. Hit /login first.")
+def credentials_from_json(creds_json: str) -> Credentials:
+    data = json.loads(creds_json)
+    creds = Credentials( token=data["token"], refresh_token=data.get("refresh_token"), token_uri=data["token_uri"], client_id=data["client_id"], client_secret=data["client_secret"], scopes=data.get("scopes"),    )
+    if data.get("expiry"):
+        creds.expiry = datetime.fromisoformat(data["expiry"])
     return creds
 
-class DriveStreamAsFile(io.RawIOBase):
-    def __init__(self, drive_service, file_id):
-        self._request = drive_service.files().get_media(fileId=file_id)
-        self._buffer = io.BytesIO()
-        self._downloader = MediaIoBaseDownload(self._buffer, self._request, chunksize=10 * 1024 * 1024)
-        self._done = False
+def save_youtube_account(token, user_id, channel_id, channel_title, creds: Credentials):
+    payload = { "user_id": user_id, "channel_id": channel_id, "channel_title": channel_title, "Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat() if creds.expiry else None, "Timestamp": datetime.now(timezone.utc).isoformat(), }
+    rows = dbimp.select_rows( token, TABLE_NAME, select="channel_id", filters={"user_id": user_id, "channel_id": channel_id},    )
+    if rows:
+        dbimp.update_rows(token, TABLE_NAME, payload, filters={"user_id": user_id, "channel_id": channel_id})
+    else:
+        dbimp.insert_rows(token, TABLE_NAME, payload)
 
-    def readable(self):
-        return True
+def get_youtube_credentials_for_account(token, user_id, channel_id):
+    rows = dbimp.select_rows( token, TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"user_id": user_id, "channel_id": channel_id}, )
+    row = rows[0] if rows else None
+    if not row:
+        return None
+    creds = Credentials( token=row["Access_token"], refresh_token=row["Refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=YOUTUBE_SCOPES, )
+    expire_raw = row.get("Token_expire")
+    expiry = datetime.fromisoformat(expire_raw) if expire_raw else None
+    needs_refresh = expiry is None or (expiry - datetime.now(timezone.utc) < timedelta(minutes=5))
+    if needs_refresh and creds.refresh_token:
+        creds.refresh(google.auth.transport.requests.Request())
+        dbimp.update_rows( token, TABLE_NAME, {"Access_token": creds.token, "Token_expire": creds.expiry.isoformat()}, filters={"user_id": user_id, "channel_id": channel_id}, )
+    return creds
 
-    def readinto(self, b):
-        while self._buffer.tell() >= len(self._buffer.getvalue()) - len(b) and not self._done:
-            _, self._done = self._downloader.next_chunk()
-        data = self._buffer.getvalue()
-        n = min(len(b), len(data))
-        if n == 0:
-            return 0
-        b[:n] = data[:n]
-        remaining = data[n:]
-        self._buffer = io.BytesIO(remaining)
-        self._buffer.seek(0, io.SEEK_END)
-        return n
-
-def get_drive_file_size(drive_service, file_id: str):
+def download_drive_file_to_temp(drive_service, file_id):
     meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
-    return int(meta["size"]), meta.get("mimeType", "video/*"), meta.get("name")
+    mimetype = meta.get("mimeType") or "video/*"
+    name = meta.get("name") or "video"
+    suffix = os.path.splitext(name)[1] or ".mp4"
+    media_request = drive_service.files().get_media(fileId=file_id)
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    with os.fdopen(fd, "wb") as tmp_file:
+        downloader = MediaIoBaseDownload(tmp_file, media_request, chunksize=10 * 1024 * 1024)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+    return tmp_path, mimetype, name
 
-def upload_from_drive_to_youtube( creds, file_id: str, title: str, description: str = "", tags=None, category_id: str = "22", privacy_status: str = "private", ):
-    drive = build("drive", "v3", credentials=creds)
-    youtube = build("youtube", "v3", credentials=creds)
-    size, mimetype, name = get_drive_file_size(drive, file_id)
-    stream = DriveStreamAsFile(drive, file_id)
-    media = MediaIoBaseUpload(stream, mimetype=mimetype, chunksize=10 * 1024 * 1024, resumable=True)
-    body = { "snippet": { "title": title, "description": description, "tags": tags or [], "categoryId": category_id, }, "status": {"privacyStatus": privacy_status},  }
-    request_ = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
-    response = None
-    while response is None:
-        status, response = request_.next_chunk()
-        if status:
-            print(f"Uploading... {int(status.progress() * 100)}%")
-    return response
+def upload_video_from_drive_to_youtube( creds, file_id, title, description="", tags=None, category_id="22", privacy_status="public"):
+    drive_service = build("drive", "v3", credentials=creds)
+    youtube_service = build("youtube", "v3", credentials=creds)
+    tmp_path, mimetype, _name = download_drive_file_to_temp(drive_service, file_id)
+    try:
+        media = MediaFileUpload(tmp_path, mimetype=mimetype, chunksize=10 * 1024 * 1024, resumable=True)
+        body = { "snippet": { "title": title, "description": description, "tags": tags or [], "categoryId": category_id, }, "status": {"privacyStatus": privacy_status}, }
+        request_ = youtube_service.videos().insert(part="snippet,status", body=body, media_body=media)
+        response = None
+        while response is None:
+            _status, response = request_.next_chunk()
+        return response
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 @app.route("/connect-youtube")
 def connect_youtube():
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
+    token = request.args.get("token")
     if not token:
         return jsonify({"status": False}), 403
     tokench = au.process(token=token)
     if not tokench["status"]:
-        return jsonify({"status": "failed", "reason": tokench["reason"]})
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
     state = serializer.dumps(user_id)
-    flow = build_flow(scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/oauth/youtube/callback")
+    flow = build_flow()
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
     return redirect(auth_url)
-
 
 @app.route("/oauth/youtube/callback")
 def youtube_oauth_callback():
@@ -147,20 +125,20 @@ def youtube_oauth_callback():
         return jsonify({"error": "state expired, please reconnect"}), 400
     except BadSignature:
         return jsonify({"error": "invalid state"}), 400
-    flow = build_flow(scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/oauth/youtube/callback")
+    flow = build_flow()
     flow.fetch_token(code=code)
     creds = flow.credentials
     creds_json = creds.to_json()
     youtube = build("youtube", "v3", credentials=creds)
-    expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-    token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     channel = youtube.channels().list(part="snippet", mine=True).execute()
     items = channel.get("items", [])
     if not items:
         return jsonify({"error": "no_youtube_channel", "detail": "authenticated Google account has no YouTube channel"}), 400
     channel_title = items[0]["snippet"]["title"]
     channel_id = items[0]["id"]
-    payload = { "user_id": user_id, "creds": creds_json, "channel_id": channel_id, "channel_title": channel_title, "token": token, }
+    expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
+    internal_token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
+    payload = { "user_id": user_id, "channel_id": channel_id, "channel_title": channel_title, "creds": creds_json, "token": internal_token, }
     signed_payload = serializer.dumps(payload)
     resp = requests.post(f"{BASE_URL}/auth/youtube/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
@@ -174,37 +152,107 @@ def youtube_callback_internal():
         return jsonify({"status": False, "error": "invalid or expired payload"}), 403
     token = data.get("token")
     user_id = data.get("user_id")
-    creds = data.get("creds")
     channel_id = data.get("channel_id")
-    if not token or not user_id or not channel_id or not creds:
+    channel_title = data.get("channel_title")
+    creds_json = data.get("creds")
+    if not token or not user_id or not channel_id or not creds_json:
         return jsonify({"status": False}), 403
     try:
-        save_tokens(token, user_id, creds, channel_id)
+        creds = credentials_from_json(creds_json)
+        save_youtube_account(token, user_id, channel_id, channel_title, creds)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
     return jsonify({"status": True}), 200
 
+@app.route("/youtube/accounts", methods=["POST"])
+@limiter.limit("30 per minute")
+def list_youtube_accounts():
+    token = request.form.get("token") or (request.get_json(silent=True) or {}).get("token")
+    if not token:
+        return jsonify({"error": "'token' is required"}), 400
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
+    user_id = tokench["user_id"]
+    rows = dbimp.select_rows(token, TABLE_NAME, select="channel_id,channel_title", filters={"user_id": user_id})
+    return jsonify({"accounts": rows or []})
+
 @app.route("/youtube/upload/short", methods=["POST"])
+@limiter.limit("5 per minute")
 def upload():
-    data = request.get_json(silent=True) or {}
-    file_id = data.get("file_id")
-    title = data.get("title")
-    if not file_id or not title:
-        return jsonify({"error": "file_id and title are required"}), 400
+    token = request.form.get("token")
+    if not token:
+        return jsonify({"error": "'token' is required"}), 400
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
+    user_id = tokench["user_id"]
+    accounts = request.form.getlist("accounts")
+    if not accounts:
+        return jsonify({"error": "'accounts' is required (one or more connected channel ids)"}), 400
+    service, err = dpp.authenticate_and_get_service(token)
+    if err:
+        return err
+    uploaded_file = request.files.get("file")
+    if not uploaded_file or uploaded_file.filename == "":
+        return jsonify({"error": "file required (form-data field: file)"}), 400
+    uploaded_file.stream.seek(0, os.SEEK_END)
+    size = uploaded_file.stream.tell()
+    uploaded_file.stream.seek(0)
+    if size > MAX_VIDEO_SIZE:
+        return jsonify({"error": f"file exceeds max size of {MAX_VIDEO_SIZE} bytes"}), 400
+    parent_id = request.form.get("parent_id")
+    platform = "Youtube"
+    subfolder = "Upload"
+    make_public = True
     try:
-        creds = get_credentials()
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 401
-    try:
-        response = upload_from_drive_to_youtube( creds, file_id=file_id, title=title, description=data.get("description", ""), tags=data.get("tags"), category_id=data.get("category_id", "22"), privacy_status=data.get("privacy_status", "private"), )
+        if parent_id:
+            parent_folder = parent_id
+        else:
+            platform_id, _ = dpp.get_or_create_folder(service, platform)
+            sub_id, _ = dpp.get_or_create_folder(service, subfolder, parent_id=platform_id)
+            parent_folder = sub_id
     except HttpError as e:
-        return jsonify({"error": "http_error", "detail": str(e)}), 502
-    return jsonify({"status": "uploaded", "youtube_response": response})
+        return jsonify({"error": "drive folder setup failed", "detail": str(e)}), 400
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            uploaded_file.save(tmp.name)
+            tmp_path = tmp.name
+        file_metadata = {"name": uploaded_file.filename}
+        if parent_folder:
+            file_metadata["parents"] = [parent_folder]
+        media_upload = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
+        created_file = service.files().create( body=file_metadata, media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType", ).execute()
+        drive_file_id = created_file["id"]
+        if make_public:
+            service.permissions().create(fileId=drive_file_id, body={"type": "anyone", "role": "reader"}).execute()
+    except HttpError as e:
+        return jsonify({"error": "drive upload failed", "detail": str(e)}), 400
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    caption = request.form.get("caption") or ""
+    description = request.form.get("description") or ""
+    tags = [t.strip() for t in (request.form.get("tags") or "").split(",") if t.strip()]
+    results = []
+    for channel_id in accounts:
+        creds = get_youtube_credentials_for_account(token, user_id, channel_id)
+        if not creds:
+            results.append({"account": channel_id, "status": "failed", "error": "channel not connected"})
+            continue
+        try:
+            response = upload_video_from_drive_to_youtube( creds, file_id=drive_file_id, title=caption, description=description, tags=tags, )
+            results.append({"account": channel_id, "status": "uploaded", "youtube_video_id": response.get("id")})
+        except HttpError as e:
+            results.append({"account": channel_id, "status": "failed", "error": str(e)})
+        except Exception as e:
+            results.append({"account": channel_id, "status": "failed", "error": str(e)})
+    try:
+        service.files().delete(fileId=drive_file_id).execute()
+    except HttpError:
+        pass
+    return jsonify({"count": len(results), "results": results})
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
-    # DRIVE_FILE_ID = "PASTE_DRIVE_FILE_ID_HERE"
-    # try:
-    #     result = upload_from_drive_to_youtube( DRIVE_FILE_ID, title="My Drive video", description="Uploaded straight from Drive, no local download", tags=["demo"], privacy_status="private", )
-    # except HttpError as e:
-    #     print(f"Failed: {e}")

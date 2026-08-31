@@ -26,7 +26,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024   # 5 MB (comment previously said 50MB but value
 MAX_TARGETS = 2000
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 APP_FOLDER = ["Leo_Social"]
-PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin"]
+PLATFORM_FOLDERS = ["whatsapp","gmail"]
 BASE_URL = ""
 SUBFOLDERS = ["Upload", "Analytics"]
 
