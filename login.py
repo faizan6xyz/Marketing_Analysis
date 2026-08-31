@@ -128,13 +128,11 @@ def check_accounts():
     except Exception:
         app.logger.exception("Failed to fetch account data for user %s", user_id)
         return jsonify({"status": False, "reason": "unable to check db"}), 500
-    merged = {
-        "instagram": all_values(data0, "Account_id"),
-        "gmail": all_values(data1, "Email"),
-        "drive": all_values(data2, "Email"),
-        "whatsapp": all_values(data4, "Account_id"),
-        "linkedin": all_values(data5, "Account_id")
-    }
+    merged = { "instagram": all_values(data0, "Account_id"),
+                "gmail": all_values(data1, "Email"),
+                "drive": all_values(data2, "Email"),
+                "linkedin": all_values(data5, "Account_id"),
+                "whatsapp": all_values(data4, "Account_id")}
     return jsonify({"status": True, "data": merged}), 200
 
 if __name__ == "__main__":

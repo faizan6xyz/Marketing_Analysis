@@ -38,9 +38,9 @@ table_name = "Drive"
 APP_FOLDER = ["Leo_Social"]
 PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin"]
 BASE_URL = ""
-SUBFOLDERS = ["photos", "videos", "pdf", "documents", "Analytics" ]
-campaigns_content = "email,campaign_id,capaign_name,send_time,recieve_time,interest"
-campaigns_content1 = "phone_no,campaign_id,capaign_name,send_time,recieve_time,interest"
+SUBFOLDERS = ["Upload", "Analytics" ]
+campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
+campaigns_content1 = "phone_no,capaign_name,send_time,recieve_time,interest"
 campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interaction,profile_activity,time,follows,thumbnail,media_id,posted"
 campaigns_content4 = "media_id,views,reach,replies,shares,navigation,follows,profile_activity,hour,thumbnail,time"
 campaigns_content5 = "media_id,publish_at,impression,likes,comments,shares,clicks,engagements,profile_views,follower_gained,saves,reaction,send"
@@ -534,7 +534,6 @@ def list_files():
             break
     return jsonify({ "count": len(all_files), "files": all_files })
 
-@app.route("/upload", methods=["POST"])
 def upload_file():
     body = request.get_json(silent=True) or {}
     token= body.get("token")
@@ -548,15 +547,13 @@ def upload_file():
         tmp_path = tmp.name
     try:
         platform = body.get("platform")
-        subfolder = body.get("subfolder")
+        subfolder = "Upload"
         parent_id = body.get("parent_id")
         make_public = True
         file_metadata = {"name": uploaded_file.filename}
         if platform or subfolder:
             if not platform or platform not in PLATFORM_FOLDERS:
                 return jsonify({"error": f"platform required, must be one of {PLATFORM_FOLDERS}"}), 400
-            if not subfolder or subfolder not in SUBFOLDERS:
-                return jsonify({"error": f"subfolder required, must be one of {SUBFOLDERS}"}), 400
             platform_id, _ = get_or_create_folder(service, platform)
             sub_id, _ = get_or_create_folder(service, subfolder, parent_id=platform_id)
             file_metadata["parents"] = [sub_id]

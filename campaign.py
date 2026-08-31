@@ -211,4 +211,10 @@ def campaign():
             except Exception as e:
                 logger.exception("campaign send failed for %s", recipient)
                 results.append({"to": recipient, "status": "failed", "error": str(e)})
-    return jsonify({"count": len(results), "results": results, "failed_uploads": failed_result})
+    delete_failures = []
+    for r in uploaded_result:
+        try:
+            service.files().delete(fileId=r["file_id"]).execute()
+        except HttpError as e:
+            delete_failures.append({"file_id": r["file_id"], "name": r.get("name"), "error": str(e)})
+    return jsonify({ "count": len(results), "results": results, "failed_uploads": failed_result, "delete_failures": delete_failures, })
