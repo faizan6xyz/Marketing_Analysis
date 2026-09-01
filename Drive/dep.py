@@ -38,16 +38,20 @@ APP_FOLDER = ["Leo_Social"]
 PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin","Youtube"]
 BASE_URL = ""
 SUBFOLDERS = ["Upload", "Analytics" ]
+# for thepost we use to call the api ddirectly for the posts there and using the media id from there to match the file csv value and show analytics
+# theres no time row in postalaysis , instead i stacked then one by one in the acsedning order as the time
 campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
 campaigns_content1 = "phone_no,capaign_name,send_time,recieve_time,interest"
 campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interaction,profile_activity,time,follows,thumbnail,media_id,posted"
 campaigns_content4 = "media_id,views,reach,replies,shares,navigation,follows,profile_activity,hour,thumbnail,time"
 campaigns_content5 = "media_id,publish_at,impression,likes,comments,shares,clicks,engagements,profile_views,follower_gained,saves,reaction,send"
+campaigns_content6 = "Video_ID,Published_At,Views,Likes,Comments,Shares,Watch_Time,Average_View_Duration,Impressions,Click_Through_Rate,Subscribers_Gained"
 
 filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": "{}",},
           "Whatsapp": {"campains.txt": campaigns_content1,"workflowmessage.json": "{}",},
           "Instagram": {"workflowmessage.json": "{}","workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
-          "Linkedln": {"workflowmessage.json": "{}","workflowcomment.json": "{}", "postanalysis.txt": campaigns_content5 },}
+          "Linkedln": {"workflowmessage.json": "{}","workflowcomment.json": "{}", "postanalysis.txt": campaigns_content5 },
+          "Youtube" : { "postanalysis.txt":campaigns_content6 }}
 
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -58,7 +62,7 @@ def Update_token(token , user_id, access_token, refresh_token, expiry):
     dbimp.update_rows(token , table_name, {"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token": fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.isoformat().encode()).decode()}, {"id" : user_id})
 
 def load_tokens(token,user_id):
-    rows = dbimp.select_rows(token,table_name , filters= {"id" : user_id})
+    rows = dbimp.select_rows(token,table_name , select="Access_token,Refresh_token,Token_expire,Connected" , filters= {"id" : user_id})
     row = rows[0] if rows else None
     if not row :    
         return None

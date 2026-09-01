@@ -58,15 +58,6 @@ def _coerce_int(value):
     except (TypeError, ValueError):
         return None
 
-def refresh_token(token, user_id, access_token):
-    resp = requests.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_token", "access_token": access_token},).json()
-    new_token = resp.get("access_token")
-    seconds = resp.get("expires_in")
-    if new_token and seconds:
-        new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows(token,TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"id": user_id},)
-        return new_token
-    return access_token
 
 def get_authenticated_access_token(account_id):
     body = request.get_json(silent=True) or {}
@@ -89,7 +80,7 @@ def get_authenticated_access_token(account_id):
     if Token_expiry.tzinfo is None:
         Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
     if Token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
-        access_token = refresh_token(tokench["token"], user_id, access_token)
+        access_token = uploadd.refresh_token(tokench["token"], user_id, access_token)
     return access_token, None
 
 @app.route("/auth/instagram/login")

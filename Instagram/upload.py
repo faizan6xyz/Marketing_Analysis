@@ -41,7 +41,7 @@ def _validate_media_url(url: str) -> None:
         raise ValueError(f"'{url}' is not a valid absolute URL.")
 
 def refresh_token(token, user_id, access_token):
-    resp = requests.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_token", "access_token": access_token},).json()
+    resp = requests.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_access_token", "access_token": access_token},).json()
     new_token = resp.get("access_token")
     seconds = resp.get("expires_in")
     if new_token and seconds:
@@ -131,9 +131,6 @@ def wait_for_container(access_token: str, container_id: str, timeout: int = 300,
         elapsed += interval
     raise TimeoutError(f"Container {container_id} did not finish within {timeout}s")
 
-def publish_container(access_token: str, ig_user_id: str, creation_id: str) -> str:
-    published = _post(f"{ig_user_id}/media_publish", {"creation_id": creation_id, "access_token": access_token})
-    return published["id"]
 
 def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, caption: str = "", media_size: int = None, publish: bool = True, ) -> str:
     _validate_media_url(image_url)
@@ -377,6 +374,12 @@ def story_schedule(token,hour,media_id,access_token):
     flat_metrics = {item["name"]: item["values"][0]["value"] for item in insights_resp.get("data", [])}
     return f"{media_id},{flat_metrics.get("views")},,{flat_metrics.get("reach")},{flat_metrics.get("replies")},{flat_metrics.get("shares")},{nav_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{flat_metrics.get("follows")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{hour},{meta_resp.get("thumbnail_url")},{one_hour_before}"
 
+def publish_container(token,access_token: str, ig_user_id: str, creation_id: str) -> str:
+    tokench = au.process(token=token)
+    access_token = refresh_token(tokench["token"],tokench["user_id"],access_token)
+    published = _post(f"{ig_user_id}/media_publish", {"creation_id": creation_id, "access_token": access_token})
+    return published["id"]
+
 def get_media_analytics(token,media_id,access_token):
     tokench = au.process(token=token)
     access_token = refresh_token(tokench["token"],tokench["user_id"],access_token)
@@ -397,6 +400,6 @@ def scccc(user_id,access_token,media_id,token,typee):
         sccc.insert__story(user_id, timesss, access_token,media_id,i,token,typee)
 
 def xcccc(user_id,access_token,media_id,token,typee):
-    for i in range(10): 
-        timesss = (datetime.now(timezone.utc) + timedelta(days=(7+i*7))).isoformat()
+    for i in range(7): 
+        timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
         sccc.insert__story1(user_id, timesss, access_token,media_id,token,typee)

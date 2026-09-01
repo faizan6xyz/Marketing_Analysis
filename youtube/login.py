@@ -1,10 +1,11 @@
-import io
 import os
 import json
 import secrets
 import tempfile
 from datetime import datetime, timezone, timedelta
+import time
 import requests
+import Instagram.schedule_video as sccc
 from flask import Flask, request, redirect, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -29,6 +30,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
+api_key = os.environ.get("api_key")
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"],)
 TABLE_NAME = "Youtube"
@@ -66,6 +68,49 @@ def get_youtube_credentials_for_account(token, user_id, channel_id):
         creds.refresh(google.auth.transport.requests.Request())
         dbimp.update_rows( token, TABLE_NAME, {"Access_token": creds.token, "Token_expire": creds.expiry.isoformat()}, filters={"user_id": user_id, "channel_id": channel_id}, )
     return creds
+
+def xcccc(user_id,access_token,media_id,token,typee):
+    for i in range(7): 
+        timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
+        sccc.insert__story1(user_id, timesss, access_token,media_id,token,typee)
+
+
+def get_valid_access_token(channel_id, token, client_id, client_secret, refresh_token, access_token, expires_at=0):
+    now = time.time()
+    if access_token and expires_at and now < expires_at - 60:
+        return access_token
+    resp = requests.post( "https://oauth2.googleapis.com/token", data={ "client_id": client_id, "client_secret": client_secret, "refresh_token": refresh_token, "grant_type": "refresh_token", }, timeout=10, )
+    resp.raise_for_status()
+    token_data = resp.json()
+    new_access_token = token_data["access_token"]
+    new_expires_at = now + token_data.get("expires_in", 3600)
+    try:
+        dbimp.update_rows(token, TABLE_NAME, {"Access_token": new_access_token, "Token_expire": new_expires_at}, filters={"channel_id": channel_id})
+    except Exception as e:
+        print(f"token update failed for channel {channel_id}: {e}")
+        return False
+    return new_access_token
+
+def shorts_schedule(channel_id, token, video_id, api_key, access_token, start_date="2026-01-01"):
+    tokench = au.process(token=token)
+    rows = dbimp.select_rows(tokench["token"], TABLE_NAME, select="Refresh_token,Token_expire", filters={"channel_id": channel_id})
+    row = rows[0] if rows else None
+    if not row:
+        return False
+    refresh_token = row["Refresh_token"]
+    expires_at = row["Token_expire"]
+    access_token = get_valid_access_token(channel_id, token, Clientid, Clientsec, refresh_token, access_token, expires_at)
+    if not access_token:
+        return False
+    meta_resp = requests.get( "https://www.googleapis.com/youtube/v3/videos", params={"part": "snippet,statistics", "id": video_id, "key": api_key}, timeout=10, ).json()
+    item = meta_resp.get("items", [{}])[0]
+    snippet = item.get("snippet", {})
+    stats = item.get("statistics", {})
+    analytics_resp = requests.get( "https://youtubeanalytics.googleapis.com/v2/reports", params={ "ids": "channel==MINE", "startDate": start_date, "endDate": datetime.now(timezone.utc).date().isoformat(), "metrics": "estimatedMinutesWatched,averageViewDuration,shares,impressions,subscribersGained", "dimensions": "video", "filters": f"video=={video_id}", "access_token": access_token, }, timeout=10, ).json()
+    headers = [c["name"] for c in analytics_resp.get("columnHeaders", [])]
+    row = analytics_resp.get("rows", [[]])[0] if analytics_resp.get("rows") else []
+    metrics = dict(zip(headers, row))
+    return f"{video_id},{snippet.get('publishedAt')},{stats.get('viewCount')},{stats.get('likeCount')},{stats.get('commentCount')},{metrics.get('shares')},{metrics.get('estimatedMinutesWatched')},{metrics.get('averageViewDuration')},{metrics.get('impressions')},{metrics.get('impressionsClickThroughRate')},{metrics.get('subscribersGained')}"
 
 def download_drive_file_to_temp(drive_service, file_id):
     meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
@@ -244,6 +289,7 @@ def upload():
         try:
             response = upload_video_from_drive_to_youtube( creds, file_id=drive_file_id, title=caption, description=description, tags=tags, )
             results.append({"account": channel_id, "status": "uploaded", "youtube_video_id": response.get("id")})
+            sccc(user_id,access_token,media_id,token,"shorts")
         except HttpError as e:
             results.append({"account": channel_id, "status": "failed", "error": str(e)})
         except Exception as e:

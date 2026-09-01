@@ -73,7 +73,7 @@ if __name__ == "__main__":
         due = get_containers_due(now)
         for row_id, container_id, access_tok, user_id , typess,media_id,hourss,token in due:
             if typess == "container":
-                aaaa.publish_container(user_id=user_id, access_token=access_tok, creation_id=container_id)
+                aaaa.publish_container(token=token,user_id=user_id, access_token=access_tok, creation_id=container_id)
                 print(row_id,container_id,access_tok,user_id)
                 delete_by_id(row_id)
             if typess == "story" :
