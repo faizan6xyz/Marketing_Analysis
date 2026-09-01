@@ -1,9 +1,11 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, date
 import time
 import Instagram.upload as aaaa
 import sqlite3
+import os 
 import Drive.dep as dpp
-
+import youtube.login as you
+youtube_api = os.environ.get("youtube_api")
 DB = "schedule.db"
 
 def get_conn():
@@ -75,20 +77,24 @@ if __name__ == "__main__":
                 print(row_id,container_id,access_tok,user_id)
                 delete_by_id(row_id)
             if typess == "story" :
-                content = aaaa.story_schedule(hourss,media_id,access_tok)
+                content = aaaa.story_schedule(token,hourss,media_id,access_tok)
                 dpp.append_to_file(token=token, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
             if typess == "photo1":
-                content = aaaa.get_media_analytics(media_id,access_tok)
+                content = aaaa.get_media_analytics(token,media_id,access_tok)
                 dpp.append_to_file(token=token, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
             if typess == "carousel1":
-                content = aaaa.get_media_analytics(media_id,access_tok)
+                content = aaaa.get_media_analytics(token,media_id,access_tok)
                 dpp.append_to_file(token=token, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
             if typess == "video1":
-                content = aaaa.get_media_analytics(media_id,access_tok)
+                content = aaaa.get_media_analytics(token,media_id,access_tok)
                 dpp.append_to_file(token=token, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "shorts": 
+                content = you.shorts_schedule(token,media_id,youtube_api,access_tok,str(date.today()))
+                dpp.append_to_file(token=token, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
         time.sleep(1)
 

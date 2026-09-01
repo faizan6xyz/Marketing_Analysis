@@ -1,12 +1,11 @@
-import os
 import re
 import time
-import json
 import Instagram.schedule_video as sccc
 import logging
 import requests
+import database.UserDB as dbimp
+import authnew as au
 from datetime import datetime, timezone,timedelta
-import Drive.dep as dpp
 from urllib.parse import urlparse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ig_post")
@@ -27,6 +26,7 @@ MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 2               # seconds; doubles each retry
 RETRYABLE_IG_ERROR_CODES = {4, 17, 32}   # IG rate-limit / throttling codes
 ALLOWED_URL_SCHEMES = {"https"}
+TABLE_NAME = "Instagram"
 
 def _redact(text: str, access_token: str = None) -> str:
     if access_token:
@@ -39,6 +39,16 @@ def _validate_media_url(url: str) -> None:
         raise ValueError(f"Refusing to fetch '{url}': only {ALLOWED_URL_SCHEMES} URLs are allowed.")
     if not parsed.netloc:
         raise ValueError(f"'{url}' is not a valid absolute URL.")
+
+def refresh_token(token, user_id, access_token):
+    resp = requests.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_token", "access_token": access_token},).json()
+    new_token = resp.get("access_token")
+    seconds = resp.get("expires_in")
+    if new_token and seconds:
+        new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+        dbimp.update_rows(token,TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"id": user_id},)
+        return new_token
+    return access_token
 
 def _request_with_retry(method: str, url: str, access_token: str = None, **kwargs) -> requests.Response:
     kwargs.setdefault("timeout", REQUEST_TIMEOUT)
@@ -356,7 +366,9 @@ def get_follower_count(account_id, access_token):
         return {"success": False, "data": None, "error": f"unexpected response shape for {account_id}: {payload}"}
     return {"success": True, "data": {"followers_count": followers_count}, "error": None}
 
-def story_schedule(hour,media_id,access_token):
+def story_schedule(token,hour,media_id,access_token):
+    tokench = au.process(token=token)
+    access_token = refresh_token(tokench["token"],tokench["user_id"],access_token)
     one_hour_before = (datetime.now(timezone.utc)).isoformat()
     meta_resp = requests.get(f"https://graph.instagram.com/{media_id}", params={ "fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
     insights_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "views,reach,replies,shares,follows","access_token": access_token,},timeout=10,).json()
@@ -365,7 +377,9 @@ def story_schedule(hour,media_id,access_token):
     flat_metrics = {item["name"]: item["values"][0]["value"] for item in insights_resp.get("data", [])}
     return f"{media_id},{flat_metrics.get("views")},,{flat_metrics.get("reach")},{flat_metrics.get("replies")},{flat_metrics.get("shares")},{nav_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{flat_metrics.get("follows")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{hour},{meta_resp.get("thumbnail_url")},{one_hour_before}"
 
-def get_media_analytics(media_id,access_token):
+def get_media_analytics(token,media_id,access_token):
+    tokench = au.process(token=token)
+    access_token = refresh_token(tokench["token"],tokench["user_id"],access_token)
     one_hour_before = (datetime.now(timezone.utc)).isoformat()
     meta_resp = requests.get(f"https://graph.instagram.com/{media_id}",params={"fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
     media_type = meta_resp.get("media_type")
