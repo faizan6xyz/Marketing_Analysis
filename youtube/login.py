@@ -235,7 +235,7 @@ def youtube_callback_internal():
     return jsonify({"status": True}), 200
 
 @app.route("/youtube/accounts", methods=["POST"])
-@limiter.limit("30 per minute")
+@limiter.limit("10 per minute")
 def list_youtube_accounts():
     token = request.form.get("token") or (request.get_json(silent=True) or {}).get("token")
     if not token:
