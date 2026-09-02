@@ -34,10 +34,10 @@ fernet = Fernet(os.environ["FERNET_KEY"].encode())
 serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds, state link expires after 10 min
 table_name = "Drive" 
-APP_FOLDER = ["Leo_Social"]
+APP_FOLDER = "Leo_Social"
 PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin","Youtube"]
 BASE_URL = ""
-SUBFOLDERS = ["Upload", "Analytics" ]
+SUBFOLDERS = "Analytics"
 # for thepost we use to call the api ddirectly for the posts there and using the media id from there to match the file csv value and show analytics
 # theres no time row in postalaysis , instead i stacked then one by one in the acsedning order as the time
 campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
@@ -143,15 +143,13 @@ def get_or_create_folder(service, folder_name, parent_id=None):
 
 def create_platform_folder_structure(service):
     structure = {}
-    for applic in APP_FOLDER:
-        app_id, app_created = get_or_create_folder(service, applic)
-        structure[applic] = {"_id": app_id, "_created": app_created}
-        for platform in PLATFORM_FOLDERS:
-            platform_id, platform_created = get_or_create_folder(service, platform, parent_id=app_id)
-            structure[applic][platform] = {"_id": platform_id, "_created": platform_created}
-            for sub in SUBFOLDERS:
-                sub_id, sub_created = get_or_create_folder(service, sub, parent_id=platform_id)
-                structure[applic][platform][sub] = {"id": sub_id, "created": sub_created}
+    app_id, app_created = get_or_create_folder(service, APP_FOLDER)
+    structure[APP_FOLDER] = {"_id": app_id, "_created": app_created}
+    for platform in PLATFORM_FOLDERS:
+        platform_id, platform_created = get_or_create_folder(service, platform, parent_id=app_id)
+        structure[APP_FOLDER][platform] = {"_id": platform_id, "_created": platform_created}
+        sub_id, sub_created = get_or_create_folder(service, SUBFOLDERS, parent_id=platform_id)
+        structure[APP_FOLDER][platform][SUBFOLDERS] = {"id": sub_id, "created": sub_created}
     return structure
 
 def create_files_in_folders(token, user_id, service, file_content, structure):
