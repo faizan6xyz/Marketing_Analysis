@@ -19,7 +19,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import Flow
-import Drive.dep as dpp
 import database.UserDB as dbimp
 import authnew as au
 YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/drive.readonly",]

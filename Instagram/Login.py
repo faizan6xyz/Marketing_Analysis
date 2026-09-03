@@ -26,6 +26,11 @@ STATE_MAX_AGE = 600  # seconds
 TABLE_NAME = "Instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
 BASE_URL = ""
+MAX_VIDEO_SIZE = 1024 * 1024 * 1024
+photo_szie = 20 * 1024 * 1024
+sotry_szie = 240 * 1024 * 1024
+reel_szie = 400 * 1024 * 1024
+video_szie = 1024 * 1024 * 1024
 
 def check_user_id(token, uuser_id):
     rows = dbimp.select_rows(token, TABLE_NAME, select="id", filters={"id": uuser_id})
@@ -56,22 +61,24 @@ def _coerce_int(value):
         return int(value)
     except (TypeError, ValueError):
         return None
-
-# add the uplaod file to the drive and fetch it back and check the duation and the size 
-
-def get_files_and_upload_to_drive(request, service, parent_folder=None, make_public=True):
+    
+def get_files_and_upload_to_drive( service, parent_folder=None):
     uploaded_files = request.files.getlist("file")
     if not uploaded_files or all(f.filename == "" for f in uploaded_files):
         return None, jsonify({"error": "at least one file required (form-data field: file)"}), 400
     results = []
     tmp_paths = []
+    make_public=True
     try:
         for uploaded_file in uploaded_files:
             if uploaded_file.filename == "":
                 continue
             uploaded_file.stream.seek(0, os.SEEK_END)
+            size = uploaded_file.stream.tell()
             uploaded_file.stream.seek(0)
-            results.append({"filename": uploaded_file.filename, "status": "failed", "error": "file exceeds max size"})
+            if size > MAX_VIDEO_SIZE:
+                results.append({"filename": uploaded_file.filename, "status": "failed", "error": "file exceeds max size"})
+                continue
             with tempfile.NamedTemporaryFile(delete=False) as tmp:
                 uploaded_file.save(tmp.name)
                 tmp_path = tmp.name
@@ -81,11 +88,11 @@ def get_files_and_upload_to_drive(request, service, parent_folder=None, make_pub
                 if parent_folder:
                     file_metadata["parents"] = [parent_folder]
                 media_upload = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
-                created_file = service.files().create( body=file_metadata, media_body=media_upload,fields="id, name, webViewLink, webContentLink, mimeType",).execute()
+                created_file = service.files().create( body=file_metadata,media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType",).execute()
                 drive_file_id = created_file["id"]
                 if make_public:
                     service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"}).execute()
-                results.append({"filename": uploaded_file.filename, "status": "uploaded", "drive_file": created_file})
+                results.append({ "filename": created_file.get("name"), "webViewLink": created_file.get("webViewLink"), "size": size, "status": "uploaded", })
             except HttpError as e:
                 results.append({"filename": uploaded_file.filename, "status": "failed", "error": str(e)})
         return results, None, None
@@ -94,16 +101,8 @@ def get_files_and_upload_to_drive(request, service, parent_folder=None, make_pub
             if path and os.path.exists(path):
                 os.remove(path)
 
-def get_authenticated_access_token(account_id):
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
-    tokench = au.process(token=token)
-    if not tokench["status"]:
-        return None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
-    user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return None, (jsonify({"error": "invalid user id"}), 401)
-    rows = dbimp.select_rows(tokench["token"], TABLE_NAME, select="Access_token,Token_expire", filters={"Account_id": account_id})
+def get_authenticated_access_token(user_id,body,token,account_id):
+    rows = dbimp.select_rows(token, TABLE_NAME, select="Access_token,Token_expire", filters={"Account_id": account_id,"id":user_id})
     if not rows:
         return None, (jsonify({"error": "no instagram account linked"}), 404)
     row = rows[0]
@@ -115,7 +114,7 @@ def get_authenticated_access_token(account_id):
     if Token_expiry.tzinfo is None:
         Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
     if Token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
-        access_token = uploadd.refresh_token(tokench["token"], user_id, access_token)
+        access_token = uploadd.refresh_token(token, user_id, access_token)
     return access_token, None
 
 @app.route("/auth/instagram/login")
@@ -202,8 +201,10 @@ def dataget():
 @app.route("/instagram/posts/")
 def get_instagram_posts():
     body = request.get_json(silent=True) or {}
-    account_id = body.get("account_id")
-    access_token, err = get_authenticated_access_token(account_id)
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
     fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"
     url = "https://graph.instagram.com/me/media"
@@ -231,8 +232,10 @@ def get_instagram_posts():
 @app.route("/instagram/stories/")
 def get_instagram_stories():
     body = request.get_json(silent=True) or {}
-    account_id = body.get("account_id")
-    access_token, err = get_authenticated_access_token(account_id)
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
     fields = "id,media_type,media_url,timestamp"
     url = "https://graph.instagram.com/me/stories"
@@ -260,9 +263,11 @@ def get_instagram_stories():
 @app.route("/instagram/comments/")
 def get_instagram_comments():
     body = request.get_json(silent=True) or {}
-    account_id = body.get("account_id")
     media_id = body.get("media_id")
-    access_token, err = get_authenticated_access_token(account_id)
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
     fields = "id,text,username,timestamp,like_count"
     url = f"https://graph.instagram.com/{media_id}/comments"
@@ -323,7 +328,7 @@ def story():
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
         account_id = row["Account_id"]
-        access_token, err = get_authenticated_access_token(account_id)
+        access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
@@ -383,7 +388,7 @@ def photo():
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
         account_id = row["Account_id"]
-        access_token, err = get_authenticated_access_token(account_id)
+        access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
@@ -456,7 +461,7 @@ def video():
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
         account_id = row["Account_id"]
-        access_token, err = get_authenticated_access_token(account_id)
+        access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
@@ -519,7 +524,7 @@ def carousel():
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
         account_id = row["Account_id"]
-        access_token, err = get_authenticated_access_token(account_id)
+        access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
@@ -539,11 +544,13 @@ def carousel():
 @app.route("/instagram/auto", methods=["POST"])
 def get_thumbnail_auto():
     body = request.get_json(silent=True) or {}
-    account_id = body.get("account_id")
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     media_ids = body.get("media_id")
     if len(media_ids) == 1 and "," in media_ids[0]:
         media_ids = [m.strip() for m in media_ids[0].split(",") if m.strip()]
-    access_token, err = get_authenticated_access_token(account_id)
     if err:
         return err
     if not media_ids:
@@ -567,8 +574,10 @@ def insight():
     body = request.get_json(silent=True) or {}
     is_story = body.get("is_story")
     media_id = body.get("media_id")
-    account_id = body.get("account_id")
-    access_token, err = get_authenticated_access_token(account_id)
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
     is_story = str(is_story).strip().lower() == "true" if is_story else False
     try:
@@ -582,10 +591,12 @@ def insight():
     
 @app.route("/instagram/comments/reply/batch/", methods=["POST"])
 def reply_to_comments_batch():
-    data = request.get_json(silent=True) or {}
-    replies = data.get("replies")  # expects [{"comment_id": "...", "message": "..."}, ...]
-    account_id = data.get("account_id")
-    access_token, err = get_authenticated_access_token(account_id)
+    body = request.get_json(silent=True) or {}
+    replies = body.get("replies")  # expects [{"comment_id": "...", "message": "..."}, ...]
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
     if not replies or not isinstance(replies, list):
         return jsonify({"success": False, "message": "expected a non-empty 'replies' list"}), 400
@@ -607,12 +618,14 @@ def reply_to_comments_batch():
 
 @app.route("/instagram/send-message/", methods=["POST"])
 def send_instagram_message():
-    data = request.get_json(silent=True) or {}
-    recipient_id = data.get("recipient_id")
-    account_id = data.get("account_id")
-    access_token, err = get_authenticated_access_token(account_id)
+    body = request.get_json(silent=True) or {}
+    recipient_id = body.get("recipient_id")
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
-    message = data.get("message")
+    message = body.get("message")
     if not recipient_id or not message:
         return jsonify({"error": "recipient_id and message are required"}), 400
     result = uploadd.send_message(recipient_id, message, access_token)
@@ -623,9 +636,12 @@ def send_instagram_message():
 @app.route("/instagram/followers")
 def get_followers_count_route():
     body = request.get_json(silent=True) or {}
-    account_id = body.get("account_id")
-    access_token, err = get_authenticated_access_token(account_id)
+    username = body.get("username")
+    token = body.get("token")
+    tokench = au.process(token=token)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
+    account_id = dbimp.select_rows()
     result = uploadd.get_follower_count(account_id, access_token)
     if not result["success"]:
         return jsonify({"error": result["error"]}), 400
