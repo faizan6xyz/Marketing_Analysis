@@ -1,5 +1,8 @@
-import database.UserDB as dbimp
+from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
+import tempfile
 import os
+import database.UserDB as dbimp
 import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
@@ -54,6 +57,42 @@ def _coerce_int(value):
     except (TypeError, ValueError):
         return None
 
+# add the uplaod file to the drive and fetch it back and check the duation and the size 
+
+def get_files_and_upload_to_drive(request, service, parent_folder=None, make_public=True):
+    uploaded_files = request.files.getlist("file")
+    if not uploaded_files or all(f.filename == "" for f in uploaded_files):
+        return None, jsonify({"error": "at least one file required (form-data field: file)"}), 400
+    results = []
+    tmp_paths = []
+    try:
+        for uploaded_file in uploaded_files:
+            if uploaded_file.filename == "":
+                continue
+            uploaded_file.stream.seek(0, os.SEEK_END)
+            uploaded_file.stream.seek(0)
+            results.append({"filename": uploaded_file.filename, "status": "failed", "error": "file exceeds max size"})
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                uploaded_file.save(tmp.name)
+                tmp_path = tmp.name
+                tmp_paths.append(tmp_path)
+            try:
+                file_metadata = {"name": uploaded_file.filename}
+                if parent_folder:
+                    file_metadata["parents"] = [parent_folder]
+                media_upload = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
+                created_file = service.files().create( body=file_metadata, media_body=media_upload,fields="id, name, webViewLink, webContentLink, mimeType",).execute()
+                drive_file_id = created_file["id"]
+                if make_public:
+                    service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"}).execute()
+                results.append({"filename": uploaded_file.filename, "status": "uploaded", "drive_file": created_file})
+            except HttpError as e:
+                results.append({"filename": uploaded_file.filename, "status": "failed", "error": str(e)})
+        return results, None, None
+    finally:
+        for path in tmp_paths:
+            if path and os.path.exists(path):
+                os.remove(path)
 
 def get_authenticated_access_token(account_id):
     body = request.get_json(silent=True) or {}

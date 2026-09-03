@@ -35,7 +35,7 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds, state link expires after 10 min
 table_name = "Drive" 
 APP_FOLDER = "Leo_Social"
-PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin","Youtube"]
+PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin","youtube","uplaod"]
 BASE_URL = ""
 SUBFOLDERS = "Analytics"
 # for thepost we use to call the api ddirectly for the posts there and using the media id from there to match the file csv value and show analytics
