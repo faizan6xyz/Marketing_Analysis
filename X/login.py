@@ -27,6 +27,8 @@ SCOPE = "tweet.read users.read offline.access"
 AUTH_URL = "https://twitter.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
 BASE_URL = ""
+image_size = 5 * 1024 * 1024
+video_size = 500 * 1024 * 1024
 MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
 size = 139
 
@@ -233,12 +235,6 @@ def x_dataget():
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
 
-
-
-# have speciclize the post endpoint for different categoreis wiht different paramters
-
-
-
 @app.route("/post/x", methods=["POST"])
 def post_to_x():
     token = request.form.get("token")
@@ -257,6 +253,8 @@ def post_to_x():
         return err
     files = request.files.getlist("file")
     media_ids = []
+    if files > 4 :
+        return "it allows  just to post 4 media items per post " , 400
     if files:
         video_files = [f for f in files if (f.mimetype or "").startswith("video/")]
         image_files = [f for f in files if (f.mimetype or "").startswith("image/")]
@@ -276,7 +274,8 @@ def post_to_x():
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
                     tmp_path = tmp.name
                     f.save(tmp_path)  
-                    if get_video_duration(tmp_path) > size :
+                    file_size_bytes = os.path.getsize(tmp_path)
+                    if get_video_duration(tmp_path) > size  or file_size_bytes > video_size :
                         os.remove(tmp_path)
                         return "unable to upload file due to long videos" , 400
                 media_id = upload_video(access_token, tmp_path, f.mimetype)
@@ -288,7 +287,20 @@ def post_to_x():
             media_ids.append(media_id)
         else:
             for f in image_files:
-                media_id = upload_image(access_token, f.read())
+                tmp_path = None
+                try:
+                    suffix = os.path.splitext(f.filename or "")[1] or ".jpg"
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                        tmp_path = tmp.name
+                        f.save(tmp_path)
+                    file_size_bytes = os.path.getsize(tmp_path)
+                    if file_size_bytes > image_size:
+                        return jsonify({"error": f"image {f.filename} exceeds max size"}), 400
+                    with open(tmp_path, "rb") as fh:
+                        media_id = upload_image(access_token, fh.read())
+                finally:
+                    if tmp_path and os.path.exists(tmp_path):
+                        os.remove(tmp_path)
                 if not media_id:
                     return jsonify({"error": f"image upload failed for {f.filename}"}), 400
                 media_ids.append(media_id)
