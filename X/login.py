@@ -233,6 +233,12 @@ def x_dataget():
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
 
+
+
+# have speciclize the post endpoint for different categoreis wiht different paramters
+
+
+
 @app.route("/post/x", methods=["POST"])
 def post_to_x():
     token = request.form.get("token")
