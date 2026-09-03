@@ -13,6 +13,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import google.auth.transport.requests
+from moviepy import VideoFileClip
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -40,6 +41,11 @@ CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS
 TABLE_NAME = "Youtube"
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)
+length = 180
+
+def get_video_duration(file_path):
+    with VideoFileClip(file_path) as video:
+        return video.duration
 
 def _to_aware_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
@@ -244,7 +250,7 @@ def list_youtube_accounts():
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
-    rows = dbimp.select_rows(token, TABLE_NAME, select="channel_id,channel_title", filters={"user_id": user_id})
+    rows = dbimp.select_rows(token, TABLE_NAME, select="channel_id,channel_title", filters  ={"user_id": user_id})
     return jsonify({"accounts": rows or []})
 
 @app.route("/youtube/upload/short", methods=["POST"])
@@ -260,9 +266,6 @@ def upload():
     accounts = request.form.getlist("accounts")
     if not accounts:
         return jsonify({"error": "'accounts' is required (one or more connected channel ids)"}), 400
-    service, err = dpp.authenticate_and_get_service(token)
-    if err:
-        return err
     uploaded_file = request.files.get("file")
     if not uploaded_file or uploaded_file.filename == "":
         return jsonify({"error": "file required (form-data field: file)"}), 400
@@ -271,73 +274,43 @@ def upload():
     uploaded_file.stream.seek(0)
     if size > MAX_VIDEO_SIZE:
         return jsonify({"error": f"file exceeds max size of {MAX_VIDEO_SIZE} bytes"}), 400
-    parent_id = request.form.get("parent_id")
-    platform = "Youtube"
-    subfolder = "Upload"
-    make_public = True
-    try:
-        if parent_id:
-            parent_folder = parent_id
-        else:
-            platform_id, _ = dpp.get_or_create_folder(service, platform)
-            sub_id, _ = dpp.get_or_create_folder(service, subfolder, parent_id=platform_id)
-            parent_folder = sub_id
-    except HttpError as e:
-        return jsonify({"error": "drive folder setup failed", "detail": str(e)}), 400
     upload_tmp_path = None
-    drive_file_id = None
-    channel_tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             uploaded_file.save(tmp.name)
             upload_tmp_path = tmp.name
-        file_metadata = {"name": uploaded_file.filename}
-        if parent_folder:
-            file_metadata["parents"] = [parent_folder]
-        media_upload = MediaFileUpload(upload_tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
-        created_file = service.files().create( body=file_metadata, media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType", ).execute()
-        drive_file_id = created_file["id"]
-        if make_public:
-            service.permissions().create(fileId=drive_file_id, body={"type": "anyone", "role": "reader"}).execute()
-        channel_tmp_path, mimetype, _name = download_drive_file_to_temp(service, drive_file_id)
-    except HttpError as e:
-        return jsonify({"error": "drive upload/download failed", "detail": str(e)}), 400
-    finally:
-        if upload_tmp_path and os.path.exists(upload_tmp_path):
-            os.remove(upload_tmp_path)
-    caption = request.form.get("caption") or ""
-    description = request.form.get("description") or ""
-    tags = [t.strip() for t in (request.form.get("tags") or "").split(",") if t.strip()]
-    def _upload_one(channel_id):
-        creds = get_youtube_credentials_for_account(token, user_id, channel_id)
-        if not creds:
-            return {"account": channel_id, "status": "failed", "error": "channel not connected"}
-        try:
-            response = upload_video_to_youtube_channel( creds, channel_tmp_path, mimetype, title=caption, description=description, tags=tags, )
-            video_id = response.get("id")
+            if get_video_duration(upload_tmp_path) > size :
+                os.remove(upload_tmp_path)
+                return "unable to upload file due to long videos" , 400
+        mimetype = uploaded_file.mimetype
+        caption = request.form.get("caption") or ""
+        description = request.form.get("description") or ""
+        tags = [t.strip() for t in (request.form.get("tags") or "").split(",") if t.strip()]
+        def _upload_one(channel_id):
+            creds = get_youtube_credentials_for_account(token, user_id, channel_id)
+            if not creds:
+                return {"account": channel_id, "status": "failed", "error": "channel not connected"}
             try:
-                sccc(user_id, creds.token, video_id, token, "shorts")
+                response = upload_video_to_youtube_channel( creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags, )
+                video_id = response.get("id")
+                try:
+                    sccc(user_id, creds.token, video_id, token, "shorts")
+                except Exception as e:
+                    print(f"xcccc scheduling failed for channel {channel_id}: {e}")
+                return {"account": channel_id, "status": "uploaded", "youtube_video_id": video_id}
+            except HttpError as e:
+                return {"account": channel_id, "status": "failed", "error": str(e)}
             except Exception as e:
-                print(f"xcccc scheduling failed for channel {channel_id}: {e}")
-            return {"account": channel_id, "status": "uploaded", "youtube_video_id": video_id}
-        except HttpError as e:
-            return {"account": channel_id, "status": "failed", "error": str(e)}
-        except Exception as e:
-            return {"account": channel_id, "status": "failed", "error": str(e)}
-    results = []
-    try:
+                return {"account": channel_id, "status": "failed", "error": str(e)}
+        results = []
         with ThreadPoolExecutor(max_workers=min(MAX_UPLOAD_WORKERS, len(accounts))) as executor:
             futures = {executor.submit(_upload_one, ch): ch for ch in accounts}
             for future in as_completed(futures):
                 results.append(future.result())
+        return jsonify({"count": len(results), "results": results})
     finally:
-        if channel_tmp_path and os.path.exists(channel_tmp_path):
-            os.remove(channel_tmp_path)
-        try:
-            service.files().delete(fileId=drive_file_id).execute()
-        except HttpError:
-            pass
-    return jsonify({"count": len(results), "results": results})
+        if upload_tmp_path and os.path.exists(upload_tmp_path):
+            os.remove(upload_tmp_path)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
