@@ -20,7 +20,7 @@ app.secret_key = os.environ["FLASK_SECRET_KEY"]
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gmail_api")
 MAX_MEDIA_ITEMS = 4
-MAX_FILE_SIZE = 5 * 1024 * 1024   # 5 MB (comment previously said 50MB but value is 5MB - confirm which is correct)
+MAX_FILE_SIZE = 10 * 1024 * 1024   
 MAX_TARGETS = 2000
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 APP_FOLDER = ["Leo_Social"]

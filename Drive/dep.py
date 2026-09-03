@@ -123,17 +123,14 @@ def authenticate_and_get_service(token):
     return service, None
 
 def get_or_create_folder(service, folder_name, parent_id=None):
-    query = (f"name='{folder_name}' "
-            "and mimeType='application/vnd.google-apps.folder' "
-            "and trashed=false")
+    query = (f"name='{folder_name}' " "and mimeType='application/vnd.google-apps.folder' " "and trashed=false")
     if parent_id:
         query += f" and '{parent_id}' in parents"
     results = service.files().list(q=query, fields="files(id, name)").execute()
     folders = results.get("files", [])
     if folders:
         if len(folders) > 1:
-            print(f"[warning] multiple folders named '{folder_name}' found "
-                  f"under parent={parent_id}; using the first one (id={folders[0]['id']})")
+            print(f"[warning] multiple folders named '{folder_name}' found " f"under parent={parent_id}; using the first one (id={folders[0]['id']})")
         return folders[0]["id"], False
     folder_metadata = { "name": folder_name, "mimeType": "application/vnd.google-apps.folder", }
     if parent_id:

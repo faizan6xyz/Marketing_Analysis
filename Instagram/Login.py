@@ -4,7 +4,6 @@ import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
 from flask import Flask, request, redirect, jsonify
-from supabase import create_client, Client
 from datetime import datetime, timezone, timedelta
 import time
 import authnew as au
@@ -20,9 +19,6 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 IG_APP_ID = os.getenv("IG_APP_ID")
 IG_APP_SECRET = os.getenv("IG_APP_SECRET")
 IG_REDIRECT_URI = os.getenv("IG_REDIRECT_URI")
-mail = os.environ.get("email")
-passw = os.environ.get("pass")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 STATE_MAX_AGE = 600  # seconds
 TABLE_NAME = "Instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
