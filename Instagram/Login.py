@@ -14,8 +14,6 @@ import authnew as au
 from moviepy import VideoFileClip
 import Instagram.upload as uploadd
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])

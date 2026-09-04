@@ -102,12 +102,6 @@ def fetch_tweet_metrics(tweet_ids: list[str], access_token: str) -> list[dict]:
         results.append( { "tweet_id": tweet["id"], "created_at": tweet.get("created_at"),"retweets": public.get("retweet_count", 0), "replies": public.get("reply_count", 0), "likes": public.get("like_count", 0),"quotes": public.get("quote_count", 0),"impressions": organic.get("impression_count", 0),"profile_clicks": organic.get("user_profile_clicks", 0), "url_clicks": organic.get("url_link_clicks", 0), })
     return results
 
-def generate_pkce_pair():
-    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode("utf-8")
-    digest = hashlib.sha256(code_verifier.encode("utf-8")).digest()
-    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
-    return code_verifier, code_challenge
-
 def get_access_token_by_username(token, user_id, username):
     rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id,Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Username": username} )
     if not rows:
@@ -151,9 +145,8 @@ def x_login():
     user_id = tokench["user_id"]
     if not check_user_id(tokench["token"], user_id):
         return jsonify({"error": "invalid user id"}), 401
-    code_verifier, code_challenge = generate_pkce_pair()
-    state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
-    params = { "response_type": "code", "client_id": X_CLIENT_ID, "redirect_uri": X_REDIRECT_URI, "scope": SCOPE,"state": state,"code_challenge": code_challenge, "code_challenge_method": "S256",}
+    state = serializer.dumps({"user_id": user_id})
+    params = { "response_type": "code", "client_id": X_CLIENT_ID, "redirect_uri": X_REDIRECT_URI, "scope": SCOPE,"state": state,}
     auth_url = AUTH_URL + "?" + urlencode(params)
     return redirect(auth_url)
 

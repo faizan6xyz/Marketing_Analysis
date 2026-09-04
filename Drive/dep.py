@@ -24,13 +24,13 @@ import authnew as au
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
-app.secret_key = os.environ["FLASK_SECRET_KEY"]
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 SECRET_KEY = os.environ.get("token_secret", "").encode("utf-8")
-CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]
-CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]  
-REDIRECT_URI = os.environ["GOOGLE_REDIRECT_URI"]
+CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")  
+REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI")
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-fernet = Fernet(os.environ["FERNET_KEY"].encode())
+fernet = Fernet(os.environ.get("FERNET_KEY").encode())
 serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds, state link expires after 10 min
 table_name = "Drive" 
