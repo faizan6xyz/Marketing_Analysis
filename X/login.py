@@ -30,7 +30,7 @@ BASE_URL = ""
 image_size = 5 * 1024 * 1024
 video_size = 500 * 1024 * 1024
 MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
-size = 139
+duation = 139
 
 def upload_image(access_token, file_bytes):
     resp = requests.post( MEDIA_UPLOAD_URL, headers={"Authorization": f"Bearer {access_token}"}, files={"media": file_bytes} ).json()
@@ -275,7 +275,7 @@ def post_to_x():
                     tmp_path = tmp.name
                     f.save(tmp_path)  
                     file_size_bytes = os.path.getsize(tmp_path)
-                    if get_video_duration(tmp_path) > size  or file_size_bytes > video_size :
+                    if get_video_duration(tmp_path) > duation  or file_size_bytes > video_size :
                         os.remove(tmp_path)
                         return "unable to upload file due to long videos" , 400
                 media_id = upload_video(access_token, tmp_path, f.mimetype)

@@ -28,7 +28,7 @@ STATE_MAX_AGE = 600  # seconds
 TABLE_NAME = "Instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
 BASE_URL = ""
-MAX_SIZE = 900 * 1024 * 1024
+MAX_SIZE = 400 * 1024 * 1024
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv", ".webm")
 reel_duraltion = 300
 sotry_duration = 59
@@ -36,8 +36,8 @@ min_sorty_duation = 3
 min_reel_duration = 3
 crousal_duration = 59
 photo_szie = 20 * 1024 * 1024
-sotry_szie = 240 * 1024 * 1024
-reel_szie = 400 * 1024 * 1024
+sotry_szie = 180 * 1024 * 1024
+reel_szie = 270 * 1024 * 1024
 
 def check_user_id(token, uuser_id):
     rows = dbimp.select_rows(token, TABLE_NAME, select="id", filters={"id": uuser_id})
