@@ -10,6 +10,7 @@ from flask import Flask, request, redirect, jsonify
 from datetime import datetime, timezone, timedelta
 import time
 import authnew as au
+from moviepy import VideoFileClip
 import Instagram.upload as uploadd
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -26,11 +27,13 @@ STATE_MAX_AGE = 600  # seconds
 TABLE_NAME = "Instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
 BASE_URL = ""
-MAX_VIDEO_SIZE = 1024 * 1024 * 1024
+MAX_SIZE = 901 * 1024 * 1024
+reel_duraltion = 300
+video_duration = 1200
 photo_szie = 20 * 1024 * 1024
 sotry_szie = 240 * 1024 * 1024
 reel_szie = 400 * 1024 * 1024
-video_szie = 1024 * 1024 * 1024
+video_szie = 900 * 1024 * 1024
 
 def check_user_id(token, uuser_id):
     rows = dbimp.select_rows(token, TABLE_NAME, select="id", filters={"id": uuser_id})
@@ -54,6 +57,10 @@ def _validate_int(value, field_name="value") -> None:
     if not isinstance(value, int) or isinstance(value, bool):
         raise ValueError(f"{field_name} must be an integer, got {type(value).__name__}: {value!r}")
 
+def get_video_duration(file_path):
+    with VideoFileClip(file_path) as video:
+        return video.duration
+
 def _coerce_int(value):
     if value is None:
         return None
@@ -61,11 +68,15 @@ def _coerce_int(value):
         return int(value)
     except (TypeError, ValueError):
         return None
-    
-def get_files_and_upload_to_drive( service, parent_folder=None):
+
+def get_files_and_upload_to_drive(service,type):
     uploaded_files = request.files.getlist("file")
     if not uploaded_files or all(f.filename == "" for f in uploaded_files):
         return None, jsonify({"error": "at least one file required (form-data field: file)"}), 400
+    if type in ("reel", "photo", "video") and len(uploaded_files) > 1:
+        return None, jsonify({"error": f"{type} allows only 1 file"}), 400
+    if type == "carousel" and len(uploaded_files) > 20:
+        return None, jsonify({"error": "carousel allows max 20 files"}), 400
     results = []
     tmp_paths = []
     make_public=True
@@ -76,7 +87,7 @@ def get_files_and_upload_to_drive( service, parent_folder=None):
             uploaded_file.stream.seek(0, os.SEEK_END)
             size = uploaded_file.stream.tell()
             uploaded_file.stream.seek(0)
-            if size > MAX_VIDEO_SIZE:
+            if size > MAX_SIZE:
                 results.append({"filename": uploaded_file.filename, "status": "failed", "error": "file exceeds max size"})
                 continue
             with tempfile.NamedTemporaryFile(delete=False) as tmp:
@@ -85,14 +96,12 @@ def get_files_and_upload_to_drive( service, parent_folder=None):
                 tmp_paths.append(tmp_path)
             try:
                 file_metadata = {"name": uploaded_file.filename}
-                if parent_folder:
-                    file_metadata["parents"] = [parent_folder]
                 media_upload = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
                 created_file = service.files().create( body=file_metadata,media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType",).execute()
                 drive_file_id = created_file["id"]
                 if make_public:
                     service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"}).execute()
-                results.append({ "filename": created_file.get("name"), "webViewLink": created_file.get("webViewLink"), "size": size, "status": "uploaded", })
+                results.append({ "filename": drive_file_id , "webViewLink": created_file.get("webViewLink"), "size": size, "status": "uploaded", })
             except HttpError as e:
                 results.append({"filename": uploaded_file.filename, "status": "failed", "error": str(e)})
         return results, None, None
@@ -100,6 +109,17 @@ def get_files_and_upload_to_drive( service, parent_folder=None):
         for path in tmp_paths:
             if path and os.path.exists(path):
                 os.remove(path)
+
+def deleteFile(service ,file_id):
+    if not service :
+        return False
+    if not file_id:
+        return False
+    try: 
+        service.files().delete(fileId=file_id).execute()
+    except:
+        return False
+    return True
 
 def get_authenticated_access_token(user_id,body,token,account_id):
     rows = dbimp.select_rows(token, TABLE_NAME, select="Access_token,Token_expire", filters={"Account_id": account_id,"id":user_id})
