@@ -10,6 +10,8 @@ import tempfile
 from flask_cors import CORS
 from flask import Flask, request, redirect, jsonify
 from datetime import datetime, timezone, timedelta
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import authnew as au
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 app = Flask(__name__)
@@ -17,6 +19,7 @@ frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
+limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 X_CLIENT_ID = os.getenv("X_CLIENT_ID")
 X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
 X_REDIRECT_URI = os.getenv("X_REDIRECT_URI")
@@ -80,37 +83,30 @@ def parse_datetime(value: str, require_tz: bool = True):
         return None
     return dt
 
+def get_last_n_tweet_ids(user_id: str, access_token: str, n: int = 20) -> list[str]:
+    resp = requests.get( f"https://api.twitter.com/2/users/{user_id}/tweets", headers={"Authorization": f"Bearer {access_token}"}, params={"max_results": min(n, 100),  
+            "tweet.fields": "created_at", }, )
+    resp.raise_for_status()
+    data = resp.json()
+    return [tweet["id"] for tweet in data.get("data", [])]
+
+
+def fetch_tweet_metrics(tweet_ids: list[str], access_token: str) -> list[dict]:
+    resp = requests.get( "https://api.twitter.com/2/tweets",  headers={"Authorization": f"Bearer {access_token}"}, params={ "ids": ",".join(tweet_ids), "tweet.fields": "created_at,public_metrics,non_public_metrics,organic_metrics",   }, )
+    resp.raise_for_status()
+    data = resp.json()
+    results = []
+    for tweet in data.get("data", []):
+        public = tweet.get("public_metrics", {})
+        organic = tweet.get("organic_metrics", {})
+        results.append( { "tweet_id": tweet["id"], "created_at": tweet.get("created_at"),"retweets": public.get("retweet_count", 0), "replies": public.get("reply_count", 0), "likes": public.get("like_count", 0),"quotes": public.get("quote_count", 0),"impressions": organic.get("impression_count", 0),"profile_clicks": organic.get("user_profile_clicks", 0), "url_clicks": organic.get("url_link_clicks", 0), })
+    return results
+
 def generate_pkce_pair():
     code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode("utf-8")
     digest = hashlib.sha256(code_verifier.encode("utf-8")).digest()
     code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
     return code_verifier, code_challenge
-
-def get_authenticated_access_token(account_id):
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
-    tokench = au.process(token=token)
-    if not tokench["status"]:
-        return None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
-    user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return None, (jsonify({"error": "invalid user id"}), 401)
-    rows = dbimp.select_rows(tokench["token"], TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"Account_id": account_id})
-    if not rows:
-        return None, (jsonify({"error": "no x account linked"}), 404)
-    row = rows[0]
-    access_token = row["Access_token"]
-    raw_expiry = row["Token_expire"]
-    if not access_token or not raw_expiry:
-        return None, (jsonify({"error": "missing access_token"}), 400)
-    Token_expiry = datetime.fromisoformat(raw_expiry)
-    if Token_expiry.tzinfo is None:
-        Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
-    if Token_expiry - datetime.now(timezone.utc) < timedelta(minutes=10):
-        refresh_token = row.get("Refresh_token")
-        if refresh_token:
-            access_token = refresh_x_token(tokench["token"], account_id, refresh_token)
-    return access_token, None
 
 def get_access_token_by_username(token, user_id, username):
     rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id,Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Username": username} )
@@ -314,3 +310,22 @@ def post_to_x():
     if tweet_resp.status_code >= 400:
         return jsonify({"error": "post failed", "details": data}), tweet_resp.status_code
     return jsonify({"status": "ok", "tweet": data}), 200
+
+@app.route("/x/analytics/posts", methods=["GET"])
+@limiter.limit("10 per minute")
+def fetch_x_post_analytics():
+    data = request.get_json(silent=True) or {}
+    token = data.get("token")
+    username = data.get("name")
+    tokench = au.process(token=token)
+    rows = dbimp.select_rows( tokench["token"],TABLE_NAME, select="account_id",filters={"id": tokench["user_id"], "name": username},)
+    if not rows:
+        return {"error": "account not found"}, 404
+    row = rows[0]
+    account_id = row["account_id"]  
+    access_token = get_access_token_by_username(tokench["token"], tokench["user_id"], username)
+    tweet_ids = get_last_n_tweet_ids(account_id, access_token, n=20)
+    if not tweet_ids:
+        return {"error": "no posts found"}, 404
+    results = fetch_tweet_metrics(tweet_ids, access_token)
+    return results

@@ -13,6 +13,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import google.auth.transport.requests
+import isodate
 from moviepy import VideoFileClip
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -29,6 +30,8 @@ MAX_VIDEO_SIZE = 30 * 1024 * 1024  # 30 MB
 RESUMABLE_UPLOAD_MAX_RETRIES = 5
 RETRIABLE_STATUS_CODES = (500, 502, 503, 504)
 MAX_UPLOAD_WORKERS = 4
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY") # figure out
+YOUTUBE_DATA_URL = "https://www.googleapis.com/youtube/v3" # figure out
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
@@ -310,6 +313,44 @@ def upload():
     finally:
         if upload_tmp_path and os.path.exists(upload_tmp_path):
             os.remove(upload_tmp_path)
+
+@app.route("/youtube/upload/short", methods=["GET"])
+@limiter.limit("10 per minute")
+def fetch_shorts():
+    data = request.get_json(silent=True) or {}
+    token = data.get("token")
+    account_name = data.get("name")
+    tokench = au.process(token=token)
+    rows = dbimp.select_rows(tokench["token"],TABLE_NAME,select="account_id" , filters={"id":tokench["user_id"],"name":account_name})
+    if rows:
+        row = rows[0]
+    channel_id = row["account_id"]
+    channel_resp = requests.get( f"{YOUTUBE_DATA_URL}/channels", params={"part": "contentDetails", "id": channel_id, "key": YOUTUBE_API_KEY}, )
+    channel_resp.raise_for_status() 
+    uploads_playlist_id = channel_resp.json()["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+    video_ids = []
+    page_token = None
+    while True:
+        params = { "part": "contentDetails", "playlistId": uploads_playlist_id, "maxResults": 50, "key": YOUTUBE_API_KEY, }
+        if page_token:
+            params["pageToken"] = page_token
+        playlist_resp = requests.get(f"{YOUTUBE_DATA_URL}/playlistItems", params=params)
+        playlist_resp.raise_for_status()
+        data = playlist_resp.json()
+        video_ids.extend(item["contentDetails"]["videoId"] for item in data.get("items", []))
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            break
+    shorts = []
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i : i + 50]
+        videos_resp = requests.get( f"{YOUTUBE_DATA_URL}/videos", params={ "part": "snippet,contentDetails,statistics", "id": ",".join(batch), "key": YOUTUBE_API_KEY, }, )
+        videos_resp.raise_for_status()
+        for item in videos_resp.json().get("items", []):
+            seconds = int( isodate.parse_duration(item["contentDetails"]["duration"]).total_seconds() )
+            if seconds <= 60:
+                shorts.append( { "video_id": item["id"], "published_at": item["snippet"]["publishedAt"], "caption": item["snippet"]["title"], "thumbnail": item["snippet"]["thumbnails"]["high"]["url"], "views": item["statistics"].get("viewCount", 0), "likes": item["statistics"].get("likeCount", 0), "comments": item["statistics"].get("commentCount", 0), "duration_seconds": seconds, } )
+    return shorts
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
