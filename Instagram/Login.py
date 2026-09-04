@@ -31,7 +31,6 @@ BASE_URL = ""
 MAX_SIZE = 900 * 1024 * 1024
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv", ".webm")
 reel_duraltion = 300
-video_duration = 1200
 sotry_duration = 59
 min_sorty_duation = 3
 min_reel_duration = 3
@@ -39,7 +38,6 @@ crousal_duration = 59
 photo_szie = 20 * 1024 * 1024
 sotry_szie = 240 * 1024 * 1024
 reel_szie = 400 * 1024 * 1024
-video_szie = 900 * 1024 * 1024
 
 def check_user_id(token, uuser_id):
     rows = dbimp.select_rows(token, TABLE_NAME, select="id", filters={"id": uuser_id})
@@ -85,7 +83,7 @@ def get_files_and_upload_to_drive(service, media_type):
     uploaded_files = request.files.getlist("file")
     if not uploaded_files or all(f.filename == "" for f in uploaded_files):
         return None, jsonify({"error": "at least one file required (form-data field: file)"}), 400
-    if media_type in ("reel", "photo", "video", "story") and len(uploaded_files) > 1:
+    if media_type in ("reel", "photo", "story") and len(uploaded_files) > 1:
         return None, jsonify({"error": f"{media_type} allows only 1 file"}), 400
     if media_type == "carousel" and len(uploaded_files) > 20:
         return None, jsonify({"error": "carousel allows max 20 files"}), 400
@@ -117,10 +115,6 @@ def get_files_and_upload_to_drive(service, media_type):
                 duration = get_duration(tmp_path)
                 if sotry_szie < file_size_on_disk or sotry_duration < duration:
                     return None, jsonify({"error": "story failed size/duration validation"}), 400
-            elif media_type == "video":
-                duration = get_duration(tmp_path)
-                if video_szie < file_size_on_disk or video_duration < duration:
-                    return None, jsonify({"error": "video failed size/duration validation"}), 400
             elif media_type == "photo":
                 if photo_szie < file_size_on_disk:
                     return None, jsonify({"error": "photo failed size validation"}), 400
@@ -436,7 +430,7 @@ def photo():
     tokench = au.process(token)
     media_size = _coerce_int(media_size)
     service = dpp.authenticate_and_get_service(token)
-    data , error , code  = get_files_and_upload_to_drive(service=service,type="story")
+    data , error , code  = get_files_and_upload_to_drive(service=service,type="photo")
     if not data or data[0]["error"] :
         return jsonify({"error":error}) , code
     media_url = data[0]["webViewLink"]
@@ -481,14 +475,12 @@ def photo():
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
-@app.route("/instagram/upload/video", methods=["POST"])
+@app.route("/instagram/upload/reel", methods=["POST"])
 def video():
     data = request.get_json(silent=True) or {}
-    cover_url = data.get("cover_url")
     media_size = data.get("media_size")
     publish = data.get("publish")
     caption = data.get("caption", "")
-    as_reel = data.get("as_reel")
     height = data.get("height")
     width = data.get("width")
     duration = data.get("duration")
@@ -503,9 +495,10 @@ def video():
         return jsonify({"error": "url and media size is required"}), 400
     tokench = au.process(token)
     media_size = _coerce_int(media_size)
+    as_reeel = True
     duration = _coerce_int(duration)
     service = dpp.authenticate_and_get_service(token)
-    data , error , code  = get_files_and_upload_to_drive(service=service,type="story")
+    data , error , code  = get_files_and_upload_to_drive(service=service,type="reel") 
     if not data or data[0]["error"] :
         return jsonify({"error":error}) , code
     media_url = data[0]["webViewLink"]
@@ -529,9 +522,6 @@ def video():
     up = now + timedelta(hours=23)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
-    as_reeel = str(as_reel).strip().lower() == "true"
-    if cover_url and not as_reeel:
-        return jsonify({"success": False, "message": "cover_url is only supported when as_reel is true"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
@@ -546,7 +536,7 @@ def video():
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
         try:
-            id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,cover_url=cover_url if as_reeel else None, as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,)
+            id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,)
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post video: {e}"})
             continue
@@ -588,7 +578,7 @@ def carousel():
     publish_now = str(publish).strip().lower() == "true"
     timee = parse_datetime(timee_raw)
     service = dpp.authenticate_and_get_service(token)
-    data , error , code  = get_files_and_upload_to_drive(service=service,type="story")
+    data , error , code  = get_files_and_upload_to_drive(service=service,type="carousel")
     if not data or data[0]["error"] :
         return jsonify({"error":error}) , code
     media_urls = [item["webViewLink"] for item in data]
