@@ -97,11 +97,11 @@ def get_drive_service(token,user_id):
             except Exception:
                 pass
             return None
-        except TransportError as e: # network-level failure talking to Google — don't disconnect, just fail this call
+        except TransportError as e:
             return None
-        except GoogleAuthError as e: # any other auth-library error we didn't anticipate
+        except GoogleAuthError as e: 
             return None
-        except Exception as e: # last-resort catch so a bad response/JSON parse doesn't 500 the route
+        except Exception as e: 
             return None 
     return build("drive", "v3", credentials=creds)
 
