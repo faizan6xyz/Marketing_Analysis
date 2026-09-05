@@ -72,6 +72,12 @@ def check_user_id(token, uuser_id):
         return False
     return True
 
+def create_tweet_with_media(access_token, text, media_ids):
+    resp = requests.post( "https://api.twitter.com/2/tweets", headers={ "Authorization": f"Bearer {access_token}", "Content-Type": "application/json", }, json={ "text": text or "", "media": {"media_ids": media_ids}, }, )
+    if resp.status_code not in (200, 201):
+        return None, resp.text
+    return resp.json().get("data", {}).get("id"), None
+
 def parse_datetime(value: str, require_tz: bool = True):
     if not value or not isinstance(value, str):
         return None
@@ -131,6 +137,23 @@ def get_access_token_by_username(token, user_id, username):
             if refreshed:
                 access_token = refreshed
     return access_token, None
+
+def _authenticate(request):
+    token = request.form.get("token")
+    username = request.form.get("username")
+    text = request.form.get("text", "")
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
+    user_id = tokench["user_id"]
+    if not check_user_id(tokench["token"], user_id):
+        return None, None, (jsonify({"error": "invalid user id"}), 401)
+    if not username:
+        return None, None, (jsonify({"error": "username is required"}), 400)
+    access_token, err = get_access_token_by_username(tokench["token"], user_id, username)
+    if err:
+        return None, None, err
+    return access_token, text, None
 
 def refresh_x_token(token, account_id, refresh_token):
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
@@ -232,32 +255,7 @@ def x_dataget():
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
-def _authenticate(request):
-    """
-    Runs the common auth/validation steps.
-    Returns (access_token, text, error_response).
-    If error_response is not None, the caller should return it immediately.
-    """
-    token = request.form.get("token")
-    username = request.form.get("username")
-    text = request.form.get("text", "")
 
-    tokench = au.process(token=token)
-    if not tokench["status"]:
-        return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
-
-    user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return None, None, (jsonify({"error": "invalid user id"}), 401)
-
-    if not username:
-        return None, None, (jsonify({"error": "username is required"}), 400)
-
-    access_token, err = get_access_token_by_username(tokench["token"], user_id, username)
-    if err:
-        return None, None, err
-
-    return access_token, text, None
 
 @app.route("/post/x/text", methods=["POST"])
 def post_to_x_text():
@@ -300,7 +298,10 @@ def post_to_x_photo():
         if not media_id:
             return jsonify({"error": f"image upload failed for {f.filename}"}), 400
         media_ids.append(media_id)
-    return _post_tweet(access_token, text, media_ids)
+    tweet_id, post_err = create_tweet_with_media(access_token, text, media_ids)
+    if post_err:
+        return jsonify({"error": "failed to create post", "detail": post_err}), 400
+    return jsonify({"success": True, "post_id": tweet_id, "media_ids": media_ids}), 200
 
 @app.route("/post/x/video", methods=["POST"])
 def post_to_x_video():
@@ -329,7 +330,10 @@ def post_to_x_video():
             os.remove(tmp_path)
     if not media_id:
         return jsonify({"error": "video upload failed"}), 400
-    return _post_tweet(access_token, text, [media_id])
+    tweet_id, post_err = create_tweet_with_media(access_token, text, [media_id])
+    if post_err:
+        return jsonify({"error": "failed to create post", "detail": post_err}), 400
+    return jsonify({"success": True, "post_id": tweet_id, "media_ids": [media_id]}), 200
 
 @app.route("/x/analytics/posts", methods=["GET"])
 @limiter.limit("10 per minute")
