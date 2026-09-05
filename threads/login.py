@@ -5,19 +5,17 @@ import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
 from flask import Flask, request, redirect, jsonify
-from datetime import datetime, timezone, timedelta, date
+from datetime import datetime, timezone, timedelta
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import authnew as au
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
-
 THREADS_TABLE_NAME = "threads"
 THREADS_APP_ID = os.environ.get("THREADS_APP_ID")
 THREADS_APP_SECRET = os.environ.get("THREADS_APP_SECRET")
