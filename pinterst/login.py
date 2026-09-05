@@ -24,6 +24,7 @@ PINTEREST_APP_ID = os.environ.get("PINTEREST_APP_ID")
 PINTEREST_APP_SECRET = os.environ.get("PINTEREST_APP_SECRET")
 PINTEREST_REDIRECT_URI = os.environ.get("PINTEREST_REDIRECT_URI")
 BASE_URL = os.environ.get("BASE_URL")
+image_size = 10 * 1024 * 1024
 STATE_MAX_AGE = 600  # seconds
 PINTEREST_SCOPES = "boards:read,pins:read,pins:write,user_accounts:read"
 PINTEREST_AUTH_URL = "https://www.pinterest.com/oauth/"
@@ -142,6 +143,36 @@ def get_all_pins(access_token, page_size=100):
             break   
     return pins
 
+def _authenticate(request):
+    token = request.form.get("token")
+    username = request.form.get("username")
+    text = request.form.get("text", "")
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
+    user_id = tokench["user_id"]
+    if not check_user_id(tokench["token"], user_id):
+        return None, None, (jsonify({"error": "invalid user id"}), 401)
+    if not username:
+        return None, None, (jsonify({"error": "username is required"}), 400)
+    access_token, err = get_access_token_by_username(tokench["token"], user_id, username)
+    if err:
+        return None, None, err
+    return access_token, text, None
+
+def get_access_token_by_username(token, user_id, username):
+    rows = dbimp.select_rows( token, PINTEREST_TABLE_NAME, select="Account_id,Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Username": username} )
+    if not rows:
+        return None, (jsonify({"error": "no x account linked for this username"}), 404)
+    row = rows[0]
+    access_token = row["Access_token"]
+    raw_expiry = row["Token_expire"]
+    refresh_token = row["Refresh_token"]
+    if not access_token or not raw_expiry:
+        return None, (jsonify({"error": "missing access_token"}), 400)
+    Token_expiry = datetime.fromisoformat(raw_expiry)
+    access_token = refresh_pinterest_token(refresh_token, Token_expiry, access_token, token, user_id, username)
+    return access_token, None
 
 def get_pins_analytics(access_token, pin_ids, metric_types="IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK"):
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -204,3 +235,49 @@ def pins_with_metrics():
     except requests.HTTPError as e:
         return jsonify({"error": str(e), "response": e.response.text}), e.response.status_code
 
+def upload_pin_from_file(access, title, board_id, photo_bytes, description=""):
+    b64_image = base64.b64encode(photo_bytes).decode("utf-8")
+    url = "https://api.pinterest.com/v5/pins"
+    headers = { "Authorization": f"Bearer {access}", "Content-Type": "application/json", }
+    payload = { "board_id": board_id, "title": title, "description": description, "media_source": { "source_type": "image_base64", "content_type": "image/jpeg", "data": b64_image,}, }
+    resp = requests.post(url, headers=headers, json=payload)
+    resp.raise_for_status()
+    return resp.json()
+
+@app.route("/post/pinterest/photo", methods=["POST"])
+def post_to_pinterest_photo():
+    access_token, text, err = _authenticate(request)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    title = data.get("title")
+    description = data.get("description", "")
+    board_id = data.get("board_id")
+    if not board_id:
+        return jsonify({"error": "board_id is required"}), 400
+    files = request.files.getlist("file")
+    if not files:
+        return jsonify({"error": "at least one image file is required"}), 400
+    if len(files) > 1:
+        return jsonify({"error": "only one photo allowed"}), 400
+    f = files[0]
+    if not (f.mimetype or "").startswith("image/"):
+        return jsonify({"error": "unsupported file type in upload"}), 400
+    tmp_path = None
+    try:
+        suffix = os.path.splitext(f.filename or "")[1] or ".jpg"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = tmp.name
+            f.save(tmp_path)
+        file_size_bytes = os.path.getsize(tmp_path)
+        if file_size_bytes > image_size:
+            return jsonify({"error": f"image {f.filename} exceeds max size"}), 400
+        with open(tmp_path, "rb") as fh:
+            try:
+                pin = upload_pin_from_file( access_token, title=title, board_id=board_id, photo_bytes=fh.read(), description=description, )
+            except requests.HTTPError as e:
+                return jsonify({"error": "pin upload failed", "detail": str(e)}), 400
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    return jsonify({"success": True, "pin_id": pin.get("id")}), 200

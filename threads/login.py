@@ -17,8 +17,8 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 THREADS_TABLE_NAME = "threads"
-THREADS_APP_ID = os.environ.get("THREADS_APP_ID")
-THREADS_APP_SECRET = os.environ.get("THREADS_APP_SECRET")
+THREADS_APP_ID = os.environ.get("Threads_app_id")
+THREADS_APP_SECRET = os.environ.get("Threads_app_secrects")
 THREADS_REDIRECT_URI = os.environ.get("THREADS_REDIRECT_URI")
 BASE_URL = os.environ.get("BASE_URL")
 STATE_MAX_AGE = 600  # seconds
@@ -190,3 +190,4 @@ def posts_with_metrics():
         return jsonify({"count": len(combined), "posts": combined}), 200
     except requests.HTTPError as e:
         return jsonify({"error": str(e), "response": e.response.text}), e.response.status_code
+
