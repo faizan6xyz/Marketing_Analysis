@@ -90,6 +90,15 @@ def get_last_n_tweet_ids(user_id: str, access_token: str, n: int = 20) -> list[s
     data = resp.json()
     return [tweet["id"] for tweet in data.get("data", [])]
 
+def _post_tweet(access_token, text, media_ids=None):
+    payload = {"text": text}
+    if media_ids:
+        payload["media"] = {"media_ids": media_ids}
+    resp = requests.post( TWEET_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json=payload, )
+    data = resp.json()
+    if resp.status_code >= 400:
+        return jsonify({"error": "post failed", "details": data}), resp.status_code
+    return jsonify({"status": "ok", "tweet": data}), 200
 
 def fetch_tweet_metrics(tweet_ids: list[str], access_token: str) -> list[dict]:
     resp = requests.get( "https://api.twitter.com/2/tweets",  headers={"Authorization": f"Bearer {access_token}"}, params={ "ids": ",".join(tweet_ids), "tweet.fields": "created_at,public_metrics,non_public_metrics,organic_metrics",   }, )
@@ -223,86 +232,104 @@ def x_dataget():
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
-
-@app.route("/post/x", methods=["POST"])
-def post_to_x():
+def _authenticate(request):
+    """
+    Runs the common auth/validation steps.
+    Returns (access_token, text, error_response).
+    If error_response is not None, the caller should return it immediately.
+    """
     token = request.form.get("token")
     username = request.form.get("username")
     text = request.form.get("text", "")
+
     tokench = au.process(token=token)
     if not tokench["status"]:
-        return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
+        return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
+
     user_id = tokench["user_id"]
     if not check_user_id(tokench["token"], user_id):
-        return jsonify({"error": "invalid user id"}), 401
+        return None, None, (jsonify({"error": "invalid user id"}), 401)
+
     if not username:
-        return jsonify({"error": "username is required"}), 400
+        return None, None, (jsonify({"error": "username is required"}), 400)
+
     access_token, err = get_access_token_by_username(tokench["token"], user_id, username)
+    if err:
+        return None, None, err
+
+    return access_token, text, None
+
+@app.route("/post/x/text", methods=["POST"])
+def post_to_x_text():
+    access_token, text, err = _authenticate(request)
+    if err:
+        return err
+    if not text:
+        return jsonify({"error": "text is required"}), 400
+    return _post_tweet(access_token, text)
+
+@app.route("/post/x/photo", methods=["POST"])
+def post_to_x_photo():
+    access_token, text, err = _authenticate(request)
     if err:
         return err
     files = request.files.getlist("file")
+    if not files:
+        return jsonify({"error": "at least one image file is required"}), 400
+    if len(files) > 4:
+        return jsonify({"error": "maximum 4 photos allowed per post"}), 400
+    non_images = [f for f in files if not (f.mimetype or "").startswith("image/")]
+    if non_images:
+        return jsonify({"error": "unsupported file type in upload"}), 400
     media_ids = []
-    if files > 4 :
-        return "it allows  just to post 4 media items per post " , 400
-    if files:
-        video_files = [f for f in files if (f.mimetype or "").startswith("video/")]
-        image_files = [f for f in files if (f.mimetype or "").startswith("image/")]
-        other = [f for f in files if f not in video_files and f not in image_files]
-        if other:
-            return jsonify({"error": "unsupported file type in upload"}), 400
-        if video_files and image_files:
-            return jsonify({"error": "cannot mix video and photos in one post"}), 400
-        if len(video_files) > 1:
-            return jsonify({"error": "only one video allowed per post"}), 400
-        if len(image_files) > 4:
-            return jsonify({"error": "maximum 4 photos allowed per post"}), 400
-        if video_files:
-            f = video_files[0]
-            tmp_path = None
-            try:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-                    tmp_path = tmp.name
-                    f.save(tmp_path)  
-                    file_size_bytes = os.path.getsize(tmp_path)
-                    if get_video_duration(tmp_path) > duation  or file_size_bytes > video_size :
-                        os.remove(tmp_path)
-                        return "unable to upload file due to long videos" , 400
-                media_id = upload_video(access_token, tmp_path, f.mimetype)
-            finally:
-                if tmp_path and os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-            if not media_id:
-                return jsonify({"error": "video upload failed"}), 400
-            media_ids.append(media_id)
-        else:
-            for f in image_files:
-                tmp_path = None
-                try:
-                    suffix = os.path.splitext(f.filename or "")[1] or ".jpg"
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                        tmp_path = tmp.name
-                        f.save(tmp_path)
-                    file_size_bytes = os.path.getsize(tmp_path)
-                    if file_size_bytes > image_size:
-                        return jsonify({"error": f"image {f.filename} exceeds max size"}), 400
-                    with open(tmp_path, "rb") as fh:
-                        media_id = upload_image(access_token, fh.read())
-                finally:
-                    if tmp_path and os.path.exists(tmp_path):
-                        os.remove(tmp_path)
-                if not media_id:
-                    return jsonify({"error": f"image upload failed for {f.filename}"}), 400
-                media_ids.append(media_id)
-    if not text and not media_ids:
-        return jsonify({"error": "text or at least one file required"}), 400
-    payload = {"text": text}
-    if media_ids:
-        payload["media"] = {"media_ids": media_ids}
-    tweet_resp = requests.post( TWEET_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json=payload )
-    data = tweet_resp.json()
-    if tweet_resp.status_code >= 400:
-        return jsonify({"error": "post failed", "details": data}), tweet_resp.status_code
-    return jsonify({"status": "ok", "tweet": data}), 200
+    for f in files:
+        tmp_path = None
+        try:
+            suffix = os.path.splitext(f.filename or "")[1] or ".jpg"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp_path = tmp.name
+                f.save(tmp_path)
+            file_size_bytes = os.path.getsize(tmp_path)
+            if file_size_bytes > image_size:
+                return jsonify({"error": f"image {f.filename} exceeds max size"}), 400
+            with open(tmp_path, "rb") as fh:
+                media_id = upload_image(access_token, fh.read())
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        if not media_id:
+            return jsonify({"error": f"image upload failed for {f.filename}"}), 400
+        media_ids.append(media_id)
+    return _post_tweet(access_token, text, media_ids)
+
+@app.route("/post/x/video", methods=["POST"])
+def post_to_x_video():
+    access_token, text, err = _authenticate(request)
+    if err:
+        return err
+    files = request.files.getlist("file")
+    if not files:
+        return jsonify({"error": "a video file is required"}), 400
+    if len(files) > 1:
+        return jsonify({"error": "only one video allowed per post"}), 400
+    f = files[0]
+    if not (f.mimetype or "").startswith("video/"):
+        return jsonify({"error": "unsupported file type in upload"}), 400
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            tmp_path = tmp.name
+            f.save(tmp_path)
+        file_size_bytes = os.path.getsize(tmp_path)
+        if get_video_duration(tmp_path) > duation or file_size_bytes > video_size:
+            return jsonify({"error": "video exceeds allowed duration or size"}), 400
+        media_id = upload_video(access_token, tmp_path, f.mimetype)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    if not media_id:
+        return jsonify({"error": "video upload failed"}), 400
+    return _post_tweet(access_token, text, [media_id])
 
 @app.route("/x/analytics/posts", methods=["GET"])
 @limiter.limit("10 per minute")

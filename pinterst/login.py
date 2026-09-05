@@ -1,17 +1,16 @@
 import database.UserDB as dbimp
 import os
 import base64
-import hashlib
-import secrets
 import requests
 from urllib.parse import urlencode
 from moviepy import VideoFileClip
 import tempfile
 from flask_cors import CORS
 from flask import Flask, request, redirect, jsonify
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta , date
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import time
 import authnew as au
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 app = Flask(__name__)
@@ -124,3 +123,84 @@ def pinterest_dataget():
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
+
+
+def get_all_pins(access_token, page_size=100):
+    pins = []
+    bookmark = None
+    headers = {"Authorization": f"Bearer {access_token}"}
+    while True:
+        params = {"page_size": page_size}
+        if bookmark:
+            params["bookmark"] = bookmark
+        resp = requests.get(f"{BASE_URL}/pins", headers=headers, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        pins.extend(data.get("items", []))
+        bookmark = data.get("bookmark")
+        if not bookmark:
+            break   
+    return pins
+
+
+def get_pins_analytics(access_token, pin_ids, metric_types="IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK"):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    results = {}
+    end_date = date.today()
+    start_date = end_date - timedelta(days=30)
+    for i in range(0, len(pin_ids), 100):
+        chunk = pin_ids[i:i + 100]
+        params = { "pin_ids": ",".join(chunk), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "metric_types": metric_types, }
+        resp = requests.get(f"{BASE_URL}/pins/analytics", headers=headers, params=params)
+        resp.raise_for_status()
+        results.update(resp.json())
+    return results
+
+def refresh_pinterest_token(refresh_token, expire, access, token, user_id, username):
+    expire = datetime.fromisoformat(expire)
+    if expire - datetime.now(timezone.utc) < timedelta(minutes=3):
+        token_url = "https://api.pinterest.com/v5/oauth/token"
+        credentials = f"{PINTEREST_APP_ID}:{PINTEREST_APP_SECRET}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+        headers = {"Authorization": f"Basic {encoded_credentials}", "Content-Type": "application/x-www-form-urlencoded", }
+        payload = { "grant_type": "refresh_token", "refresh_token": refresh_token, }
+        resp = requests.post(token_url, headers=headers, data=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
+        try:
+            dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "Access_token": data["access_token"], "Refresh_token": data.get("refresh_token", refresh_token), "Token_expire": new_expiry.isoformat(), }, filters={"Username": username, "id": user_id}, )
+        except Exception as e:
+            print(f"Failed to persist refreshed Pinterest token for user_id={user_id}: {e}")
+        return data["access_token"]
+    else:
+        return access
+    
+@app.route("/pinterest/pins-with-metrics", methods=["GET"])
+def pins_with_metrics():
+    data = request.get_json(silent=True) or {}
+    username = data.get("username")
+    token = data.get("token")
+    if not username or token :
+        return jsonify({"status":"failed"}) , 400
+    tokench = au.process(token=token)
+    rows = dbimp.select_rows(tokench["token"],PINTEREST_TABLE_NAME,select="Access_token,Refresh_token,Token_expire",filters={"Username":username,"id":tokench["user_id"]})
+    if not rows :
+        return jsonify({"status":"failed"}) , 400
+    row = rows[0]
+    access_token = row["Access_token"]
+    Refresh_token = row["Refresh_token"]
+    Token_expire = row["Token_expire"]
+    access_token = refresh_pinterest_token(Refresh_token, Token_expire, access_token, tokench["token"], tokench["user_id"], username)
+    try:
+        pins = get_all_pins(access_token)
+        pin_ids = [p["id"] for p in pins]
+        analytics = get_pins_analytics(access_token, pin_ids)
+        combined = []
+        for pin in pins:
+            pin_id = pin["id"]
+            combined.append({ "pin_id": pin_id, "title": pin.get("title"), "link": pin.get("link"), "created_at": pin.get("created_at"), "media_url": pin.get("media", {}).get("images", {}).get("originals", {}).get("url"), "metrics": analytics.get(pin_id, {}), })
+        return jsonify({"count": len(combined), "pins": combined}) , 200
+    except requests.HTTPError as e:
+        return jsonify({"error": str(e), "response": e.response.text}), e.response.status_code
+
