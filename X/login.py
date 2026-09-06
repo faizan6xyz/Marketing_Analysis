@@ -146,8 +146,6 @@ def _authenticate(request):
     if not tokench["status"]:
         return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
     user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return None, None, (jsonify({"error": "invalid user id"}), 401)
     if not username:
         return None, None, (jsonify({"error": "username is required"}), 400)
     access_token, err = get_access_token_by_username(tokench["token"], user_id, username)
