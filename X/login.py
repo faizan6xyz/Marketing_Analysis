@@ -153,7 +153,7 @@ def _authenticate(request):
         return None, None, err
     return access_token, text, None
 
-def refresh_x_token(token, account_id, refresh_token):
+def refresh_x_token(token,user_id, account_id, refresh_token):
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
     resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
     new_access = resp.get("access_token")
@@ -162,7 +162,7 @@ def refresh_x_token(token, account_id, refresh_token):
     if not new_access or not seconds:
         return None
     expire_time = (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
-    dbimp.update_rows(token, TABLE_NAME, {"Access_token": new_access, "Refresh_token": new_refresh, "Token_expire": expire_time}, filters={"Account_id": account_id})
+    dbimp.update_rows(token, TABLE_NAME, {"Access_token": new_access, "Refresh_token": new_refresh, "Token_expire": expire_time}, filters={"Account_id": account_id,"id":user_id})
     return new_access
 
 @app.route("/auth/x/login")
@@ -175,8 +175,10 @@ def x_login():
     user_id = tokench["user_id"]
     if not check_user_id(tokench["token"], user_id):
         return jsonify({"error": "invalid user id"}), 401
-    state = serializer.dumps({"user_id": user_id})
-    params = { "response_type": "code", "client_id": X_CLIENT_ID, "redirect_uri": X_REDIRECT_URI, "scope": SCOPE,"state": state,}
+    code_verifier = secrets.token_urlsafe(64)[:128]
+    code_challenge = base64.urlsafe_b64encode( hashlib.sha256(code_verifier.encode()).digest()).decode().rstrip("=")
+    state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
+    params = {"response_type": "code", "client_id": X_CLIENT_ID, "redirect_uri": X_REDIRECT_URI, "scope": SCOPE, "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256",    }
     auth_url = AUTH_URL + "?" + urlencode(params)
     return redirect(auth_url)
 
@@ -322,7 +324,8 @@ def post_to_x_video():
         file_size_bytes = os.path.getsize(tmp_path)
         if get_video_duration(tmp_path) > duation or file_size_bytes > video_size:
             return jsonify({"error": "video exceeds allowed duration or size"}), 400
-        media_id = upload_video(access_token, tmp_path, f.mimetype)
+        with open(tmp_path,"r") as file:
+            media_id = upload_video(access_token, file.read(), f.mimetype)
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
@@ -340,12 +343,14 @@ def fetch_x_post_analytics():
     token = data.get("token")
     username = data.get("name")
     tokench = au.process(token=token)
-    rows = dbimp.select_rows( tokench["token"],TABLE_NAME, select="account_id",filters={"id": tokench["user_id"], "name": username},)
+    rows = dbimp.select_rows( tokench["token"],TABLE_NAME, select="Account_id",filters={"id": tokench["user_id"], "name": username},)
     if not rows:
         return {"error": "account not found"}, 404
     row = rows[0]
     account_id = row["account_id"]  
-    access_token = get_access_token_by_username(tokench["token"], tokench["user_id"], username)
+    access_token, err = get_access_token_by_username(tokench["token"], tokench["user_id"], username)
+    if err:
+        return err
     tweet_ids = get_last_n_tweet_ids(account_id, access_token, n=20)
     if not tweet_ids:
         return {"error": "no posts found"}, 404
