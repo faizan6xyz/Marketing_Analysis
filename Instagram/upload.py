@@ -138,6 +138,9 @@ def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, captio
     params = {"image_url": image_url, "caption": caption, "access_token": access_token, }
     container = _post(f"{ig_user_id}/media", params)
     creation_id = container["id"]
+    if not publish:
+        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        return creation_id
     return publish_container(access_token, ig_user_id, creation_id)
 
 def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: int, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, ) -> str:
@@ -166,6 +169,9 @@ def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: in
     container = _post(f"{ig_user_id}/media", params)
     creation_id = container["id"]
     wait_for_container(access_token, creation_id)
+    if not publish:
+        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        return creation_id
     return publish_container(access_token, ig_user_id, creation_id)
  
 def post_carousel(timmmm, access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True, ) -> str:
@@ -200,6 +206,9 @@ def post_carousel(timmmm, access_token: str, ig_user_id: str,   media_size: list
     params = { "media_type": "CAROUSEL", "children": ",".join(child_ids), "caption": caption, "access_token": access_token,}
     container = _post(f"{ig_user_id}/media", params)
     creation_id = container["id"]
+    if not publish:
+        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        return creation_id
     return publish_container(access_token, ig_user_id, creation_id)
 
 def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, media_url: str, is_video: bool = False, publish: bool = True, media_duration: int = 0, ) -> str:
@@ -221,6 +230,9 @@ def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, medi
     creation_id = container["id"]
     if is_video:
         wait_for_container(access_token, creation_id)
+    if not publish:
+        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        return creation_id
     return publish_container(access_token, ig_user_id, creation_id)
 
 def get_media_insights(media_id, access_token, story ):
