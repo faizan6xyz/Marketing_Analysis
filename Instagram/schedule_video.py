@@ -3,6 +3,7 @@ import time
 import Instagram.upload as aaaa
 import sqlite3
 import os 
+import threads.login as thhh
 import Drive.dep as dpp
 import youtube.login as you
 youtube_api = os.environ.get("youtube_api")
@@ -74,6 +75,10 @@ if __name__ == "__main__":
         for row_id, container_id, access_tok, user_id , typess,media_id,hourss,token in due:
             if typess == "container":
                 aaaa.publish_container(token=token,user_id=user_id, access_token=access_tok, creation_id=container_id)
+                print(row_id,container_id,access_tok,user_id)
+                delete_by_id(row_id)
+            if typess == "container1":
+                thhh.publish_threads_container_sc(token=token,user_id=user_id, access_token=access_tok, creation_id=container_id)
                 print(row_id,container_id,access_tok,user_id)
                 delete_by_id(row_id)
             if typess == "story" :

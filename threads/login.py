@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from flask_cors import CORS
 from flask import Flask, request, redirect, jsonify
 from datetime import datetime, timezone, timedelta
+import Instagram.schedule_video as sccc
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import authnew as au
@@ -66,6 +67,17 @@ def get_all_threads_media(access_token, account_id, page_size=100):
         params = None  # 'next' already has all query params baked in
     return media
 
+def parse_datetime(value: str, require_tz: bool = True):
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if require_tz and dt.tzinfo is None:
+        return None
+    return dt
+
 def get_threads_insights(access_token, media_ids, metric_types="views,likes,replies,reposts,quotes,shares"):
     results = {}
     for media_id in media_ids:
@@ -75,16 +87,20 @@ def get_threads_insights(access_token, media_ids, metric_types="views,likes,repl
         results[media_id] = {m["name"]: m.get("values", [{}])[0].get("value") for m in data}
     return results
 
-def _publish_threads_post(access_token, threads_user_id, media_type, text, **kwargs):
+def _publish_threads_post(publish,time,access_token, threads_user_id, media_type, text, **kwargs):
     creation_id = create_threads_container( access_token, threads_user_id, media_type, text=text, **kwargs )
     if not creation_id:
         raise RuntimeError("failed to create container")
     is_published = wait_for_threads_container(access_token, creation_id)
     if not is_published:
         raise RuntimeError("container failed to reach FINISHED state")
-    thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
-    if not thread_id:
-        raise RuntimeError("failed to publish thread")
+    if publish :
+        thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
+        if not thread_id:
+            raise RuntimeError("failed to publish thread")
+    if not publish:
+        sccc.insert_time(threads_user_id,creation_id,time,access_token)
+        return creation_id
     return thread_id
 
 def create_threads_container( access_token, threads_user_id, media_type,text=None, image_url=None, video_url=None, children_ids=None, is_carousel_item=False,):
@@ -141,6 +157,14 @@ def create_threads_carousel(access_token, threads_user_id, items, caption=None):
     return create_threads_container( access_token, threads_user_id, media_type="CAROUSEL", text=caption, children_ids=child_ids, )
 
 def publish_threads_container(access_token, threads_user_id, creation_id):
+    resp = requests.post( f"{THREADS_API_BASE}/{threads_user_id}/threads_publish", data={ "creation_id": creation_id, "access_token": access_token, }, )
+    resp.raise_for_status()
+    return resp.json().get("id")  
+
+def publish_threads_container_sc(token,access_token, threads_user_id, creation_id):
+    tokench = au.process(token=token)
+    expire  = datetime.now(timezone.utc).isoformat()
+    refresh_threads_token(expire, access_token, token, tokench["user_id"], threads_user_id)
     resp = requests.post( f"{THREADS_API_BASE}/{threads_user_id}/threads_publish", data={ "creation_id": creation_id, "access_token": access_token, }, )
     resp.raise_for_status()
     return resp.json().get("id")  
@@ -314,11 +338,23 @@ def posts_with_metrics():
 
 @app.route("/post/threads/text", methods=["POST"])
 def post_threads_text():
+    data = request.get_json(silent=True) or {}
+    publish = data.get("publish")
+    timee_raw = data.get("time") or {}
+    publish_now = str(publish).strip().lower() == "true"
+    timee = parse_datetime(timee_raw)
+    if timee is None:
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
     access_token, threads_user_id, text, err = _authenticate(request)
     if err:
         return err
     try:
-        thread_id = _publish_threads_post(access_token, threads_user_id, "TEXT", text=text)
+        thread_id = _publish_threads_post(publish_now,timee,access_token, threads_user_id, "TEXT", text=text)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_id}), 200
@@ -330,10 +366,21 @@ def post_threads_image():
         return err
     data = request.get_json(silent=True) or {}
     image_url = data.get("image_url")
+    publish = data.get("publish")
+    timee_raw = data.get("time") or {}
+    publish_now = str(publish).strip().lower() == "true"
+    timee = parse_datetime(timee_raw)
+    if timee is None:
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
     if not image_url:
         return jsonify({"error": "image_url is required"}), 400
     try:
-        thread_id = _publish_threads_post( access_token, threads_user_id, "IMAGE", text=text, image_url=image_url)
+        thread_id = _publish_threads_post(publish_now,timee, access_token, threads_user_id, "IMAGE", text=text, image_url=image_url)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_id}), 200
@@ -345,10 +392,21 @@ def post_threads_video():
         return err
     data = request.get_json(silent=True) or {}
     video_url = data.get("video_url")
+    publish = data.get("publish")
+    timee_raw = data.get("time") or {}
+    publish_now = str(publish).strip().lower() == "true"
+    timee = parse_datetime(timee_raw)
+    if timee is None:
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
     if not video_url:
         return jsonify({"error": "video_url is required"}), 400
     try:
-        thread_id = _publish_threads_post( access_token, threads_user_id, "VIDEO", text=text, video_url=video_url )
+        thread_id = _publish_threads_post( publish_now,timee,access_token, threads_user_id, "VIDEO", text=text, video_url=video_url )
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_id}), 200
@@ -360,6 +418,17 @@ def post_threads_carousel():
         return err
     data = request.get_json(silent=True) or {}
     items = data.get("items", [])
+    publish = data.get("publish")
+    timee_raw = data.get("time") or {}
+    publish_now = str(publish).strip().lower() == "true"
+    timee = parse_datetime(timee_raw)
+    if timee is None:
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=23)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
     if not items:
         return jsonify({"error": "items is required for carousel posts"}), 400
     try:
