@@ -102,8 +102,8 @@ def check_ig_username(target_username, ig_user_id, access_token) -> bool:
     except ValueError:
         return False
     if resp.status_code == 200 and "business_discovery" in payload:
-        return True   # username exists (as a Business/Creator account)
-    return False       # not found, or exists but isn't a business/creator account
+        return True   
+    return False  
 
 def _check_caption(caption: str) -> str:
     if len(caption) > MAX_CAPTION_CHARS:
@@ -117,7 +117,6 @@ def _check_caption(caption: str) -> str:
         caption = caption[:match.start()].rstrip()
     return caption
 
-# Container is the object that holds the media and other info before publishing
 def wait_for_container(access_token: str, container_id: str, timeout: int = 300, interval: int = 5) -> None:
     elapsed = 0
     while elapsed < timeout:
@@ -130,7 +129,6 @@ def wait_for_container(access_token: str, container_id: str, timeout: int = 300,
         time.sleep(interval)
         elapsed += interval
     raise TimeoutError(f"Container {container_id} did not finish within {timeout}s")
-
 
 def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, caption: str = "", media_size: int = None, publish: bool = True, ) -> str:
     _validate_media_url(image_url)

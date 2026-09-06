@@ -1,6 +1,6 @@
 import database.UserDB as dbimp
 import os
-import base64
+import time
 import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
@@ -26,6 +26,7 @@ THREADS_SCOPES = "threads_basic,threads_content_publish,threads_manage_insights,
 THREADS_AUTH_URL = "https://threads.net/oauth/authorize"
 THREADS_TOKEN_URL = "https://graph.threads.net/oauth/access_token"
 THREADS_EXCHANGE_URL = "https://graph.threads.net/access_token"
+THREADS_API_BASE = "https://graph.threads.net/v1.0"
 THREADS_REFRESH_URL = "https://graph.threads.net/refresh_access_token"
 THREADS_ME_URL = "https://graph.threads.net/v1.0/me"
 
@@ -191,3 +192,107 @@ def posts_with_metrics():
     except requests.HTTPError as e:
         return jsonify({"error": str(e), "response": e.response.text}), e.response.status_code
 
+
+
+
+
+def create_threads_container( access_token, threads_user_id, media_type,text=None, image_url=None, video_url=None, children_ids=None, is_carousel_item=False,):
+    media_type = media_type.upper()
+    valid_types = {"TEXT", "IMAGE", "VIDEO", "CAROUSEL"}
+    if media_type not in valid_types:
+        raise ValueError(f"media_type must be one of {valid_types}, got {media_type!r}")
+    data = {"access_token": access_token}
+    if media_type == "TEXT":
+        if not text or not text.strip():
+            raise ValueError("text is required for TEXT posts")
+        data["media_type"] = "TEXT"
+        data["text"] = text
+    elif media_type == "IMAGE":
+        if not image_url:
+            raise ValueError("image_url is required for IMAGE posts")
+        data["media_type"] = "IMAGE"
+        data["image_url"] = image_url
+        if text:
+            data["text"] = text
+        if is_carousel_item:
+            data["is_carousel_item"] = "true"
+    elif media_type == "VIDEO":
+        if not video_url:
+            raise ValueError("video_url is required for VIDEO posts")
+        data["media_type"] = "VIDEO"
+        data["video_url"] = video_url
+        if text:
+            data["text"] = text
+        if is_carousel_item:
+            data["is_carousel_item"] = "true"
+    elif media_type == "CAROUSEL":
+        if not children_ids or len(children_ids) < 2:
+            raise ValueError("CAROUSEL requires at least 2 children_ids")
+        if len(children_ids) > 20:
+            raise ValueError("CAROUSEL supports at most 20 items")
+        data["media_type"] = "CAROUSEL"
+        data["children"] = ",".join(children_ids)
+        if text:
+            data["text"] = text
+    resp = requests.post(f"{THREADS_API_BASE}/{threads_user_id}/threads", data=data)
+    resp.raise_for_status()
+    return resp.json().get("id")
+
+def create_threads_carousel(access_token, threads_user_id, items, caption=None):
+    if len(items) < 2 or len(items) > 20:
+        raise ValueError("carousel requires between 2 and 20 items")
+    child_ids = []
+    for item in items:
+        child_id = create_threads_container( access_token,threads_user_id, media_type=item["type"], image_url=item.get("url") if item["type"] == "IMAGE" else None, video_url=item.get("url") if item["type"] == "VIDEO" else None,is_carousel_item=True, )
+        if not child_id:
+            raise RuntimeError(f"failed to create carousel child for {item}")
+        child_ids.append(child_id)
+    return create_threads_container( access_token, threads_user_id, media_type="CAROUSEL", text=caption, children_ids=child_ids, )
+
+def publish_threads_container(access_token, threads_user_id, creation_id):
+    resp = requests.post( f"{THREADS_API_BASE}/{threads_user_id}/threads_publish", data={ "creation_id": creation_id, "access_token": access_token, }, )
+    resp.raise_for_status()
+    return resp.json().get("id")  
+
+def wait_for_threads_container(access_token, creation_id, timeout=30, interval=2):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        resp = requests.get( f"{THREADS_API_BASE}/{creation_id}", params={"fields": "status,error_message", "access_token": access_token}, )
+        resp.raise_for_status()
+        info = resp.json()
+        status = info.get("status")
+        if status == "FINISHED":
+            return True
+        if status in ("ERROR", "EXPIRED"):
+            raise RuntimeError(info.get("error_message") or f"container {status.lower()}")
+        time.sleep(interval)
+    raise TimeoutError("container did not finish processing in time")
+
+@app.route("/post/threads", methods=["POST"])
+def post_to_threads():
+    access_token, threads_user_id, text, err = _authenticate(request)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    media_type = (data.get("media_type") or "TEXT").upper()
+    try:
+        if media_type == "TEXT":
+            creation_id = create_threads_container(access_token, threads_user_id, "TEXT", text=text)
+        elif media_type == "IMAGE":
+            creation_id = create_threads_container(  access_token, threads_user_id, "IMAGE", text=text, image_url=data.get("image_url") )
+        elif media_type == "VIDEO":
+            creation_id = create_threads_container( access_token, threads_user_id, "VIDEO", text=text, video_url=data.get("video_url") )
+        elif media_type == "CAROUSEL":
+            creation_id = create_threads_carousel(access_token, threads_user_id, data.get("items", []), caption=text)
+        else:
+            return jsonify({"error": f"unsupported media_type: {media_type}"}), 400
+        if not creation_id:
+            return jsonify({"error": "failed to create container"}), 400
+        is_published = wait_for_threads_container(access_token,creation_id)
+        if is_published:
+            thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
+        if not thread_id:
+            return jsonify({"error": "failed to publish thread"}), 400
+    except (requests.HTTPError, ValueError, RuntimeError) as e:
+        return jsonify({"error": "thread post failed", "detail": str(e)}), 400
+    return jsonify({"success": True, "thread_id": thread_id}), 200
