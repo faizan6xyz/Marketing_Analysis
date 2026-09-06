@@ -27,8 +27,13 @@ BASE_URL = os.environ.get("BASE_URL")
 image_size = 10 * 1024 * 1024
 STATE_MAX_AGE = 600  # seconds
 PINTEREST_SCOPES = "boards:read,pins:read,pins:write,user_accounts:read"
+MEDIA_REGISTER_URL = "https://api.pinterest.com/v5/media"
+PIN_CREATE_URL = "https://api.pinterest.com/v5/pins"
 PINTEREST_AUTH_URL = "https://www.pinterest.com/oauth/"
 PINTEREST_TOKEN_URL = "https://api.pinterest.com/v5/oauth/token"
+duation = 300
+max_size = 100 * 1024 * 1024
+
 
 def check_user_id(token, uuser_id):
     rows = dbimp.select_rows(token, PINTEREST_TABLE_NAME, select="id", filters={"id": uuser_id})
@@ -36,6 +41,120 @@ def check_user_id(token, uuser_id):
     if not exist:
         return False
     return True
+
+def get_all_pins(access_token, page_size=100):
+    pins = []
+    bookmark = None
+    headers = {"Authorization": f"Bearer {access_token}"}
+    while True:
+        params = {"page_size": page_size}
+        if bookmark:
+            params["bookmark"] = bookmark
+        resp = requests.get(f"{BASE_URL}/pins", headers=headers, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        pins.extend(data.get("items", []))
+        bookmark = data.get("bookmark")
+        if not bookmark:
+            break   
+    return pins
+
+def _authenticate(request):
+    token = request.form.get("token")
+    username = request.form.get("username")
+    text = request.form.get("text", "")
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
+    user_id = tokench["user_id"]
+    if not check_user_id(tokench["token"], user_id):
+        return None, None, (jsonify({"error": "invalid user id"}), 401)
+    if not username:
+        return None, None, (jsonify({"error": "username is required"}), 400)
+    access_token, err = get_access_token_by_username(tokench["token"], user_id, username)
+    if err:
+        return None, None, err
+    return access_token, text, None
+
+def get_access_token_by_username(token, user_id, username):
+    rows = dbimp.select_rows( token, PINTEREST_TABLE_NAME, select="Account_id,Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Username": username} )
+    if not rows:
+        return None, (jsonify({"error": "no x account linked for this username"}), 404)
+    row = rows[0]
+    access_token = row["Access_token"]
+    raw_expiry = row["Token_expire"]
+    refresh_token = row["Refresh_token"]
+    if not access_token or not raw_expiry:
+        return None, (jsonify({"error": "missing access_token"}), 400)
+    Token_expiry = datetime.fromisoformat(raw_expiry)
+    access_token = refresh_pinterest_token(refresh_token, Token_expiry, access_token, token, user_id, username)
+    return access_token, None
+
+def get_pins_analytics(access_token, pin_ids, metric_types="IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK"):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    results = {}
+    end_date = date.today()
+    start_date = end_date - timedelta(days=30)
+    for i in range(0, len(pin_ids), 100):
+        chunk = pin_ids[i:i + 100]
+        params = { "pin_ids": ",".join(chunk), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "metric_types": metric_types, }
+        resp = requests.get(f"{BASE_URL}/pins/analytics", headers=headers, params=params)
+        resp.raise_for_status()
+        results.update(resp.json())
+    return results
+
+def refresh_pinterest_token(refresh_token, expire, access, token, user_id, username):
+    expire = datetime.fromisoformat(expire)
+    if expire - datetime.now(timezone.utc) < timedelta(minutes=3):
+        token_url = "https://api.pinterest.com/v5/oauth/token"
+        credentials = f"{PINTEREST_APP_ID}:{PINTEREST_APP_SECRET}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+        headers = {"Authorization": f"Basic {encoded_credentials}", "Content-Type": "application/x-www-form-urlencoded", }
+        payload = { "grant_type": "refresh_token", "refresh_token": refresh_token, }
+        resp = requests.post(token_url, headers=headers, data=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
+        try:
+            dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "Access_token": data["access_token"], "Refresh_token": data.get("refresh_token", refresh_token), "Token_expire": new_expiry.isoformat(), }, filters={"Username": username, "id": user_id}, )
+        except Exception as e:
+            print(f"Failed to persist refreshed Pinterest token for user_id={user_id}: {e}")
+        return data["access_token"]
+    else:
+        return access
+
+def register_pinterest_video(access):
+    resp = requests.post( MEDIA_REGISTER_URL, headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"}, json={"media_type": "video"}, )
+    resp.raise_for_status()
+    return resp.json()  
+
+def upload_pinterest_video_file(upload_url, upload_parameters, file_path):
+    with open(file_path, "rb") as fh:
+        resp = requests.post( upload_url, data=upload_parameters,files={"file": fh},    )
+    resp.raise_for_status()
+
+def wait_for_pinterest_media(access, media_id, timeout=120, interval=3):
+    deadline = time.time() + timeout
+    headers = {"Authorization": f"Bearer {access}"}
+    while time.time() < deadline:
+        resp = requests.get(f"{MEDIA_REGISTER_URL}/{media_id}", headers=headers)
+        resp.raise_for_status()
+        status = resp.json().get("status")
+        if status == "succeeded":
+            return True
+        if status == "failed":
+            return False
+        time.sleep(interval)
+    return False 
+
+def create_pinterest_video_pin(access, board_id, title, description, media_id):
+    resp = requests.post( PIN_CREATE_URL,  headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"},json={ "board_id": board_id, "title": title, "description": description, "media_source": { "source_type": "video_id", "media_id": media_id,},},)
+    resp.raise_for_status()
+    return resp.json()
+
+def get_video_duration(file_path):
+    with VideoFileClip(file_path) as video:
+        return video.duration
 
 @app.route("/auth/pinterest/login")
 def pinterest_login():
@@ -124,88 +243,6 @@ def pinterest_dataget():
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
-
-
-def get_all_pins(access_token, page_size=100):
-    pins = []
-    bookmark = None
-    headers = {"Authorization": f"Bearer {access_token}"}
-    while True:
-        params = {"page_size": page_size}
-        if bookmark:
-            params["bookmark"] = bookmark
-        resp = requests.get(f"{BASE_URL}/pins", headers=headers, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        pins.extend(data.get("items", []))
-        bookmark = data.get("bookmark")
-        if not bookmark:
-            break   
-    return pins
-
-def _authenticate(request):
-    token = request.form.get("token")
-    username = request.form.get("username")
-    text = request.form.get("text", "")
-    tokench = au.process(token=token)
-    if not tokench["status"]:
-        return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
-    user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return None, None, (jsonify({"error": "invalid user id"}), 401)
-    if not username:
-        return None, None, (jsonify({"error": "username is required"}), 400)
-    access_token, err = get_access_token_by_username(tokench["token"], user_id, username)
-    if err:
-        return None, None, err
-    return access_token, text, None
-
-def get_access_token_by_username(token, user_id, username):
-    rows = dbimp.select_rows( token, PINTEREST_TABLE_NAME, select="Account_id,Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Username": username} )
-    if not rows:
-        return None, (jsonify({"error": "no x account linked for this username"}), 404)
-    row = rows[0]
-    access_token = row["Access_token"]
-    raw_expiry = row["Token_expire"]
-    refresh_token = row["Refresh_token"]
-    if not access_token or not raw_expiry:
-        return None, (jsonify({"error": "missing access_token"}), 400)
-    Token_expiry = datetime.fromisoformat(raw_expiry)
-    access_token = refresh_pinterest_token(refresh_token, Token_expiry, access_token, token, user_id, username)
-    return access_token, None
-
-def get_pins_analytics(access_token, pin_ids, metric_types="IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK"):
-    headers = {"Authorization": f"Bearer {access_token}"}
-    results = {}
-    end_date = date.today()
-    start_date = end_date - timedelta(days=30)
-    for i in range(0, len(pin_ids), 100):
-        chunk = pin_ids[i:i + 100]
-        params = { "pin_ids": ",".join(chunk), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "metric_types": metric_types, }
-        resp = requests.get(f"{BASE_URL}/pins/analytics", headers=headers, params=params)
-        resp.raise_for_status()
-        results.update(resp.json())
-    return results
-
-def refresh_pinterest_token(refresh_token, expire, access, token, user_id, username):
-    expire = datetime.fromisoformat(expire)
-    if expire - datetime.now(timezone.utc) < timedelta(minutes=3):
-        token_url = "https://api.pinterest.com/v5/oauth/token"
-        credentials = f"{PINTEREST_APP_ID}:{PINTEREST_APP_SECRET}"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
-        headers = {"Authorization": f"Basic {encoded_credentials}", "Content-Type": "application/x-www-form-urlencoded", }
-        payload = { "grant_type": "refresh_token", "refresh_token": refresh_token, }
-        resp = requests.post(token_url, headers=headers, data=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
-        try:
-            dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "Access_token": data["access_token"], "Refresh_token": data.get("refresh_token", refresh_token), "Token_expire": new_expiry.isoformat(), }, filters={"Username": username, "id": user_id}, )
-        except Exception as e:
-            print(f"Failed to persist refreshed Pinterest token for user_id={user_id}: {e}")
-        return data["access_token"]
-    else:
-        return access
     
 @app.route("/pinterest/pins-with-metrics", methods=["GET"])
 def pins_with_metrics():
@@ -239,7 +276,7 @@ def upload_pin_from_file(access, title, board_id, photo_bytes, description=""):
     b64_image = base64.b64encode(photo_bytes).decode("utf-8")
     url = "https://api.pinterest.com/v5/pins"
     headers = { "Authorization": f"Bearer {access}", "Content-Type": "application/json", }
-    payload = { "board_id": board_id, "title": title, "description": description, "media_source": { "source_type": "image_base64", "content_type": "image/jpeg", "data": b64_image,}, }
+    payload = { "board_id": board_id, "title": title, "description": description, "media_source": { "source_type": "image_base64", "content_type": "image/jpeg", "da        ta": b64_image,}, }
     resp = requests.post(url, headers=headers, json=payload)
     resp.raise_for_status()
     return resp.json()
@@ -277,6 +314,49 @@ def post_to_pinterest_photo():
                 pin = upload_pin_from_file( access_token, title=title, board_id=board_id, photo_bytes=fh.read(), description=description, )
             except requests.HTTPError as e:
                 return jsonify({"error": "pin upload failed", "detail": str(e)}), 400
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    return jsonify({"success": True, "pin_id": pin.get("id")}), 200
+
+@app.route("/post/pinterest/video", methods=["POST"])
+def post_to_pinterest_video():
+    access_token, text, err = _authenticate(request)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    title = data.get("title")
+    description = data.get("description", "")
+    board_id = data.get("board_id")
+    if not board_id:
+        return jsonify({"error": "board_id is required"}), 400
+    files = request.files.getlist("file")
+    if not files:
+        return jsonify({"error": "a video file is required"}), 400
+    if len(files) > 1:
+        return jsonify({"error": "only one video allowed per pin"}), 400
+    f = files[0]
+    if not (f.mimetype or "").startswith("video/"):
+        return jsonify({"error": "unsupported file type in upload"}), 400
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            tmp_path = tmp.name
+            f.save(tmp_path)
+        file_size_bytes = os.path.getsize(tmp_path)
+        if get_video_duration(tmp_path) > duation or file_size_bytes > max_size:
+            return jsonify({"error": "video exceeds allowed duration or size"}), 400
+        try:
+            registration = register_pinterest_video(access_token)
+            media_id = registration.get("media_id")
+            if not media_id:
+                return jsonify({"error": "video registration failed"}), 400
+            upload_pinterest_video_file(registration["upload_url"], registration["upload_parameters"],tmp_path,)
+            if not wait_for_pinterest_media(access_token, media_id):
+                return jsonify({"error": "video processing failed or timed out"}), 400
+            pin = create_pinterest_video_pin(access_token, board_id, title, description, media_id)
+        except requests.HTTPError as e:
+            return jsonify({"error": "pin upload failed", "detail": str(e)}), 400
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
