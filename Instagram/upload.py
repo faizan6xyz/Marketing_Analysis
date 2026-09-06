@@ -261,43 +261,6 @@ def get_media_insights(media_id, access_token, story ):
         return {"success": False, "data": None, "error": f"unexpected response shape for {media_id}: {e}"}
     return {"success": True, "data": result, "error": None}
 
-def get_media_thumbnail(media_id, access_token):
-    if not access_token:
-        return {"success": False, "data": None, "error": f"missing access_token for {media_id}"}
-    url = f"https://graph.instagram.com/{media_id}"
-    params = {"fields": "id,media_type,media_url,thumbnail_url,permalink,children{id,media_type,media_url,thumbnail_url}", "access_token": access_token,}
-    try:
-        response = requests.get(url, params=params, timeout=5)
-        payload = response.json()
-    except requests.RequestException as e:
-        return {"success": False, "data": None, "error": f"request failed for {media_id}: {e}"}
-    except ValueError as e:
-        return {"success": False, "data": None, "error": f"response was not valid JSON for {media_id}: {e}"}
-    if "error" in payload:
-        return {"success": False, "data": None, "error": f"API error for {media_id}: {payload['error']}"}
-    media_type = payload.get("media_type")
-    if media_type == "VIDEO":
-        thumbnail_url = payload.get("thumbnail_url")
-        if not thumbnail_url:
-            return {"success": False, "data": None, "error": f"no thumbnail_url returned for {media_id}"}
-        return {"success": True, "data": {"media_id": media_id, "thumbnail_url": thumbnail_url, "media_type": media_type}, "error": None}
-    if media_type == "IMAGE":
-        media_url = payload.get("media_url")
-        if not media_url:
-            return {"success": False, "data": None, "error": f"no media_url returned for {media_id}"}
-        return {"success": True, "data": {"media_id": media_id, "thumbnail_url": media_url, "media_type": media_type}, "error": None}
-    if media_type == "CAROUSEL_ALBUM":
-        children = payload.get("children", {}).get("data", [])
-        if not children:
-            return {"success": False, "data": None, "error": f"carousel {media_id} has no children"}
-        first = children[0]
-        child_type = first.get("media_type")
-        thumbnail_url = first.get("thumbnail_url") if child_type == "VIDEO" else first.get("media_url")
-        if not thumbnail_url:
-            return {"success": False, "data": None, "error": f"no thumbnail found for first item in carousel {media_id}"}
-        return {"success": True, "data": {"media_id": media_id, "thumbnail_url": thumbnail_url, "media_type": media_type}, "error": None}
-    return {"success": False, "data": None, "error": f"unsupported media_type '{media_type}' for {media_id}"}
-
 def reply_to_comment(comment_id, message, access_token):
     if not access_token:
         return {"success": False, "data": None, "error": f"missing access_token for {comment_id}"}
@@ -341,25 +304,6 @@ def send_message(recipient_id, message, access_token):
     if not message_id:
         return {"success": False, "data": None, "error": f"unexpected response shape for {recipient_id}: {payload}"}
     return {"success": True, "data": {"message_id": message_id, "recipient_id": recipient}, "error": None}
-
-def get_follower_count(account_id, access_token):
-    if not access_token:
-        return {"success": False, "data": None, "error": f"missing access_token for {account_id}"}
-    url = f"{BASE_URL}/{account_id}"
-    params = {"fields": "followers_count", "access_token": access_token}
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        payload = response.json()
-    except requests.RequestException as e:
-        return {"success": False, "data": None, "error": f"request failed for {account_id}: {e}"}
-    except ValueError as e:
-        return {"success": False, "data": None, "error": f"response was not valid JSON for {account_id}: {e}"}
-    if "error" in payload:
-        return {"success": False, "data": None, "error": f"API error for {account_id}: {payload['error']}"}
-    followers_count = payload.get("followers_count")
-    if followers_count is None:
-        return {"success": False, "data": None, "error": f"unexpected response shape for {account_id}: {payload}"}
-    return {"success": True, "data": {"followers_count": followers_count}, "error": None}
 
 def story_schedule(token,hour,media_id,access_token):
     tokench = au.process(token=token)

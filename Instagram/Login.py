@@ -264,9 +264,10 @@ def get_instagram_posts():
     username = body.get("username")
     token = body.get("token")
     tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
-    if err: return err
-    fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"
+    access_token, err = get_authenticated_access_token(tokench["user_id"], tokench["token"], username)
+    if err:
+        return err
+    fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count"
     url = "https://graph.instagram.com/me/media"
     params = {"fields": fields, "access_token": access_token}
     posts = []
@@ -277,17 +278,7 @@ def get_instagram_posts():
         posts.extend(resp.get("data", []))
         url = resp.get("paging", {}).get("next")
         params = None
-    for post in posts:
-        try:
-            thumb_result = uploadd.get_media_thumbnail(access_token=access_token,media_id=post["id"])
-        except Exception as e:
-            post["thumbnail_url"] = None
-            continue
-        if thumb_result["success"]:
-            post["thumbnail_url"] = thumb_result["data"]
-        else:
-            post["thumbnail_url"] = None
-    return jsonify({"count": len(posts), "posts": posts}) , 200
+    return jsonify({"count": len(posts), "posts": posts}), 200
 
 @app.route("/instagram/stories/")
 def get_instagram_stories():
@@ -319,28 +310,6 @@ def get_instagram_stories():
         else:
             story["thumbnail_url"] = None
     return jsonify({"count": len(stories), "stories": stories}), 200
-
-@app.route("/instagram/comments/")
-def get_instagram_comments():
-    body = request.get_json(silent=True) or {}
-    media_id = body.get("media_id")
-    username = body.get("username")
-    token = body.get("token")
-    tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
-    if err: return err
-    fields = "id,text,username,timestamp,like_count"
-    url = f"https://graph.instagram.com/{media_id}/comments"
-    params = {"fields": fields, "access_token": access_token}
-    comments = []
-    while url:
-        resp = requests.get(url, params=params).json()
-        if "error" in resp:
-            return jsonify(resp), 400
-        comments.extend(resp.get("data", []))
-        url = resp.get("paging", {}).get("next")
-        params = None
-    return jsonify({"count": len(comments), "comments": comments})
 
 @app.route("/instagram/upload/story", methods=["POST"])
 def story():
@@ -613,34 +582,6 @@ def carousel():
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
-@app.route("/instagram/auto", methods=["POST"])
-def get_thumbnail_auto():
-    body = request.get_json(silent=True) or {}
-    username = body.get("username")
-    token = body.get("token")
-    tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
-    media_ids = body.get("media_id")
-    if len(media_ids) == 1 and "," in media_ids[0]:
-        media_ids = [m.strip() for m in media_ids[0].split(",") if m.strip()]
-    if err:
-        return err
-    if not media_ids:
-        return jsonify({"success": False, "message": "media_id is required"}), 400
-    results_by_id = {}
-    errors_by_id = {}
-    for mid in media_ids:
-        try:
-            result = uploadd.get_media_thumbnail(access_token=access_token, media_id=mid)
-        except Exception as e:
-            errors_by_id[mid] = f"Unable to fetch thumbnail: {e}"
-            continue
-        if result["success"]:
-            results_by_id[mid] = result["data"]
-        else:
-            errors_by_id[mid] = result["error"]
-    return jsonify({ "success": len(errors_by_id) == 0, "data": results_by_id,"errors": errors_by_id if errors_by_id else None }), 200 if not errors_by_id else 207
-
 @app.route("/instagram/insight", methods=["POST"])
 def insight():
     body = request.get_json(silent=True) or {}
@@ -648,7 +589,7 @@ def insight():
     media_id = body.get("media_id")
     username = body.get("username")
     token = body.get("token")
-    tokench = au.process(token=token)
+    tokench = au.process(token=token)   
     access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
     if err: return err
     is_story = str(is_story).strip().lower() == "true" if is_story else False
@@ -660,78 +601,7 @@ def insight():
         return jsonify({"success": True, "data": result["data"]}), 200
     else:
         return jsonify({"success": False, "message": result["error"]}), 500
-    
-@app.route("/instagram/comments/reply/batch/", methods=["POST"])
-def reply_to_comments_batch():
-    body = request.get_json(silent=True) or {}
-    replies = body.get("replies")  # expects [{"comment_id": "...", "message": "..."}, ...]
-    username = body.get("username")
-    token = body.get("token")
-    tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
-    if err: return err
-    if not replies or not isinstance(replies, list):
-        return jsonify({"success": False, "message": "expected a non-empty 'replies' list"}), 400
-    results = []
-    for item in replies:
-        comment_id = item.get("comment_id")
-        message = item.get("message")
-        if not comment_id or not message:
-            results.append({"comment_id": comment_id, "success": False, "error": "missing comment_id or message"})
-            continue
-        try:
-            r = uploadd.reply_to_comment(access_token=access_token, comment_id=comment_id, message=message)
-        except Exception as e:
-            r = {"success": False, "data": None, "error": str(e)}
-        results.append({"comment_id": comment_id, "success": r["success"], "data": r.get("data"), "error": r.get("error")})
-        time.sleep(0.2)
-    overall_success = all(r["success"] for r in results)
-    return jsonify({"success": overall_success, "results": results}), 200
-
-@app.route("/instagram/send-message/", methods=["POST"])
-def send_instagram_message():
-    body = request.get_json(silent=True) or {}
-    recipient_id = body.get("recipient_id")
-    username = body.get("username")
-    token = body.get("token")
-    tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
-    if err: return err
-    message = body.get("message")
-    if not recipient_id or not message:
-        return jsonify({"error": "recipient_id and message are required"}), 400
-    result = uploadd.send_message(recipient_id, message, access_token)
-    if not result["success"]:
-        return jsonify(result), 400
-    return jsonify(result), 200
-
-@app.route("/instagram/followers")
-def get_followers_count_route():
-    body = request.get_json(silent=True) or {}
-    username = body.get("username")
-    token = body.get("token")
-    tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
-    if err: return err
-    account_id = dbimp.select_rows()
-    result = uploadd.get_follower_count(account_id, access_token)
-    if not result["success"]:
-        return jsonify({"error": result["error"]}), 400
-    return jsonify(result["data"])
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
 #  account id will be hideen and checks by the db 
