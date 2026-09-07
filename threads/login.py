@@ -438,9 +438,13 @@ def post_threads_carousel():
         is_published = wait_for_threads_container(access_token, creation_id)
         if not is_published:
             raise RuntimeError("carousel container failed to reach FINISHED state")
-        thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
-        if not thread_id:
-            raise RuntimeError("failed to publish carousel thread")
+        if publish_now :
+            thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
+            if not thread_id:
+                raise RuntimeError("failed to publish carousel thread")
+        if not publish:
+            sccc.insert_time(threads_user_id,creation_id,time,access_token)
+            return creation_id
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_id}), 200

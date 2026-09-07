@@ -102,6 +102,8 @@ if __name__ == "__main__":
                 dpp.append_to_file(token=token, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
         time.sleep(1)
+# had to shift from the token to another method in which the token doesn't require to publish or do anything 
+
 
 
 # add repeat of addition of scheledule of post1 type when every it deletes

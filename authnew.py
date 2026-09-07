@@ -4,16 +4,15 @@ import secrets
 import hmac
 import hashlib
 from datetime import datetime, timezone, timedelta
-import random
 import os
 import database.UserDB as dbimp
 SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
 
 def random_text(limit):
-    password = [ secrets.choice(string.ascii_uppercase), secrets.choice(string.ascii_lowercase), secrets.choice(string.digits),]
+    password = [ secrets.choice(string.ascii_uppercase), secrets.choice(string.ascii_lowercase),secrets.choice(string.digits),]
     characters = string.ascii_letters + string.digits
     password.extend(secrets.choice(characters) for _ in range(limit))
-    random.SystemRandom().shuffle(password)
+    secrets.SystemRandom().shuffle(password)
     return ''.join(password)
 
 def jsonspoof(user_id, timestamp):
@@ -46,13 +45,10 @@ def process(token):
     expected_sign = hmac.new(SECRET_KEY, f"{user_id}.{time}".encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected_sign, sign):
         return {"status" : False, "reason" : "invalid signature"}
-    if datetime.now(timezone.utc) > datetime.fromisoformat(time) :
+    if datetime.now(timezone.utc) > datetime.fromisoformat(time) and datetime.now(timezone.utc) - datetime.fromisoformat(time) < timedelta(hours=12): 
         time = datetime.now(timezone.utc) + timedelta(hours=1)
         token_new = jsonspoof(user_id=user_id , timestamp=time)
         dbimp.update_token_by_token(token=token,new_token=token_new)
-        update = dbimp.update_rows(token_new,"users" , {"Token":token_new},{"user_id":user_id})
-        if not update:
-            return "unable to update"
         return {"status" : True , "token" : token_new , "user_id":user_id }
     return {"status" : True , "token" : token , "user_id":user_id }
 
