@@ -40,39 +40,39 @@ def upload_image(access_token, file_bytes):
     resp = requests.post( MEDIA_UPLOAD_URL, headers={"Authorization": f"Bearer {access_token}"}, files={"media": file_bytes} ).json()
     return resp.get("media_id_string")
 
-def refresh_x_token11( account_id):
-    rows = dbimp.select_rows_web(TABLE_NAME,select="Refresh_token",filters={"Account_id": account_id})
-    if not rows:
-        return None
-    refresh_token = rows[0]["Refresh_token"]
-    basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
-    resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
-    new_access = resp.get("access_token")
-    new_refresh = resp.get("refresh_token", refresh_token)
-    seconds = resp.get("expires_in")
-    if not new_access or not seconds:
-        return None
-    expire_time = (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
-    dbimp.update_rows_web( TABLE_NAME, {"Access_token": new_access, "Refresh_token": new_refresh, "Token_expire": expire_time}, filters={"Account_id": account_id})
-    return new_access
+# def refresh_x_token11( account_id):
+#     rows = dbimp.select_rows_web(TABLE_NAME,select="Refresh_token",filters={"Account_id": account_id})
+#     if not rows:
+#         return None
+#     refresh_token = rows[0]["Refresh_token"]
+#     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
+#     resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
+#     new_access = resp.get("access_token")
+#     new_refresh = resp.get("refresh_token", refresh_token)
+#     seconds = resp.get("expires_in")
+#     if not new_access or not seconds:
+#         return None
+#     expire_time = (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
+#     dbimp.update_rows_web( TABLE_NAME, {"Access_token": new_access, "Refresh_token": new_refresh, "Token_expire": expire_time}, filters={"Account_id": account_id})
+#     return new_access
 
-def get_tweet_metrics(x_user_id, tweet_id, access_token):
-    access_token = refresh_x_token11(x_user_id)
-    headers = {"Authorization": f"Bearer {access_token}"}
-    tweet_url = f"https://api.x.com/2/tweets/{tweet_id}"
-    tweet_params = {"tweet.fields": "created_at,public_metrics"}
-    resp = requests.get(tweet_url, headers=headers, params=tweet_params, timeout=10)
-    resp.raise_for_status()
-    t = resp.json()["data"]
-    pm = t.get("public_metrics", {})
-    user_url = f"https://api.x.com/2/users/{x_user_id}"
-    user_params = {"user.fields": "public_metrics"}
-    resp = requests.get(user_url, headers=headers, params=user_params, timeout=10)
-    resp.raise_for_status()
-    u = resp.json()["data"]
-    followers = u["public_metrics"]["followers_count"]
-    profile_clicks = None  
-    return f"{t.get('id')},{t.get('created_at')},{pm.get('impression_count')},{pm.get('like_count')},{pm.get('retweet_count')},{pm.get('reply_count')},{pm.get('bookmark_count')},{profile_clicks},{followers}"
+# def get_tweet_metrics(x_user_id, tweet_id, access_token):
+#     access_token = refresh_x_token11(x_user_id)
+#     headers = {"Authorization": f"Bearer {access_token}"}
+#     tweet_url = f"https://api.x.com/2/tweets/{tweet_id}"
+#     tweet_params = {"tweet.fields": "created_at,public_metrics"}
+#     resp = requests.get(tweet_url, headers=headers, params=tweet_params, timeout=10)
+#     resp.raise_for_status()
+#     t = resp.json()["data"]
+#     pm = t.get("public_metrics", {})
+#     user_url = f"https://api.x.com/2/users/{x_user_id}"
+#     user_params = {"user.fields": "public_metrics"}
+#     resp = requests.get(user_url, headers=headers, params=user_params, timeout=10)
+#     resp.raise_for_status()
+#     u = resp.json()["data"]
+#     followers = u["public_metrics"]["followers_count"]
+#     profile_clicks = None  
+#     return f"{t.get('id')},{t.get('created_at')},{pm.get('impression_count')},{pm.get('like_count')},{pm.get('retweet_count')},{pm.get('reply_count')},{pm.get('bookmark_count')},{profile_clicks},{followers}"
 
 def upload_video(access_token, file_bytes, mime_type="video/mp4"):
     total_bytes = len(file_bytes)
@@ -176,10 +176,10 @@ def get_access_token_by_username(token, user_id, username):
                 access_token = refreshed
     return access_token, None ,account_id
 
-def xcccc(user_id,access_token,media_id,typee):
-    for i in range(7): 
-        timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
-        sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
+# def xcccc(user_id,access_token,media_id,typee):
+#     for i in range(7): 
+#         timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
+#         sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
 
 def _authenticate(request):
     token = request.form.get("token")
@@ -310,7 +310,7 @@ def post_to_x_text():
     tweet_id = _post_tweet(access_token, text)
     if not tweet_id:
         return jsonify({"error": "failed to create post"}), 400
-    xcccc(account_id, access_token, tweet_id, "tweet")
+    # xcccc(account_id, access_token, tweet_id, "tweet")
     return jsonify({"success": True, "post_id": tweet_id}), 200
 
 @app.route("/post/x/photo", methods=["POST"])
@@ -348,7 +348,7 @@ def post_to_x_photo():
         tweet_id, post_err = create_tweet_with_media(access_token, text, media_ids)
         if post_err:
             return jsonify({"error": "failed to create post", "detail": post_err}), 400
-        xcccc(account_id, access_token, tweet_id, "photo_tweet")
+        # xcccc(account_id, access_token, tweet_id, "photo_tweet")
         return jsonify({"success": True, "post_id": tweet_id, "media_ids": media_ids}), 200
     if post_err:
         return jsonify({"error": "failed to create post", "detail": post_err}), 400
@@ -385,7 +385,7 @@ def post_to_x_video():
     tweet_id, post_err = create_tweet_with_media(access_token, text, [media_id])
     if post_err:
         return jsonify({"error": "failed to create post", "detail": post_err}), 400
-    xcccc(account_id,access_token,tweet_id,"video_tweet")
+    # xcccc(account_id,access_token,tweet_id,"video_tweet")
     if post_err:
         return jsonify({"error": "failed to create post", "detail": post_err}), 400
     return jsonify({"success": True, "post_id": tweet_id, "media_ids": [media_id]}), 200

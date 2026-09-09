@@ -2,8 +2,10 @@ from datetime import datetime, timezone, date
 import time
 import Instagram.upload as aaaa
 import sqlite3
+import X.login as x
 import os 
 import threads.login as thhh
+import pinterst.login as pin 
 import Drive.dep as dpp
 import youtube.login as you
 youtube_api = os.environ.get("youtube_api")
@@ -23,7 +25,7 @@ def init_db():
                     access_token TEXT ,
                      media_id TEXT ,
                      hour INTEGER ,
-                     token TEXT) """)
+                     ) """)
     conn.commit()
     conn.close()
 
@@ -33,15 +35,15 @@ def insert_time(user_id, container_id, scheduled_time, access_token):    # time 
     conn.commit()
     conn.close()
 
-def insert__story(user_id,  scheduled_time, access_token,media_id,hour,token,typee):    # time should be give in the isoformat iniitally as argument 
+def insert__story(user_id,  scheduled_time, access_token,media_id,hour,typee):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()
-    conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour,token) VALUES (?, ?, ?, ?,?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id,hour,token))
+    conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour) VALUES (?, ?, ?,?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id,hour))
     conn.commit()
     conn.close()
 
-def insert__story1(user_id,  scheduled_time, access_token,media_id,token,typee):    # time should be give in the isoformat iniitally as argument 
+def insert__story1(user_id,  scheduled_time, access_token,media_id,typee):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()
-    conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,token) VALUES (?, ?, ?, ?,?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id,token))
+    conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (?, ?, ?, ?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id))
     conn.commit()
     conn.close()
 
@@ -72,34 +74,52 @@ if __name__ == "__main__":
     while True:
         now = datetime.now(timezone.utc).isoformat()
         due = get_containers_due(now)
-        for row_id, container_id, access_tok, user_id , typess,media_id,hourss,token in due:
+        for row_id, container_id, access_tok, username_id , typess,media_id,hourss in due:
             if typess == "container":
-                aaaa.publish_container(token=token,user_id=user_id, access_token=access_tok, creation_id=container_id)
-                print(row_id,container_id,access_tok,user_id)
+                aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
                 delete_by_id(row_id)
             if typess == "container1":
-                thhh.publish_threads_container_sc(token=token,user_id=user_id, access_token=access_tok, creation_id=container_id)
-                print(row_id,container_id,access_tok,user_id)
+                thhh.publish_threads_container_sc(user_id=username_id, access_token=access_tok, creation_id=container_id)
                 delete_by_id(row_id)
             if typess == "story" :
-                content = aaaa.story_schedule(token,hourss,media_id,access_tok)
-                dpp.append_to_file(token=token, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
+                content = aaaa.story_schedule(username_id,hourss,media_id,access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
-            if typess == "photo1":
-                content = aaaa.get_media_analytics(token,media_id,access_tok)
-                dpp.append_to_file(token=token, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
+            if typess == "photo":
+                content = aaaa.get_media_analytics(username_id,media_id,access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
-            if typess == "carousel1":
-                content = aaaa.get_media_analytics(token,media_id,access_tok)
-                dpp.append_to_file(token=token, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
+            if typess == "carousel":
+                content = aaaa.get_media_analytics(username_id,media_id,access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
-            if typess == "video1":
-                content = aaaa.get_media_analytics(token,media_id,access_tok)
-                dpp.append_to_file(token=token, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
+            if typess == "video":
+                content = aaaa.get_media_analytics(username_id,media_id,access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
             if typess == "shorts": 
-                content = you.shorts_schedule(token,media_id,youtube_api,access_tok,str(date.today()))
-                dpp.append_to_file(token=token, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
+                content = you.shorts_schedule(username_id,media_id,youtube_api,access_tok,str(date.today()))
+                dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            # if typess == "tweet":
+            #     content = x.get_tweet_metrics(username_id ,media_id, access_tok)
+            #     dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
+            #     delete_by_id(row_id)
+            # if typess == "photo_tweet" :
+            #     content = x.get_tweet_metrics(username_id ,media_id, access_tok)
+            #     dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
+            #     delete_by_id(row_id)
+            # if typess == "video_tweet":
+            #     content = x.get_tweet_metrics(username_id ,media_id, access_tok)
+            #     dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
+            #     delete_by_id(row_id)
+            if typess == "pin_photo": 
+                content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "pin_video": 
+                content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
         time.sleep(1)
 # had to shift from the token to another method in which the token doesn't require to publish or do anything 
