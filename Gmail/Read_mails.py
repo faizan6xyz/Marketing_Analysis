@@ -46,8 +46,8 @@ ALLOWED_ATTACHMENT_EXTENSIONS = { '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.cs
 def build_flow():
     return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [GMAIL_REDIRECT_URI], }}, scopes=SCOPES, redirect_uri=GMAIL_REDIRECT_URI)
 
-def save_tokens(token, user_id, creds, email_addr=None):
-    payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(), "Timestamp": datetime.now(timezone.utc).isoformat()}
+def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
+    payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(),"Account_id":google_account_id ,"Timestamp": datetime.now(timezone.utc).isoformat()}
     if email_addr:
         payload["Email"] = email_addr
     rows = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})

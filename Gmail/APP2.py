@@ -85,12 +85,15 @@ def gmail_oauth_callback():
     flow = gc.build_flow()
     flow.fetch_token(code=code)
     creds = flow.credentials
-    creds_json = creds.to_json()  # Credentials has a to_json() method
-    service = build('gmail', 'v1', credentials=creds)
+    creds_json = creds.to_json()
+    gmail_service = build('gmail', 'v1', credentials=creds)
+    oauth2_service = build('oauth2', 'v2', credentials=creds)
+    email_addr = gmail_service.users().getProfile(userId='me').execute()['emailAddress']
+    userinfo = oauth2_service.userinfo().get().execute()
+    google_account_id = userinfo['id']  # stable, permanent per Google Account
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    email_addr = service.users().getProfile(userId='me').execute()['emailAddress']
-    payload = {"user_id": user_id,"creds": creds_json,"email": email_addr, "token":token}
+    payload = { "user_id": user_id, "creds": creds_json, "email": email_addr, "google_account_id": google_account_id, "token": token,}
     signed_payload = serializer.dumps(payload)
     resp = requests.post(f"{BASE_URL}/auth/gmail/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
@@ -106,13 +109,14 @@ def oauth_callbac():
     user_id = data.get("user_id")
     creds = data.get("creds")
     email = data.get("email")
-    if not token or not user_id or not email or not creds :
-        return jsonify({"status":False}),403
+    google_account_id = data.get("google_account_id")
+    if not token or not user_id or not email or not creds or not google_account_id:
+        return jsonify({"status": False}), 403
     try:
-        gc.save_tokens(token, user_id, creds, email)
+        gc.save_tokens(token, user_id, creds, google_account_id,email)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
-    return jsonify({"status":True}),200
+    return jsonify({"status": True}), 200
 
 @app.route('/messages', methods=['GET'])
 @limiter.limit("30 per minute")

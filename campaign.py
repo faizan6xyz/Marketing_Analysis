@@ -147,8 +147,13 @@ def campaign():
         return jsonify({"status": False}), 403
     results = []
     if platform == "gmail":
+        email =  request.form.get("email")
         try:
             gmail_service = gc.get_service(token=token, user_id=user_id)
+            rows=dbimp.select_rows(tokench["token"],"Gmail", select="Account_id" , filters={"id":user_id,"email":email})
+            if rows:
+                row = rows[0]
+            account_id = row["Account_id"]
         except Exception:
             cleanup_local_files()
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
@@ -167,13 +172,14 @@ def campaign():
                     gc.send_message_with_attachments( service=gmail_service, to=recipient, subject=campaign_name or "", body_text=body, attachment_paths=attachment_paths, attachment_labels=attachment_labels, name=recipient_name, )
                 else:
                     gc.send_message(service=gmail_service, to=recipient, subject=campaign_name or "", body_text=body, name=recipient_name)
-                dpp.append_to_file(token=token, platform=platform, filename="campaigns.txt", data_to_append=content)
+                dpp.append_to_file( user_id=account_id,platform=platform, filename="campaigns.txt", data_to_append=content)
                 results.append({"to": recipient, "status": "sent"})
             except Exception as e:
                 logger.exception("campaign send failed for %s", recipient)
                 results.append({"to": recipient, "status": "failed", "error": str(e)})
     elif platform == "whatsapp":
-        rows = dbimp.select_rows(token, "Whatsapp", select="Access_token,Account_id,Token_expire", filters={"id": user_id})
+        number = request.form.get("number")
+        rows = dbimp.select_rows(tokench["token"], "Whatsapp", select="Access_token,Account_id,Token_expire", filters={"Phone_no":number,"id": user_id})
         row = rows[0] if rows else None
         if not row:
             cleanup_local_files()
@@ -200,7 +206,7 @@ def campaign():
                 what.send_whatsapp_message(PHONE_NUMBER_ID=account_id, ACCESS_TOKEN=acc, recipient_number=recipient, message_body=personalized_body)
                 for m in media:
                     what.send_whatsapp_media( PHONE_NUMBER_ID=account_id, ACCESS_TOKEN=acc, recipient_number=recipient, msg_type=m["type"], path=m["path"], caption=m.get("caption"), filename=m.get("filename"),  )
-                dpp.append_to_file(token=token, platform=platform, filename="campaigns.txt", data_to_append=content)
+                dpp.append_to_file( user_id=account_id,platform=platform, filename="campaigns.txt", data_to_append=content)
                 results.append({"to": recipient, "status": "sent"})
             except Exception as e:
                 logger.exception("campaign send failed for %s", recipient)

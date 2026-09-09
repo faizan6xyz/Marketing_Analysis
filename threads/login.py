@@ -54,6 +54,22 @@ def refresh_threads_token(expire, access, token, user_id, username):
     else:
         return access
 
+def refresh_threads_tokenww(expire, access, thread_user_id):
+    expire = datetime.fromisoformat(expire)
+    if expire - datetime.now(timezone.utc) < timedelta(days=1):
+        resp = requests.get( THREADS_REFRESH_URL, params={"grant_type": "th_refresh_token", "access_token": access}, )
+        resp.raise_for_status()
+        data = resp.json()
+        new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
+        new_access = data["access_token"]
+        try:
+            dbimp.update_rows_web( THREADS_TABLE_NAME, { "Access_token": new_access, "Token_expire": new_expiry.isoformat(), }, filters={"Account_id": thread_user_id}, )
+        except Exception as e:
+            print(f"Failed to persist refreshed Threads token for : {e}")
+        return new_access
+    else:
+        return access
+
 def get_all_threads_media(access_token, account_id, page_size=100):
     media = []
     url = f"https://graph.threads.net/v1.0/{account_id}/threads"
@@ -161,10 +177,9 @@ def publish_threads_container(access_token, threads_user_id, creation_id):
     resp.raise_for_status()
     return resp.json().get("id")  
 
-def publish_threads_container_sc(token,access_token, threads_user_id, creation_id):
-    tokench = au.process(token=token)
+def publish_threads_container_sc(access_token, threads_user_id, creation_id):
     expire  = datetime.now(timezone.utc).isoformat()
-    refresh_threads_token(expire, access_token, token, tokench["user_id"], threads_user_id)
+    refresh_threads_tokenww(expire, access_token, threads_user_id)
     resp = requests.post( f"{THREADS_API_BASE}/{threads_user_id}/threads_publish", data={ "creation_id": creation_id, "access_token": access_token, }, )
     resp.raise_for_status()
     return resp.json().get("id")  

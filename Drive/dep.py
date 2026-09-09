@@ -46,12 +46,14 @@ campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interacti
 campaigns_content4 = "media_id,views,reach,replies,shares,navigation,follows,profile_activity,hour,thumbnail,time"
 campaigns_content5 = "media_id,publish_at,impression,likes,comments,shares,clicks,engagements,profile_views,follower_gained,saves,reaction,send"
 campaigns_content6 = "Video_ID,Published_At,Views,Likes,Comments,Shares,Watch_Time,Average_View_Duration,Impressions,Click_Through_Rate,Subscribers_Gained"
+campaigns_content7 = "Tweet_ID,Published At,Impressions,Likes,Retweets,Replies,Bookmarks,Profile_Clicks,Follower_Gained"
 
 filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": "{}",},
           "Whatsapp": {"campains.txt": campaigns_content1,"workflowmessage.json": "{}",},
           "Instagram": {"workflowmessage.json": "{}","workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
           "Linkedln": {"workflowmessage.json": "{}","workflowcomment.json": "{}", "postanalysis.txt": campaigns_content5 },
-          "Youtube" : { "postanalysis.txt":campaigns_content6 }}
+          "Youtube" : { "postanalysis.txt":campaigns_content6 },
+          "x": {"postanalysis.txt":campaigns_content7 } }
 
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -59,10 +61,10 @@ def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     
 
 def Update_token(token , user_id, access_token, refresh_token, expiry):
-    dbimp.update_rows(token , table_name, {"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token": fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.isoformat().encode()).decode()}, {"id" : user_id})
+    dbimp.update_rows_web(token , table_name, {"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token": fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.isoformat().encode()).decode()}, {"id" : user_id})
 
-def load_tokens(token,user_id):
-    rows = dbimp.select_rows(token,table_name , select="Access_token,Refresh_token,Token_expire,Connected" , filters= {"id" : user_id})
+def load_tokens(user_id):
+    rows = dbimp.select_rows_web(table_name , select="Access_token,Refresh_token,Token_expire,Connected" , filters= {"id" : user_id})
     row = rows[0] if rows else None
     if not row :    
         return None
@@ -73,14 +75,14 @@ def load_tokens(token,user_id):
     return {"access_token": fernet.decrypt(access_token.encode()).decode(), "refresh_token": fernet.decrypt(refresh_token.encode()).decode(), "token_expiry": fernet.decrypt(expiry.encode()).decode() , "connected": bool(connected) }
 
 
-def mark_disconnected(token,user_id):
-    dbimp.update_rows(token,table_name , {"Connected" : 0 } , {"id" : user_id} )
+def mark_disconnected(user_id):
+    dbimp.update_rows_web(table_name , {"Connected" : 0 } , {"id" : user_id} )
 
 def build_flow():
     return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [REDIRECT_URI], }}, scopes=SCOPES,redirect_uri=REDIRECT_URI)
 
-def get_drive_service(token,user_id):
-    tokens = load_tokens(token,user_id)
+def get_drive_service(user_id):
+    tokens = load_tokens(user_id)
     if not tokens or not tokens["connected"]:
         return None
     expiry = None
@@ -90,10 +92,10 @@ def get_drive_service(token,user_id):
     if creds.expired:
         try:
             creds.refresh(GoogleRequest())
-            Update_token(token ,user_id, creds.token, creds.refresh_token, creds.expiry)
+            Update_token(user_id, creds.token, creds.refresh_token, creds.expiry)
         except RefreshError:
             try:
-                mark_disconnected(token, user_id)
+                mark_disconnected( user_id)
             except Exception:
                 pass
             return None
@@ -105,19 +107,8 @@ def get_drive_service(token,user_id):
             return None 
     return build("drive", "v3", credentials=creds)
 
-def authenticate_request(token):
-    tokench = au.process(token=token)
-    if not tokench["status"]:
-        return None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
-    user_id = tokench['user_id']
-    if not user_id:
-        return None, (jsonify({"error": "user_id required"}), 400)
-    return user_id, None
-
-def authenticate_and_get_service(token):
-    user_id, err = authenticate_request(token)
-    if err: return None,  err
-    service = get_drive_service(token,user_id)
+def authenticate_and_get_service(user_id):
+    service = get_drive_service(user_id)
     if not service:
         return None, (jsonify({"error": "not connected", "connect_url": f"/connect-drive?user_id={user_id}"}), 401)
     return service, None
@@ -167,18 +158,18 @@ def create_files_in_folders(token, user_id, service, file_content, structure):
             dbimp.update_rows(token,platform,{filename: created["id"], f"{filename}_hash": x},{"id": user_id})
     return created_files
 
-def _resolve_and_verify_file(token, platform, filename):
+def _resolve_and_verify_file(user_idd, platform, filename):
     if not platform or not filename:
         raise ValueError("filename and platform are required")
-    service, err = authenticate_and_get_service(token)
+    rows  = dbimp.select_rows_web(platform, select='id' , filters={"Account_id":user_idd})
+    if rows :
+        row = row[0]
+    user_id = row["id"]
+    service, err = authenticate_and_get_service(user_id)
     if err:
         raise RuntimeError(f"Authentication failed: {err}")
-    user_id_data = au.jp(token)
-    user_id = user_id_data["user"] if user_id_data else None
-    if not user_id:
-        raise RuntimeError("Failed to resolve user_id from token")
     try:
-        filesss = dbimp.select_rows(token, platform, select=f"{filename},{filename}_hash", filters={"id": user_id})
+        filesss = dbimp.select_rows_web( platform, select=f"{filename},{filename}_hash", filters={"id": user_id})
     except Exception as e:
         raise RuntimeError(f"Failed to select file record: {e}")
     row = filesss[0] if filesss else None
@@ -204,8 +195,8 @@ def _resolve_and_verify_file(token, platform, filename):
     buffer.seek(0)
     return service, file_id, buffer
 
-def read_csv_from_drive(token, platform, filename, as_json: bool = False):
-    service, file_id, buffer = _resolve_and_verify_file(token, platform, filename)
+def read_csv_from_drive(user_id, platform, filename, as_json: bool = False):
+    service, file_id, buffer = _resolve_and_verify_file(user_id, platform, filename)
     if as_json:
         try:
             raw = buffer.read().decode("utf-8")
@@ -228,10 +219,10 @@ def read_csv_from_drive(token, platform, filename, as_json: bool = False):
         raise ValueError("The CSV file is not valid UTF-8")
     return df
 
-def mark_status_done(token, platform, filename, sender_ids, status_col, id_col):   # Works on a CSV file. For each ID in sender_ids:
+def mark_status_done(user_id, platform, filename, sender_ids, status_col, id_col):   # Works on a CSV file. For each ID in sender_ids:
     if not sender_ids:
         raise ValueError("sender_ids list is required and cannot be empty")
-    service, file_id, buffer = _resolve_and_verify_file(token, platform, filename)
+    service, file_id, buffer = _resolve_and_verify_file(user_id, platform, filename)
     try:
         df = pd.read_csv(buffer)
     except pd.errors.EmptyDataError:
@@ -266,13 +257,13 @@ def mark_status_done(token, platform, filename, sender_ids, status_col, id_col):
             service.files().update(fileId=file_id, media_body=media).execute()
         except Exception as e:
             raise RuntimeError(f"Failed to write updated CSV to Google Drive: {e}")
-        dbimp.update_rows(token, platform, {f"{filename}_hash": new_hash}, {"id": file_id})
+        dbimp.update_rows_web( platform, {f"{filename}_hash": new_hash}, {"id": file_id})
     return {"status": "ok", "rows_updated": total_updated, "details": results}
 
-def delete_matching_rows(token, platform, filename, valuess, status_col, id_col,status_value="receive", delete_all_matches=False): # deletes rows where it matches.
+def delete_matching_rows(user_id, platform, filename, valuess, status_col, id_col,status_value="receive", delete_all_matches=False): # deletes rows where it matches.
     if not valuess:
         raise ValueError("valuess list is required and cannot be empty")
-    service, file_id, buffer = _resolve_and_verify_file(token, platform, filename)
+    service, file_id, buffer = _resolve_and_verify_file(user_id, platform, filename)
     try:
         df = pd.read_csv(buffer)
     except pd.errors.EmptyDataError:
@@ -309,11 +300,11 @@ def delete_matching_rows(token, platform, filename, valuess, status_col, id_col,
             service.files().update(fileId=file_id, media_body=media).execute()
         except Exception as e:
             raise RuntimeError(f"Failed to write updated CSV to Google Drive: {e}")
-        dbimp.update_rows(token, platform, {f"{filename}_hash": new_hash}, {"id": file_id})
+        dbimp.update_rows_web( platform, {f"{filename}_hash": new_hash}, {"id": file_id})
     return {"status": "ok", "rows_deleted": total_deleted, "details": results}
 
-def append_to_file(token, platform, filename, data_to_append, as_json: bool = False,as_text: bool = True, add_newline=True):   # Adds new content to the end of a file without replacing what's there.
-    service, file_id, buffer = _resolve_and_verify_file(token, platform, filename)
+def append_to_file(user_id, platform, filename, data_to_append, as_json: bool = False,as_text: bool = True, add_newline=True):   # Adds new content to the end of a file without replacing what's there.
+    service, file_id, buffer = _resolve_and_verify_file(user_id, platform, filename)
     if as_json:
         try:
             raw = buffer.read().decode("utf-8")
@@ -373,11 +364,11 @@ def append_to_file(token, platform, filename, data_to_append, as_json: bool = Fa
         service.files().update(fileId=file_id, media_body=media).execute()
     except Exception as e:
         raise RuntimeError(f"Failed to write updated file to Google Drive: {e}")
-    dbimp.update_rows(token, platform, {f"{filename}_hash": new_hash}, {"id": file_id})
+    dbimp.update_rows_web( platform, {f"{filename}_hash": new_hash}, {"id": file_id})
     return {"status": "ok", "as_text": as_text, "as_json": as_json, "bytes_appended": bytes_appended}
 
-def update_file(token, platform, filename, old_text, new_text, as_json: bool = False,as_text: bool = True, replace_all=False): # A find-and-replace function.
-    service, file_id, buffer = _resolve_and_verify_file(token, platform, filename)
+def update_file(user_id, platform, filename, old_text, new_text, as_json: bool = False,as_text: bool = True, replace_all=False): # A find-and-replace function.
+    service, file_id, buffer = _resolve_and_verify_file(user_id, platform, filename)
     try:
         content = buffer.read().decode("utf-8")
     except UnicodeDecodeError:
@@ -443,8 +434,17 @@ def update_file(token, platform, filename, old_text, new_text, as_json: bool = F
         service.files().update(fileId=file_id, media_body=media).execute()
     except Exception as e:
         raise RuntimeError(f"Failed to write updated file to Google Drive: {e}")
-    dbimp.update_rows(token, platform, {f"{filename}_hash": new_hash}, {"id": file_id})
+    dbimp.update_rows_web( platform, {f"{filename}_hash": new_hash}, {"id": file_id})
     return {"status": "ok", "rows_updated": occurrences}
+
+def authenticate_request(token):
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
+    user_id = tokench['user_id']
+    if not user_id:
+        return None, (jsonify({"error": "user_id required"}), 400)
+    return user_id, None
 
 @app.route("/connect-drive")
 def connect_drive():
@@ -497,7 +497,8 @@ def oauth_callbac():
     access = data.get("access")
     if not token or not user_id or not expire or not access or not refresh :
         return jsonify({"status":False}),403
-    service, err = authenticate_and_get_service(token)
+    tokench = au.process(token=token)
+    service, err = authenticate_and_get_service(tokench["user_id"])
     if err: return err
     try:
         datetime.fromisoformat(expire)
@@ -520,7 +521,8 @@ def oauth_callbac():
 def list_files():
     body = request.get_json(silent=True) or {}
     token= body.get("token")
-    service, err = authenticate_and_get_service(token)
+    tokench = au.process(token=token)
+    service, err = authenticate_and_get_service(tokench["user_id"])
     if err: return err
     all_files = []
     page_token = None
@@ -588,9 +590,10 @@ def list_files():
 def read_csv_from_drive(file_id):
     body = request.get_json(silent=True) or {}
     token= body.get("token")
+    tokench = au.process(token=token)
     if not file_id :
         return jsonify({"error" : "File_id is required "}) , 500
-    service, err = authenticate_and_get_service(token)
+    service, err = authenticate_and_get_service(tokench["user_id"])
     if err:
         return err
     try:
@@ -614,9 +617,10 @@ def read_csv_from_drive(file_id):
 def append_csv_to_drive(file_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
+    tokench = au.process(token=token)
     if not file_id:
         return jsonify({"error": "File_id is required"}), 500
-    service, err = authenticate_and_get_service(token)
+    service, err = authenticate_and_get_service(tokench["user_id"])
     if err:
         return err
     body = request.get_json(silent=True) or {}

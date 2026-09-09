@@ -296,7 +296,7 @@ def upload():
                 response = upload_video_to_youtube_channel( creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags, )
                 video_id = response.get("id")
                 try:
-                    sccc(user_id, creds.token, video_id, token, "shorts")
+                    xcccc(channel_id, creds.token, video_id, token, "shorts")
                 except Exception as e:
                     print(f"xcccc scheduling failed for channel {channel_id}: {e}")
                 return {"account": channel_id, "status": "uploaded", "youtube_video_id": video_id}
