@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
 from supabase_auth.errors import AuthApiError
 import os
+import json
 from typing import Any, Optional
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import sqlite3
 from contextlib import closing
+import valkey
 load_dotenv()
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -15,7 +17,15 @@ DB = "users.db"
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Set SUPABASE_URL and SUPABASE_KEY in your environment or .env file")
 TABLE_NAME = "users"
-_session_cache: dict[str, Any] = {}  # its a plain Python dictionary that avoids re-authenticating with Supabase on every single database call.
+_session_cache: dict[str, Any] = {}  
+VALKEY_HOST = os.environ.get("VALKEY_HOST", "localhost")
+VALKEY_PORT = int(os.environ.get("VALKEY_PORT", 6379))
+VALKEY_DB = int(os.environ.get("VALKEY_DB", 0))
+vk = valkey.Valkey(host=VALKEY_HOST, port=VALKEY_PORT, db=VALKEY_DB, decode_responses=True)
+
+def _row_cache_key(table_name: str, filters: Optional[dict[str, Any]], select: str = "*", order_by: Optional[str] = None, ascending: bool = True, limit: Optional[int] = None) -> str:
+    key_data = { "filters": filters or {}, "select": select, "order_by": order_by, "ascending": ascending, "limit": limit, }
+    return f"rows:{table_name}:{json.dumps(key_data, sort_keys=True, default=str)}"
 
 def _is_session_valid(session) -> bool:
     if session is None:
@@ -114,6 +124,8 @@ def update_rows(token, table_name: str, updates: dict[str, Any], filters: dict[s
     query = supabase.table(table_name).update(updates)
     query = _apply_filters(query, filters)
     response = query.execute()
+    cache_key = _row_cache_key(table_name, filters)
+    vk.set(cache_key, json.dumps(response.data, default=str))
     return response.data
 
 def delete_rows(token, table_name: str, filters: dict[str, Any]) -> list[dict]:
@@ -123,7 +135,11 @@ def delete_rows(token, table_name: str, filters: dict[str, Any]) -> list[dict]:
     response = query.execute()
     return response.data
 
-def select_rows( token, table_name: str, filters: Optional[dict[str, Any]] = None, select: str = "*", order_by: Optional[str] = None, ascending: bool = True, limit: Optional[int] = None, ) -> list[dict]:
+def select_rows(token, table_name: str, filters: Optional[dict[str, Any]] = None, select: str = "*", order_by: Optional[str] = None, ascending: bool = True, limit: Optional[int] = None, ) -> list[dict]:
+    cache_key = _row_cache_key(table_name, filters, select, order_by, ascending, limit)
+    cached = vk.get(cache_key)
+    if cached is not None:
+        return json.loads(cached)
     supabase = get_authenticated_client(token)
     query = supabase.table(table_name).select(select)
     if filters:
@@ -133,9 +149,14 @@ def select_rows( token, table_name: str, filters: Optional[dict[str, Any]] = Non
     if limit:
         query = query.limit(limit)
     response = query.execute()
+    vk.set(cache_key, json.dumps(response.data, default=str))
     return response.data
 
-def select_rows_web( table_name: str, filters: Optional[dict[str, Any]] = None, select: str = "*", order_by: Optional[str] = None, ascending: bool = True, limit: Optional[int] = None,) -> list[dict]:
+def select_rows_web(table_name: str, filters: Optional[dict[str, Any]] = None, select: str = "*", order_by: Optional[str] = None, ascending: bool = True, limit: Optional[int] = None,) -> list[dict]:
+    cache_key = _row_cache_key(table_name, filters, select, order_by, ascending, limit)
+    cached = vk.get(cache_key)
+    if cached is not None:
+        return json.loads(cached)
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     res = supabase.auth.sign_in_with_password({"email": email , "password":passw})
     query = supabase.table(table_name).select(select)
@@ -146,6 +167,7 @@ def select_rows_web( table_name: str, filters: Optional[dict[str, Any]] = None, 
     if limit:
         query = query.limit(limit)
     response = query.execute()
+    vk.set(cache_key, json.dumps(response.data, default=str))
     return response.data
 
 def insert_rows_web(table_name: str, data: dict[str, Any] | list[dict[str, Any]]) -> list[dict]:
@@ -160,6 +182,8 @@ def update_rows_web(table_name: str, updates: dict[str, Any], filters: dict[str,
     query = supabase.table(table_name).update(updates)
     query = _apply_filters(query, filters)
     response = query.execute()
+    cache_key = _row_cache_key(table_name, filters)
+    vk.set(cache_key, json.dumps(response.data, default=str))
     return response.data
 
 def delete_rows_web(table_name: str, filters: dict[str, Any]) -> list[dict]:

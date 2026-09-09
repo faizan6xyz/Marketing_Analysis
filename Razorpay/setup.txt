@@ -1,9 +1,0 @@
-Here's the full Razorpay setup for payment integration, tailored to your Flask stack.
-
-Account setup
-
-    1. Sign up at razorpay.com and complete KYC (needed to go live — test mode works immediately without it)
-    
-    2. Go to Settings → API Keys in the dashboard
-    
-    3. Generate Test Mode keys first (key_id + key_secret) — switch to Live keys only after KYC is approved
