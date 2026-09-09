@@ -46,14 +46,16 @@ campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interacti
 campaigns_content4 = "media_id,views,reach,replies,shares,navigation,follows,profile_activity,hour,thumbnail,time"
 campaigns_content5 = "media_id,publish_at,impression,likes,comments,shares,clicks,engagements,profile_views,follower_gained,saves,reaction,send"
 campaigns_content6 = "Video_ID,Published_At,Views,Likes,Comments,Shares,Watch_Time,Average_View_Duration,Impressions,Click_Through_Rate,Subscribers_Gained"
-campaigns_content7 = "Tweet_ID,Published At,Impressions,Likes,Retweets,Replies,Bookmarks,Profile_Clicks,Follower_Gained"
+# campaigns_content7 = "Tweet_ID,Published At,Impressions,Likes,Retweets,Replies,Bookmarks,Profile_Clicks,Follower_Gained"
+campaigns_content8 = "Pin_ID,Published_At,Impressions,Saves,Clicks,Outbound_Clicks,Engagements,Follower_Gained"
 
 filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": "{}",},
           "Whatsapp": {"campains.txt": campaigns_content1,"workflowmessage.json": "{}",},
           "Instagram": {"workflowmessage.json": "{}","workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
           "Linkedln": {"workflowmessage.json": "{}","workflowcomment.json": "{}", "postanalysis.txt": campaigns_content5 },
           "Youtube" : { "postanalysis.txt":campaigns_content6 },
-          "x": {"postanalysis.txt":campaigns_content7 } }
+        #   "x": {"postanalysis.txt":campaigns_content7 } 
+          "Pinterst": {"postanalysis.txt":campaigns_content8}}
 
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()

@@ -115,11 +115,11 @@ if __name__ == "__main__":
             #     delete_by_id(row_id)
             if typess == "pin_photo": 
                 content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
-                dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
+                dpp.append_to_file(user_id=username_id, platform="Pinterst", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
             if typess == "pin_video": 
                 content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
-                dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
+                dpp.append_to_file(user_id=username_id, platform="Pinterst", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
         time.sleep(1)
 # had to shift from the token to another method in which the token doesn't require to publish or do anything 
