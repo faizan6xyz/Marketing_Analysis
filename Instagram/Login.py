@@ -369,11 +369,7 @@ def story():
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post story: {e}"})
             continue
-        if id_post:
-            uploadd.scccc(user_id=tokench["user_id"], access_token=access_token,media_id=id_post,token=tokench["token"],typee="story",)
-            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-        else:
-            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post story."})
+        results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
     overall_success = any(r["success"] for r in results)
     status_code = 200 if overall_success else 500
     return jsonify({"success": overall_success, "results": results}), status_code
@@ -433,11 +429,7 @@ def photo():
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post photo: {e}"})
             continue
-        if id_post:
-            uploadd.xcccc(user_id=tokench["user_id"], access_token=access_token, media_id=id_post, token=tokench["token"], typee="photo1")
-            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-        else:
-            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post photo."})
+        results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
@@ -506,11 +498,7 @@ def video():
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post video: {e}"})
             continue
-        if id_post:
-            uploadd.xcccc(user_id=tokench["user_id"], access_token=access_token, media_id=id_post, token=tokench["token"], typee="video1")
-            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-        else:
-            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post video."})
+        results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
@@ -573,11 +561,7 @@ def carousel():
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post carousel: {e}"})
             continue
-        if id_post:
-            uploadd.xcccc(user_id=tokench["user_id"], access_token=access_token, media_id=id_post, token=tokench["token"], typee="carousel1")
-            results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-        else:
-            results.append({"username": user, "account_id": account_id, "success": False, "message": "Unable to post carousel."})
+        results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 

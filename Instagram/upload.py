@@ -50,6 +50,16 @@ def refresh_token(token, user_id, access_token):
         return new_token
     return access_token
 
+def refresh_token11( IG_user_id, access_token):
+    resp = requests.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_access_token", "access_token": access_token},).json()
+    new_token = resp.get("access_token")
+    seconds = resp.get("expires_in")
+    if new_token and seconds:
+        new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+        dbimp.update_rows_web(TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"Account_id": IG_user_id},)
+        return new_token
+    return access_token
+
 def _request_with_retry(method: str, url: str, access_token: str = None, **kwargs) -> requests.Response:
     kwargs.setdefault("timeout", REQUEST_TIMEOUT)
     last_exc = None
@@ -141,7 +151,7 @@ def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, captio
     if not publish:
         sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
         return creation_id
-    return publish_container(access_token, ig_user_id, creation_id)
+    return publish_container('photo',access_token, ig_user_id, creation_id)
 
 def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: int, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, ) -> str:
     _validate_media_url(video_url)
@@ -172,7 +182,7 @@ def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: in
     if not publish:
         sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
         return creation_id
-    return publish_container(access_token, ig_user_id, creation_id)
+    return publish_container("video",access_token, ig_user_id, creation_id)
  
 def post_carousel(timmmm, access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True, ) -> str:
     if len(media_urls) != len(is_video):
@@ -209,7 +219,7 @@ def post_carousel(timmmm, access_token: str, ig_user_id: str,   media_size: list
     if not publish:
         sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
         return creation_id
-    return publish_container(access_token, ig_user_id, creation_id)
+    return publish_container('carousel',access_token, ig_user_id, creation_id)
 
 def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, media_url: str, is_video: bool = False, publish: bool = True, media_duration: int = 0, ) -> str:
     _validate_media_url(media_url)
@@ -233,7 +243,7 @@ def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, medi
     if not publish:
         sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
         return creation_id
-    return publish_container(access_token, ig_user_id, creation_id)
+    return publish_container("story",access_token, ig_user_id, creation_id)
 
 def get_media_insights(media_id, access_token, story ):
     metrics = ("views","reach", "replies","shares","likes","navigation","profile_activity") if story else ("views","reach","likes","comments","saved","shares","total_interactions","profile_activity","follows","caption","timestamp")    
@@ -305,9 +315,8 @@ def send_message(recipient_id, message, access_token):
         return {"success": False, "data": None, "error": f"unexpected response shape for {recipient_id}: {payload}"}
     return {"success": True, "data": {"message_id": message_id, "recipient_id": recipient}, "error": None}
 
-def story_schedule(token,hour,media_id,access_token):
-    tokench = au.process(token=token)
-    access_token = refresh_token(tokench["token"],tokench["user_id"],access_token)
+def story_schedule(ig_user_id,hour,media_id,access_token):
+    access_token = refresh_token11(ig_user_id,access_token)
     one_hour_before = (datetime.now(timezone.utc)).isoformat()
     meta_resp = requests.get(f"https://graph.instagram.com/{media_id}", params={ "fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
     insights_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "views,reach,replies,shares,follows","access_token": access_token,},timeout=10,).json()
@@ -316,15 +325,15 @@ def story_schedule(token,hour,media_id,access_token):
     flat_metrics = {item["name"]: item["values"][0]["value"] for item in insights_resp.get("data", [])}
     return f"{media_id},{flat_metrics.get("views")},,{flat_metrics.get("reach")},{flat_metrics.get("replies")},{flat_metrics.get("shares")},{nav_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{flat_metrics.get("follows")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{hour},{meta_resp.get("thumbnail_url")},{one_hour_before}"
 
-def publish_container(token,access_token: str, ig_user_id: str, creation_id: str) -> str:
-    tokench = au.process(token=token)
-    access_token = refresh_token(tokench["token"],tokench["user_id"],access_token)
+def publish_container(typee,access_token: str, ig_user_id: str, creation_id: str) -> str:
+    access_token = refresh_token11(ig_user_id,access_token)
     published = _post(f"{ig_user_id}/media_publish", {"creation_id": creation_id, "access_token": access_token})
+    if published["id"] :
+        scccc(user_id=ig_user_id, access_token=access_token,media_id=published["id"],typee=typee,)
     return published["id"]
 
-def get_media_analytics(token,media_id,access_token):
-    tokench = au.process(token=token)
-    access_token = refresh_token(tokench["token"],tokench["user_id"],access_token)
+def get_media_analytics(ig_user_id , media_id,access_token):
+    access_token = refresh_token11(ig_user_id,access_token)
     one_hour_before = (datetime.now(timezone.utc)).isoformat()
     meta_resp = requests.get(f"https://graph.instagram.com/{media_id}",params={"fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
     media_type = meta_resp.get("media_type")
@@ -336,12 +345,12 @@ def get_media_analytics(token,media_id,access_token):
     profile_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights", params={"metric": "profile_activity", "breakdown": "action_type", "access_token": access_token,},timeout=10,).json()
     return f"{media_id},{flat_metrics.get("views")},{flat_metrics.get("likes")},{flat_metrics.get("comments")},{flat_metrics.get("saved")},{flat_metrics.get("shares")},{flat_metrics.get("total_interactions")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{one_hour_before},{flat_metrics.get("follows")},{meta_resp.get("thumbnail_url")}"
 
-def scccc(user_id,access_token,media_id,token,typee):
+def scccc(user_id,access_token,media_id,typee):
     for i in range(22):
         timesss = (datetime.now(timezone.utc) + timedelta(hours=i+1)).isoformat()
-        sccc.insert__story(user_id, timesss, access_token,media_id,i,token,typee)
+        sccc.insert__story(user_id, timesss, access_token,media_id,i,typee)
 
-def xcccc(user_id,access_token,media_id,token,typee):
+def xcccc(user_id,access_token,media_id,typee):
     for i in range(7): 
         timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
-        sccc.insert__story1(user_id, timesss, access_token,media_id,token,typee)
+        sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
