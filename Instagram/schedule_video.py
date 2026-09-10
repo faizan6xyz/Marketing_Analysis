@@ -23,8 +23,11 @@ def init_db():
                     type TEXT ,
                     container_id TEXT ,
                     access_token TEXT ,
-                     media_id TEXT ,
-                     hour INTEGER ,
+                    media_id TEXT ,
+                    hour INTEGER ,
+                    text1 TEXT ,
+                    text2 TEXT ,
+                    text3 TEXT 
                      ) """)
     conn.commit()
     conn.close()
@@ -32,6 +35,12 @@ def init_db():
 def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()
     conn.execute("INSERT INTO schedule (user_id, container_id, time, type , access_token) VALUES (?, ?, ?, ?, ?)",(user_id, container_id, scheduled_time,"container",access_token))
+    conn.commit()
+    conn.close()
+
+def insert_post(user_id, scheduled_time, access_token, typeee, text1 , text2 , text3 , media_id):    # time should be give in the isoformat iniitally as argument 
+    conn = get_conn()
+    conn.execute("INSERT INTO schedule (user_id, time, access_token , type , text1 , text2 , text3 ,media_id) VALUES (?, ?, ?, ?, ?, ? , ? , ?)",(user_id, scheduled_time,access_token,typeee,text1,text2,text3,media_id))
     conn.commit()
     conn.close()
 
@@ -49,7 +58,7 @@ def insert__story1(user_id,  scheduled_time, access_token,media_id,typee):    # 
 
 def get_containers_due(now):
     conn = get_conn()
-    cur = conn.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,token FROM schedule WHERE time < ?", (now,))
+    cur = conn.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < ?", (now,))
     rows = cur.fetchall()
     conn.close()
     return rows
@@ -74,7 +83,7 @@ if __name__ == "__main__":
     while True:
         now = datetime.now(timezone.utc).isoformat()
         due = get_containers_due(now)
-        for row_id, container_id, access_tok, username_id , typess,media_id,hourss in due:
+        for row_id, container_id, access_tok, username_id , typess,media_id,hourss,text1,text2,text3 in due:
             if typess == "container":
                 aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
                 delete_by_id(row_id)
@@ -98,7 +107,7 @@ if __name__ == "__main__":
                 dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
             if typess == "shorts": 
-                content = you.shorts_schedule(username_id,media_id,youtube_api,access_tok,str(date.today()))
+                content = you.shorts_schedule(username_id, media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
             # if typess == "tweet":
@@ -121,6 +130,10 @@ if __name__ == "__main__":
                 content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Pinterst", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
+            if typess == "Shorts_later":
+                you.post_later(username_id, media_id, text1, text2, text3) 
+                delete_by_id(row_id)
+            
         time.sleep(1)
 # had to shift from the token to another method in which the token doesn't require to publish or do anything 
 

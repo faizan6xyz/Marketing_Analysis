@@ -530,12 +530,12 @@ def carousel():
     if any(v is None for v in media_durationn):
         return jsonify({"success": False, "message": "one or more media_duration values are not valid ints"}), 400
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
     service = dpp.authenticate_and_get_service(token)
     data , error , code  = get_files_and_upload_to_drive(service=service,type="carousel")
     if not data or data[0]["error"] :
         return jsonify({"error":error}) , code
     media_urls = [item["webViewLink"] for item in data]
+    timee = parse_datetime(timee_raw)
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)

@@ -38,8 +38,6 @@ APP_FOLDER = "Leo_Social"
 PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin","youtube","uplaod"]
 BASE_URL = ""
 SUBFOLDERS = "Analytics"
-# for thepost we use to call the api ddirectly for the posts there and using the media id from there to match the file csv value and show analytics
-# theres no time row in postalaysis , instead i stacked then one by one in the acsedning order as the time
 campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
 campaigns_content1 = "phone_no,capaign_name,send_time,recieve_time,interest"
 campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interaction,profile_activity,time,follows,thumbnail,media_id,posted"
@@ -75,7 +73,6 @@ def load_tokens(user_id):
     expiry = row["Token_expire"]
     connected = row["Connected"]
     return {"access_token": fernet.decrypt(access_token.encode()).decode(), "refresh_token": fernet.decrypt(refresh_token.encode()).decode(), "token_expiry": fernet.decrypt(expiry.encode()).decode() , "connected": bool(connected) }
-
 
 def mark_disconnected(user_id):
     dbimp.update_rows_web(table_name , {"Connected" : 0 } , {"id" : user_id} )
@@ -535,59 +532,6 @@ def list_files():
         if not page_token:
             break
     return jsonify({ "count": len(all_files), "files": all_files })
-
-# def upload_file():
-#     body = request.get_json(silent=True) or {}
-#     token= body.get("token")
-#     service, err = authenticate_and_get_service(token)
-#     if err: return err
-#     if "file" not in request.files:
-#         return jsonify({"error": "file required (form-data field: file)"}), 400
-#     uploaded_file = request.files["file"]
-#     with tempfile.NamedTemporaryFile(delete=False) as tmp:
-#         uploaded_file.save(tmp.name)
-#         tmp_path = tmp.name
-#     try:
-#         platform = body.get("platform")
-#         subfolder = "Upload"
-#         parent_id = body.get("parent_id")
-#         make_public = True
-#         file_metadata = {"name": uploaded_file.filename}
-#         if platform or subfolder:
-#             if not platform or platform not in PLATFORM_FOLDERS:
-#                 return jsonify({"error": f"platform required, must be one of {PLATFORM_FOLDERS}"}), 400
-#             platform_id, _ = get_or_create_folder(service, platform)
-#             sub_id, _ = get_or_create_folder(service, subfolder, parent_id=platform_id)
-#             file_metadata["parents"] = [sub_id]
-#         elif parent_id:
-#             file_metadata["parents"] = [parent_id]
-#         media = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
-#         created_file = service.files().create(body=file_metadata, media_body=media, fields="id, name, webViewLink, webContentLink, mimeType" ).execute()
-#         file_id = created_file["id"]
-#         if make_public:
-#             service.permissions().create(fileId=file_id, body={"type": "anyone", "role": "reader"}, ).execute()
-#     except HttpError as e:
-#         return jsonify({"error": "drive upload failed", "detail": str(e)}), 400
-#     finally:
-#         os.remove(tmp_path)
-#     return jsonify({"file_id": file_id, "name": created_file.get("name"),"mime_type": created_file.get("mimeType"), "url": created_file.get("webViewLink"),"download_url": created_file.get("webContentLink"),  "public": make_public,})   # download url is the media url to pass
-
-# def delete_file():
-#     body = request.get_json(silent=True) or {}
-#     token= body.get("token")
-#     service, err = authenticate_and_get_service(token)
-#     if err: return err
-#     file_id = body.get("file_id")
-#     if not file_id:
-#         return jsonify({"error": "file_id required"}), 400
-#     try:
-#         service.files().delete(fileId=file_id).execute()
-#     except HttpError as e:
-#         status = e.resp.status if e.resp else 500
-#         if status == 404:
-#             return jsonify({"error": "file not found"}), 404
-#         return jsonify({"error": "drive error", "details": str(e)}), status
-#     return jsonify({ "file_id": file_id, "status": "deleted"})
 
 def read_csv_from_drive(file_id):
     body = request.get_json(silent=True) or {}
