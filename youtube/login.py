@@ -194,7 +194,7 @@ def shorts_schedule(channel_id, video_id, access_token):
     access_token = get_valid_access_token11(channel_id,Clientid, Clientsec, refresh_token, access_token, expires_at_iso)
     if not access_token:
         return False
-    meta_resp = requests.get( "https://www.googleapis.com/youtube/v3/videos", params={"part": "snippet,statistics", "id": video_id, "key": api_key}, timeout=10, ).json()
+    meta_resp = requests.get( "https://www.googleapis.com/youtube/v3/videos", params={"part": "snippet,statistics", "id": video_id, "key": YOUTUBE_API_KEY},timeout=10,    ).json()
     item = meta_resp.get("items", [{}])[0]
     snippet = item.get("snippet", {})
     stats = item.get("statistics", {})
@@ -229,6 +229,25 @@ def parse_datetime(value: str, require_tz: bool = True):
         return None
     return dt
 
+def upload_path_to_drive(service, file_path, filename, mimetype):
+    make_public = True
+    drive_file_id = None
+    try:
+        file_metadata = {"name": filename}
+        media_upload = MediaFileUpload(file_path, mimetype=mimetype, resumable=True)
+        created_file = service.files().create(body=file_metadata, media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType",).execute()
+        drive_file_id = created_file["id"]
+        if make_public:
+            service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
+        return drive_file_id, None
+    except HttpError as e:
+        if drive_file_id:
+            try:
+                service.files().delete(fileId=drive_file_id).execute()
+            except HttpError:
+                pass
+        return None, str(e)
+
 def _upload_resumable_with_retry(request_):
     response = None
     retries = 0
@@ -251,12 +270,16 @@ def post_later(channel_id, file_id, text1, text2, text3):
     drive_service = dpp.get_drive_service_web(channel_id) if hasattr(dpp, "get_drive_service_web") else dpp.get_drive_service(channel_id)
     tmp_path, mimetype, name = download_drive_file_to_temp(drive_service, file_id)
     try:
-        response = upload_video_to_youtube_channel( creds, tmp_path, mimetype, title=text1, description=text2, tags=text3,  )
+        response = upload_video_to_youtube_channel( creds, tmp_path, mimetype, title=text1, description=text2, tags=text3, )
         video_id = response.get("id")
         try:
             xcccc(channel_id, creds.token, video_id, "shorts")
         except Exception as e:
             print(f"xcccc scheduling failed for channel {channel_id}: {e}")
+        return video_id
+    except Exception as e:
+        print(f"post_later: upload failed for channel {channel_id}: {e}")
+        return False
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
@@ -356,9 +379,9 @@ def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, 
     channel_id = rows[0]["Account_id"]
     if not publish_now:
         service = dpp.get_drive_service(user_id)
-        drive_file_id, err_resp, status_code = get_file_and_upload_to_drive(service)
-        if err_resp is not None:
-            return {"account": channel_id, "status": "failed", "error": "drive upload failed"}
+        drive_file_id, err = upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
+        if err is not None:
+            return {"account": channel_id, "status": "failed", "error": f"drive upload failed: {err}"}
         sccc.insert_post( user_id=channel_id, scheduled_time=timee, access_token="", typeee="Shorts_later", text1=caption, text2=description, text3=tags, media_id=drive_file_id, )
         return {"account": channel_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
     creds = get_youtube_credentials_for_account(token, user_id, channel_id)
