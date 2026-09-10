@@ -170,7 +170,7 @@ def get_valid_access_token11(channel_id,client_id, client_secret, refresh_token,
     now = datetime.now(timezone.utc)
     expiry = _iso_to_aware_utc(expires_at_iso)
     if expiry and now < expiry - timedelta(seconds=60):
-        return  
+        return access_token
     resp = requests.post( "https://oauth2.googleapis.com/token", data={ "client_id": client_id, "client_secret": client_secret, "refresh_token": refresh_token, "grant_type": "refresh_token", }, timeout=10,     )
     resp.raise_for_status()
     token_data = resp.json()
@@ -257,7 +257,7 @@ def _upload_resumable_with_retry(request_):
         except HttpError as e:
             if e.resp is not None and e.resp.status in RETRIABLE_STATUS_CODES and retries < RESUMABLE_UPLOAD_MAX_RETRIES:
                 retries += 1
-                time.sleep(min(2 ** retries, 30))
+                time.sleep(min(2 ** retries,16))
                 continue
             raise
     return response
@@ -267,7 +267,11 @@ def post_later(channel_id, file_id, text1, text2, text3):
     if not creds:
         print(f"post_later: no credentials found for channel {channel_id}")
         return False
-    drive_service = dpp.get_drive_service_web(channel_id) if hasattr(dpp, "get_drive_service_web") else dpp.get_drive_service(channel_id)
+    rows = dbimp.select_rows_web(TABLE_NAME,select="id",filters={"Account_id":channel_id})
+    if not rows :
+        return False
+    user_id = rows[0]["id"]
+    drive_service = dpp.get_drive_service(user_id)
     tmp_path, mimetype, name = download_drive_file_to_temp(drive_service, file_id)
     try:
         response = upload_video_to_youtube_channel( creds, tmp_path, mimetype, title=text1, description=text2, tags=text3, )
@@ -373,7 +377,7 @@ def list_youtube_accounts():
     return jsonify({"accounts": rows or []})
 
 def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
-    rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "channel_title": account_channel_title},    )
+    rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "channel_title": account_channel_title},)
     if not rows:
         return {"account": account_channel_title, "status": "failed", "error": "account not found"}
     channel_id = rows[0]["Account_id"]
@@ -445,8 +449,7 @@ def upload():
         tags = [t.strip() for t in (request.form.get("tags") or "").split(",") if t.strip()]
         results = []
         with ThreadPoolExecutor(max_workers=min(MAX_UPLOAD_WORKERS, len(accounts))) as executor:
-            futures = {
-                executor.submit( _upload_one_account, account, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee, ): account for account in accounts }
+            futures = { executor.submit( _upload_one_account, account, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee, ): account for account in accounts }
             for future in as_completed(futures):
                 results.append(future.result())
         return jsonify({"count": len(results), "results": results}), 200
