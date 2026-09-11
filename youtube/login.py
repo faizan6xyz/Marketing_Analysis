@@ -369,7 +369,7 @@ def youtube_callback_internal():
 @app.route("/youtube/accounts", methods=["POST"])
 @limiter.limit("10 per minute")
 def list_youtube_accounts():
-    token = request.form.get("token") or (request.get_json(silent=True) or {}).get("token")
+    token = request.get_json(silent=True) or {}
     if not token:
         return jsonify({"error": "'token' is required"}), 400
     tokench = au.process(token=token)
@@ -417,17 +417,18 @@ def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, 
 @app.route("/youtube/upload/short", methods=["POST"])
 @limiter.limit("5 per minute")
 def upload():
-    token = request.form.get("token")
+    data = request.get_json(silent=True) or {}
+    token = data.get("token")
     if not token:
         return jsonify({"error": "'token' is required"}), 400
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
-    publish = request.form.get("publish", "true")
-    timee_raw = request.form.get("time")
+    publish = data.get("publish", "true")
+    timee_raw = data.get("time")
     publish_now = str(publish).strip().lower() == "true"
-    accounts = request.form.getlist("accounts")
+    accounts = data.get("accounts")
     timee = parse_datetime(timee_raw)
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
@@ -454,9 +455,9 @@ def upload():
         if get_video_duration(upload_tmp_path) > MAX_SHORT_SECONDS:
             return jsonify({"error": f"video exceeds max short length of {MAX_SHORT_SECONDS} seconds"}), 400
         mimetype = uploaded_file.mimetype
-        caption = request.form.get("caption") or ""
-        description = request.form.get("description") or ""
-        tags = [t.strip() for t in (request.form.get("tags") or "").split(",") if t.strip()]
+        caption = data.get("caption") or ""
+        description = data.get("description") or ""
+        tags = [t.strip() for t in (data.get("tags") or "").split(",") if t.strip()]
         x = _upload_one_account(accounts, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee)
         if not  x :
             return jsonify({"status":False}), 400

@@ -124,9 +124,9 @@ def get_pinterest_pin_analytics_csv(username_id,pin_id, access_token):
         metrics = bucket.get("lifetime_metrics") or bucket.get("summary_metrics") or {} 
     return f"{pin_id},{published_at},{metrics.get('IMPRESSION', 0)},{metrics.get('SAVE', 0)},{metrics.get('PIN_CLICK', 0)},{metrics.get('OUTBOUND_CLICK', 0)},{metrics.get('ENGAGEMENT', 0)},{metrics.get('USER_FOLLOW', 0)}"
   
-def _authenticate(request):
-    token = request.form.get("token")
-    usernames = request.form.getlist("usernames")
+def _authenticate(data):
+    token = data.get("token")
+    usernames = data.get("usernames")
     tokench = au.process(token=token)
     access_tokens = []
     Account_ids = []
@@ -495,12 +495,13 @@ def pins_with_metrics():
 
 @app.route("/post/pinterest/photo", methods=["POST"])
 def post_to_pinterest_photo():
-    access_tokens ,err , Account_ids , user_id = _authenticate(request)
+    data = request.get_json(silent=True) or {}
+    access_tokens ,err , Account_ids , user_id = _authenticate(data)
     if err:
         return err
-    title = request.form.get("title")
-    description = request.form.get("description", "")
-    board_id = request.form.get("board_id")
+    title = data.get("title")
+    description = data.get("description", "")
+    board_id = data.get("board_id")
     if not board_id:
         return jsonify({"error": "board_id is required"}), 400
     files = request.files.getlist("file")
@@ -511,8 +512,8 @@ def post_to_pinterest_photo():
     f = files[0]
     if not (f.mimetype or "").startswith("image/"):
         return jsonify({"error": "unsupported file type in upload"}), 400
-    publish = request.form.get("publish", "true")
-    timee_raw = request.form.get("time")
+    publish = data.get("publish", "true")
+    timee_raw = data.get("time")
     publish_now = str(publish).strip().lower() == "true"
     timee = parse_datetime(timee_raw)
     if timee is None:
@@ -545,14 +546,15 @@ def post_to_pinterest_photo():
 
 @app.route("/post/pinterest/video", methods=["POST"])
 def post_to_pinterest_video():
-    access_tokens ,err , Account_ids , user_id = _authenticate(request)
+    data = request.get_json(silent=True) or {}
+    access_tokens ,err , Account_ids , user_id = _authenticate(data)
     if err:
         return err
-    title = request.form.get("title")
-    description = request.form.get("description", "")
-    board_id = request.form.get("board_id")
-    publish = request.form.get("publish", "true")
-    timee_raw = request.form.get("time")
+    title = data.get("title")
+    description = data.get("description", "")
+    board_id = data.get("board_id")
+    publish = data.get("publish", "true")
+    timee_raw = data.get("time")
     publish_now = str(publish).strip().lower() == "true"
     timee = parse_datetime(timee_raw)
     if timee is None:
