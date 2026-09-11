@@ -133,7 +133,12 @@ if __name__ == "__main__":
             if typess == "Shorts_later":
                 you.post_later(username_id, media_id, text1, text2, text3) 
                 delete_by_id(row_id)
-            
+            if typess == "Pin_photo_later":
+                pin.post_late(username_id , access_tok , text1, text2, text3, "photo" ,media_id)
+                delete_by_id(row_id)
+            if typess == "Pin_video_later":
+                pin.post_late(username_id , access_tok , text1, text2, text3, "video" ,media_id)
+                delete_by_id(row_id)
         time.sleep(1)
 # had to shift from the token to another method in which the token doesn't require to publish or do anything 
 

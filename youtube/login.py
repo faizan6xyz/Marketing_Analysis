@@ -263,30 +263,33 @@ def _upload_resumable_with_retry(request_):
     return response
 
 def post_later(channel_id, file_id, text1, text2, text3):
-    creds = get_youtube_credentials_for_account_web(channel_id)
-    if not creds:
-        print(f"post_later: no credentials found for channel {channel_id}")
-        return False
-    rows = dbimp.select_rows_web(TABLE_NAME,select="id",filters={"Account_id":channel_id})
+    channel_ids = json.loads(channel_id[0])
+    chann = channel_ids[0]
+    rows = dbimp.select_rows_web(TABLE_NAME,select="id",filters={"Account_id":chann})
     if not rows :
         return False
     user_id = rows[0]["id"]
     drive_service = dpp.get_drive_service(user_id)
     tmp_path, mimetype, name = download_drive_file_to_temp(drive_service, file_id)
-    try:
-        response = upload_video_to_youtube_channel( creds, tmp_path, mimetype, title=text1, description=text2, tags=text3, )
-        video_id = response.get("id")
+    for channel_id in channel_ids :
+        creds = get_youtube_credentials_for_account_web(channel_id)
+        if not creds:
+            print(f"post_later: no credentials found for channel {channel_id}")
+            return False
         try:
-            xcccc(channel_id, creds.token, video_id, "shorts")
+            response = upload_video_to_youtube_channel( creds, tmp_path, mimetype, title=text1, description=text2, tags=text3, )
+            video_id = response.get("id")
+            try:
+                xcccc(channel_id, creds.token, video_id, "shorts")
+            except Exception as e:
+                print(f"xcccc scheduling failed for channel {channel_id}: {e}")
+            return video_id
         except Exception as e:
-            print(f"xcccc scheduling failed for channel {channel_id}: {e}")
-        return video_id
-    except Exception as e:
-        print(f"post_later: upload failed for channel {channel_id}: {e}")
-        return False
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+            print(f"post_later: upload failed for channel {channel_id}: {e}")
+            return False
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, description="", tags=None, category_id="22", privacy_status="public"):
     youtube_service = build("youtube", "v3", credentials=creds)
@@ -377,32 +380,39 @@ def list_youtube_accounts():
     return jsonify({"accounts": rows or []})
 
 def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
-    rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "channel_title": account_channel_title},)
-    if not rows:
-        return {"account": account_channel_title, "status": "failed", "error": "account not found"}
-    channel_id = rows[0]["Account_id"]
+    account_ids = []
+    for account_title in account_channel_title :
+        rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "channel_title": account_title},)
+        if not rows:
+            return False
+        channel_id = rows[0]["Account_id"]
+        account_ids.append(channel_id)
     if not publish_now:
         service = dpp.get_drive_service(user_id)
         drive_file_id, err = upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
         if err is not None:
-            return {"account": channel_id, "status": "failed", "error": f"drive upload failed: {err}"}
+            return False
+        channel_id  = json.dumps(account_ids)
         sccc.insert_post( user_id=channel_id, scheduled_time=timee, access_token="", typeee="Shorts_later", text1=caption, text2=description, text3=tags, media_id=drive_file_id, )
         return {"account": channel_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
-    creds = get_youtube_credentials_for_account(token, user_id, channel_id)
-    if not creds:
-        return {"account": channel_id, "status": "failed", "error": "channel not connected"}
-    try:
-        response = upload_video_to_youtube_channel(creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags)
-        video_id = response.get("id")
+    video_ids = []
+    for channel_id in account_ids :
+        creds = get_youtube_credentials_for_account(token, user_id, channel_id)
+        if not creds:
+            return False
         try:
-            xcccc(channel_id, creds.token, video_id, "shorts")
+            response = upload_video_to_youtube_channel(creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags)
+            video_id = response.get("id")
+            try:
+                xcccc(channel_id, creds.token, video_id, "shorts")
+            except Exception as e:
+                return False
+            video_ids.append(video_id)
+        except HttpError as e:
+            return False
         except Exception as e:
-            print(f"xcccc scheduling failed for channel {channel_id}: {e}")
-        return {"account": channel_id, "status": "uploaded", "youtube_video_id": video_id}
-    except HttpError as e:
-        return {"account": channel_id, "status": "failed", "error": str(e)}
-    except Exception as e:
-        return {"account": channel_id, "status": "failed", "error": str(e)}
+            return False
+    return video_id
 
 @app.route("/youtube/upload/short", methods=["POST"])
 @limiter.limit("5 per minute")
@@ -447,12 +457,10 @@ def upload():
         caption = request.form.get("caption") or ""
         description = request.form.get("description") or ""
         tags = [t.strip() for t in (request.form.get("tags") or "").split(",") if t.strip()]
-        results = []
-        with ThreadPoolExecutor(max_workers=min(MAX_UPLOAD_WORKERS, len(accounts))) as executor:
-            futures = { executor.submit( _upload_one_account, account, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee, ): account for account in accounts }
-            for future in as_completed(futures):
-                results.append(future.result())
-        return jsonify({"count": len(results), "results": results}), 200
+        x = _upload_one_account(accounts, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee)
+        if not  x :
+            return jsonify({"status":False}), 400
+        return jsonify({"status":True}), 200
     finally:
         if upload_tmp_path and os.path.exists(upload_tmp_path):
             os.remove(upload_tmp_path)

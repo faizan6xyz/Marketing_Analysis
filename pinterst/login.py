@@ -5,6 +5,7 @@ import requests
 from urllib.parse import urlencode
 from moviepy import VideoFileClip
 import Drive.dep as dpp
+import json 
 import tempfile
 from flask_cors import CORS
 import Instagram.schedule_video as sccc
@@ -206,33 +207,85 @@ def download_drive_file_to_temp(drive_service, file_id):
             _, done = downloader.next_chunk()
     return tmp_path, mimetype, name
 
-def post_late(Account_id , access_token , board_id, title, description, typee ,drive_file_id):
+def post_late(Account_id , access_token , title, description, board_id,  typee ,drive_file_id):
+    Account_ids = json.loads(Account_id[0])
+    Account_id = Account_ids[0]
+    access_tokens = json.load(access_token[0])
     rows = dbimp.select_rows_web(PINTEREST_TABLE_NAME,select="id",filters={"Account_id":Account_id})
     if not rows :
         return False
     user_id = rows[0]["id"]
     service = dpp.get_drive_service(user_id)
     tmp_path, mimetype, name = download_drive_file_to_temp(service, drive_file_id)
-    access_token = refresh_pinterest_token11(access_token,Account_id)
-    if typee == "photo":
-        with open(tmp_path, "rb") as fh:
-            photo_bytes = fh.read()
-        b64_image = base64.b64encode(photo_bytes).decode("utf-8")
-        url = "https://api.pinterest.com/v5/pins"
-        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-        payload = { "board_id": board_id, "title": title, "description": description, "media_source": { "source_type": "image_base64",  "content_type": "image/jpeg", "data": b64_image, }, }
+    for access_token, Account_id in zip(access_tokens,Account_ids):
+        access_token = refresh_pinterest_token11(access_token,Account_id)
+        if typee == "photo":
+            with open(tmp_path, "rb") as fh:
+                photo_bytes = fh.read()
+            b64_image = base64.b64encode(photo_bytes).decode("utf-8")
+            url = "https://api.pinterest.com/v5/pins"
+            headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+            payload = { "board_id": board_id, "title": title, "description": description, "media_source": { "source_type": "image_base64",  "content_type": "image/jpeg", "data": b64_image, }, }
+            try:
+                resp = requests.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                return {"account": Account_id, "status": "posted", "response": resp.json()}
+            except requests.HTTPError as e:
+                error_detail = resp.text if resp is not None else str(e)
+                return {"account": Account_id, "status": "failed", "error": error_detail}
+            except requests.RequestException as e:
+                return {"account": Account_id, "status": "failed", "error": str(e)}
+        if typee == "video":
+            try:
+                resp = requests.post( MEDIA_REGISTER_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json={"media_type": "video"},        )
+                resp.raise_for_status()
+                registration = resp.json()
+            except requests.HTTPError as e:
+                raise RuntimeError(f"registration failed: {e}") from e
+            media_id = registration.get("media_id")
+            upload_url = registration.get("upload_url")
+            upload_parameters = registration.get("upload_parameters")
+            if not media_id or not upload_url or not upload_parameters:
+                raise RuntimeError(f"registration response missing required fields: {registration}")
+            try:
+                with open(tmp_path, "rb") as fh:
+                    resp = requests.post(upload_url, data=upload_parameters, files={"file": fh})
+                if not resp.ok:
+                    raise RuntimeError(f"upload failed [{resp.status_code}]: {resp.text}")
+            except OSError as e:
+                raise RuntimeError(f"could not read file at {tmp_path}: {e}") from e
+            deadline = time.time() + 60
+            headers = {"Authorization": f"Bearer {access_token}"}
+            status = None
+            while time.time() < deadline:
+                resp = requests.get(f"{MEDIA_REGISTER_URL}/{media_id}", headers=headers)
+                resp.raise_for_status()
+                status = resp.json().get("status")
+                if status == "succeeded":
+                    break
+                if status == "failed":
+                    raise RuntimeError(f"video processing failed for media_id={media_id}")
+            else:
+                raise RuntimeError(f"video processing timed out after {120}s for media_id={media_id}")
+            try:
+                resp = requests.post( PIN_CREATE_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},json={ "title": title, "description": description, "board_id": board_id, "media_source": { "source_type": "video_id", "media_id": media_id, }, },)
+                resp.raise_for_status()
+                return resp.json()
+            except requests.HTTPError as e:
+                raise RuntimeError(f"pin creation failed: {e}") from e
+
+def create_pinterest_video_pin_full(access_token, board_id, title, description, file_path,publish_now,timee,Account_id,user_id,typeee,mimetype ,timeout=60 ):
+    if not publish_now :
+        service = dpp.get_drive_service(user_id)
+        drive_file_id, err = upload_path_to_drive(service, file_path, os.path.basename(file_path), mimetype)
+        if err is not None:
+            return {"account": Account_id, "status": "failed", "error": f"drive upload failed: {err}"}
+        list_account_ids=json.dumps(Account_id)
+        sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token=access_token, typeee=typeee, text1=title, text2=description , text3=board_id, media_id=drive_file_id,  )
+        return {"account": Account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
+    for access in access_token  : 
         try:
-            resp = requests.post(url, headers=headers, json=payload)
-            resp.raise_for_status()
-            return {"account": Account_id, "status": "posted", "response": resp.json()}
-        except requests.HTTPError as e:
-            error_detail = resp.text if resp is not None else str(e)
-            return {"account": Account_id, "status": "failed", "error": error_detail}
-        except requests.RequestException as e:
-            return {"account": Account_id, "status": "failed", "error": str(e)}
-    if typee == "video":
-        try:
-            resp = requests.post( MEDIA_REGISTER_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json={"media_type": "video"},        )
+            resp = requests.post( MEDIA_REGISTER_URL, headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"}, json={"media_type": "video"},        )
             resp.raise_for_status()
             registration = resp.json()
         except requests.HTTPError as e:
@@ -243,14 +296,14 @@ def post_late(Account_id , access_token , board_id, title, description, typee ,d
         if not media_id or not upload_url or not upload_parameters:
             raise RuntimeError(f"registration response missing required fields: {registration}")
         try:
-            with open(tmp_path, "rb") as fh:
+            with open(file_path, "rb") as fh:
                 resp = requests.post(upload_url, data=upload_parameters, files={"file": fh})
             if not resp.ok:
                 raise RuntimeError(f"upload failed [{resp.status_code}]: {resp.text}")
         except OSError as e:
-            raise RuntimeError(f"could not read file at {tmp_path}: {e}") from e
-        deadline = time.time() + 120
-        headers = {"Authorization": f"Bearer {access_token}"}
+            raise RuntimeError(f"could not read file at {file_path}: {e}") from e
+        deadline = time.time() + timeout
+        headers = {"Authorization": f"Bearer {access}"}
         status = None
         while time.time() < deadline:
             resp = requests.get(f"{MEDIA_REGISTER_URL}/{media_id}", headers=headers)
@@ -261,83 +314,39 @@ def post_late(Account_id , access_token , board_id, title, description, typee ,d
             if status == "failed":
                 raise RuntimeError(f"video processing failed for media_id={media_id}")
         else:
-            raise RuntimeError(f"video processing timed out after {120}s for media_id={media_id}")
+            raise RuntimeError(f"video processing timed out after {timeout}s for media_id={media_id}")
         try:
-            resp = requests.post( PIN_CREATE_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},json={ "title": title, "description": description, "board_id": board_id, "media_source": { "source_type": "video_id", "media_id": media_id, }, },)
+            resp = requests.post( PIN_CREATE_URL, headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"},json={ "title": title, "description": description, "board_id": board_id, "media_source": { "source_type": "video_id", "media_id": media_id, }, },)
             resp.raise_for_status()
             return resp.json()
         except requests.HTTPError as e:
             raise RuntimeError(f"pin creation failed: {e}") from e
 
-def create_pinterest_video_pin_full(access_token, board_id, title, description, file_path,publish_now,timee,Account_id,user_id,typeee,mimetype ,timeout=120, interval=3):
-    if not publish_now :
-        service = dpp.get_drive_service(user_id)
-        drive_file_id, err = upload_path_to_drive(service, file_path, os.path.basename(file_path), mimetype)
-        if err is not None:
-            return {"account": Account_id, "status": "failed", "error": f"drive upload failed: {err}"}
-        sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token="", typeee=typeee, text1=title, text2=description , text3=board_id, media_id=drive_file_id,  )
-        return {"account": Account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
-    try:
-        resp = requests.post( MEDIA_REGISTER_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}, json={"media_type": "video"},        )
-        resp.raise_for_status()
-        registration = resp.json()
-    except requests.HTTPError as e:
-        raise RuntimeError(f"registration failed: {e}") from e
-    media_id = registration.get("media_id")
-    upload_url = registration.get("upload_url")
-    upload_parameters = registration.get("upload_parameters")
-    if not media_id or not upload_url or not upload_parameters:
-        raise RuntimeError(f"registration response missing required fields: {registration}")
-    try:
-        with open(file_path, "rb") as fh:
-            resp = requests.post(upload_url, data=upload_parameters, files={"file": fh})
-        if not resp.ok:
-            raise RuntimeError(f"upload failed [{resp.status_code}]: {resp.text}")
-    except OSError as e:
-        raise RuntimeError(f"could not read file at {file_path}: {e}") from e
-    deadline = time.time() + timeout
-    headers = {"Authorization": f"Bearer {access_token}"}
-    status = None
-    while time.time() < deadline:
-        resp = requests.get(f"{MEDIA_REGISTER_URL}/{media_id}", headers=headers)
-        resp.raise_for_status()
-        status = resp.json().get("status")
-        if status == "succeeded":
-            break
-        if status == "failed":
-            raise RuntimeError(f"video processing failed for media_id={media_id}")
-    else:
-        raise RuntimeError(f"video processing timed out after {timeout}s for media_id={media_id}")
-    try:
-        resp = requests.post( PIN_CREATE_URL, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},json={ "title": title, "description": description, "board_id": board_id, "media_source": { "source_type": "video_id", "media_id": media_id, }, },)
-        resp.raise_for_status()
-        return resp.json()
-    except requests.HTTPError as e:
-        raise RuntimeError(f"pin creation failed: {e}") from e
-
-def upload_pin_from_file(access, title, board_id, publish_now, timee, user_id, upload_tmp_path, mimetype, Account_id, typeee,description=""):
+def upload_pin_from_file(access_token, title, board_id, publish_now, timee, user_id, upload_tmp_path, mimetype, Account_id, typeee,description=""):
     if not publish_now:
         service = dpp.get_drive_service(user_id)
         drive_file_id, err = upload_path_to_drive(service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype)
         if err is not None:
             return {"account": Account_id, "status": "failed", "error": f"drive upload failed: {err}"}
-        sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token="", typeee=typeee, text1=title, text2=description , text3=board_id, media_id=drive_file_id,        )
+        list_account_ids=json.dumps(Account_id)
+        sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token=access_token, typeee=typeee, text1=title, text2=description , text3=board_id, media_id=drive_file_id, )
         return {"account": Account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
     with open(upload_tmp_path, "rb") as fh:
         photo_bytes = fh.read()
     b64_image = base64.b64encode(photo_bytes).decode("utf-8")
     url = "https://api.pinterest.com/v5/pins"
-    headers = {"Authorization": f"Bearer {access}", "Content-Type": "application/json"}
     payload = { "board_id": board_id, "title": title, "description": description, "media_source": { "source_type": "image_base64",  "content_type": "image/jpeg", "data": b64_image, }, }
-    try:
-        resp = requests.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
-        return {"account": Account_id, "status": "posted", "response": resp.json()}
-    except requests.HTTPError as e:
-        error_detail = resp.text if resp is not None else str(e)
-        return {"account": Account_id, "status": "failed", "error": error_detail}
-    except requests.RequestException as e:
-        return {"account": Account_id, "status": "failed", "error": str(e)}
+    for access  in access_token : 
+        headers = {"Authorization": f"Bearer {access}", "Content-Type": "application/json"}
+        try:
+            resp = requests.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            return { "status": "posted", "response": resp.json()}
+        except requests.HTTPError as e:
+            error_detail = resp.text if resp is not None else str(e)
+            return { "status": "failed", "error": error_detail}
+        except requests.RequestException as e:
+            return { "status": "failed", "error": str(e)}
 
 def upload_path_to_drive(service, file_path, filename, mimetype):
     make_public = True
@@ -524,9 +533,9 @@ def post_to_pinterest_photo():
             return jsonify({"error": f"image {f.filename} exceeds max size"}), 400
         with open(tmp_path, "rb") as fh:
             try:
-                for access , Account_id in zip(access_tokens,Account_ids) :
-                    pin = upload_pin_from_file(access, title, board_id, publish_now, timee, user_id, tmp_path, f.mimetype, Account_id, "Pin_photo_later",description)
-                    xcccc(Account_id,access,pin.get("id"),"pin_photo")
+                pin = upload_pin_from_file(access_tokens, title, board_id, publish_now, timee, user_id, tmp_path, f.mimetype, Account_ids, "Pin_photo_later",description)
+                for access_token , Account_id in zip(access_tokens,Account_ids):
+                    xcccc(Account_id,access_token,pin.get("id"),"pin_photo")
             except requests.HTTPError as e:
                 return jsonify({"error": "pin upload failed", "detail": str(e)}), 400
     finally:
@@ -572,8 +581,8 @@ def post_to_pinterest_video():
         if get_video_duration(tmp_path) > duation or file_size_bytes > max_size:
             return jsonify({"error": "video exceeds allowed duration or size"}), 400
         try:
+            pin = create_pinterest_video_pin_full( access_tokens, board_id, title, description, tmp_path,publish_now,timee ,Account_ids,user_id,"Pin_video_later",f.mimetype  )
             for access_token , Account_id in zip(access_tokens,Account_ids):
-                pin = create_pinterest_video_pin_full( access_token, board_id, title, description, tmp_path,publish_now,timee ,Account_id,user_id,"Pin_video_later",f.mimetype  )
                 xcccc(Account_id, access_token, pin.get("id"), "pin_video")
         except requests.HTTPError as e:
             return jsonify({"error": "pin upload failed", "detail": str(e)}), 400
