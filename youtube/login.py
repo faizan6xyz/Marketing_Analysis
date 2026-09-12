@@ -17,7 +17,7 @@ import isodate
 from moviepy import VideoFileClip
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import Flow
 import database.UserDB as dbimp
@@ -204,20 +204,6 @@ def shorts_schedule(channel_id, video_id, access_token):
     metrics = dict(zip(headers, row))
     return (f"{video_id},{snippet.get('publishedAt')},{stats.get('viewCount')},{stats.get('likeCount')},"f"{stats.get('commentCount')},{metrics.get('shares')},{metrics.get('estimatedMinutesWatched')},"f"{metrics.get('averageViewDuration')},{metrics.get('impressions')}," f"{metrics.get('impressionsClickThroughRate')},{metrics.get('subscribersGained')}")
 
-def download_drive_file_to_temp(drive_service, file_id):
-    meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
-    mimetype = meta.get("mimeType") or "video/*"
-    name = meta.get("name") or "video"
-    suffix = os.path.splitext(name)[1] or ".mp4"
-    media_request = drive_service.files().get_media(fileId=file_id)
-    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
-    with os.fdopen(fd, "wb") as tmp_file:
-        downloader = MediaIoBaseDownload(tmp_file, media_request, chunksize=10 * 1024 * 1024)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-    return tmp_path, mimetype, name
-
 def parse_datetime(value: str, require_tz: bool = True):
     if not value or not isinstance(value, str):
         return None
@@ -228,25 +214,6 @@ def parse_datetime(value: str, require_tz: bool = True):
     if require_tz and dt.tzinfo is None:
         return None
     return dt
-
-def upload_path_to_drive(service, file_path, filename, mimetype):
-    make_public = True
-    drive_file_id = None
-    try:
-        file_metadata = {"name": filename}
-        media_upload = MediaFileUpload(file_path, mimetype=mimetype, resumable=True)
-        created_file = service.files().create(body=file_metadata, media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType",).execute()
-        drive_file_id = created_file["id"]
-        if make_public:
-            service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
-        return drive_file_id, None
-    except HttpError as e:
-        if drive_file_id:
-            try:
-                service.files().delete(fileId=drive_file_id).execute()
-            except HttpError:
-                pass
-        return None, str(e)
 
 def _upload_resumable_with_retry(request_):
     response = None
@@ -270,7 +237,7 @@ def post_later(channel_id, file_id, text1, text2, text3):
         return False
     user_id = rows[0]["id"]
     drive_service = dpp.get_drive_service(user_id)
-    tmp_path, mimetype, name = download_drive_file_to_temp(drive_service, file_id)
+    tmp_path, mimetype, name = dpp.download_drive_file_to_temp(drive_service, file_id)
     for channel_id in channel_ids :
         creds = get_youtube_credentials_for_account_web(channel_id)
         if not creds:
@@ -389,7 +356,7 @@ def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, 
         account_ids.append(channel_id)
     if not publish_now:
         service = dpp.get_drive_service(user_id)
-        drive_file_id, err = upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
+        drive_file_id, err = dpp.upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
         if err is not None:
             return False
         channel_id  = json.dumps(account_ids)

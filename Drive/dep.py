@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from flask import Flask, request, redirect, jsonify
 from google_auth_oauthlib.flow import Flow
-from googleapiclient.http import MediaIoBaseDownload , MediaIoBaseUpload ,MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload , MediaIoBaseUpload ,MediaFileUpload
 from googleapiclient.errors import HttpError
 from datetime import datetime, timezone, timedelta
 from google.oauth2.credentials import Credentials
@@ -20,6 +20,7 @@ from io import BytesIO
 import hashlib
 from flask_cors import CORS
 import hmac
+import tempfile
 import authnew as au
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
@@ -76,6 +77,39 @@ def load_tokens(user_id):
 
 def mark_disconnected(user_id):
     dbimp.update_rows_web(table_name , {"Connected" : 0 } , {"id" : user_id} )
+
+def download_drive_file_to_temp(drive_service, file_id):
+    meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
+    mimetype = meta.get("mimeType") or "video/*"
+    name = meta.get("name") or "video"
+    suffix = os.path.splitext(name)[1] or ".mp4"
+    media_request = drive_service.files().get_media(fileId=file_id)
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    with os.fdopen(fd, "wb") as tmp_file:
+        downloader = MediaIoBaseDownload(tmp_file, media_request, chunksize=10 * 1024 * 1024)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+    return tmp_path, mimetype, name
+
+def upload_path_to_drive(service, file_path, filename, mimetype):
+    make_public = True
+    drive_file_id = None
+    try:
+        file_metadata = {"name": filename}
+        media_upload = MediaFileUpload(file_path, mimetype=mimetype, resumable=True)
+        created_file = service.files().create(body=file_metadata, media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType",).execute()
+        drive_file_id = created_file["id"]
+        if make_public:
+            service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
+        return drive_file_id, None
+    except HttpError as e:
+        if drive_file_id:
+            try:
+                service.files().delete(fileId=drive_file_id).execute()
+            except HttpError:
+                pass
+        return None, str(e)
 
 def build_flow():
     return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [REDIRECT_URI], }}, scopes=SCOPES,redirect_uri=REDIRECT_URI)

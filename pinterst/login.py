@@ -193,20 +193,6 @@ def refresh_pinterest_token(refresh_token, expire, access, token, user_id, usern
     else:
         return access
 
-def download_drive_file_to_temp(drive_service, file_id):
-    meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
-    mimetype = meta.get("mimeType") or "video/*"
-    name = meta.get("name") or "video"
-    suffix = os.path.splitext(name)[1] or ".mp4"
-    media_request = drive_service.files().get_media(fileId=file_id)
-    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
-    with os.fdopen(fd, "wb") as tmp_file:
-        downloader = MediaIoBaseDownload(tmp_file, media_request, chunksize=10 * 1024 * 1024)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-    return tmp_path, mimetype, name
-
 def post_late(Account_id , access_token , title, description, board_id,  typee ,drive_file_id):
     Account_ids = json.loads(Account_id[0])
     Account_id = Account_ids[0]
@@ -216,7 +202,7 @@ def post_late(Account_id , access_token , title, description, board_id,  typee ,
         return False
     user_id = rows[0]["id"]
     service = dpp.get_drive_service(user_id)
-    tmp_path, mimetype, name = download_drive_file_to_temp(service, drive_file_id)
+    tmp_path, mimetype, name = dpp.download_drive_file_to_temp(service, drive_file_id)
     for access_token, Account_id in zip(access_tokens,Account_ids):
         access_token = refresh_pinterest_token11(access_token,Account_id)
         if typee == "photo":
@@ -277,7 +263,7 @@ def post_late(Account_id , access_token , title, description, board_id,  typee ,
 def create_pinterest_video_pin_full(access_token, board_id, title, description, file_path,publish_now,timee,Account_id,user_id,typeee,mimetype ,timeout=60 ):
     if not publish_now :
         service = dpp.get_drive_service(user_id)
-        drive_file_id, err = upload_path_to_drive(service, file_path, os.path.basename(file_path), mimetype)
+        drive_file_id, err = dpp.upload_path_to_drive(service, file_path, os.path.basename(file_path), mimetype)
         if err is not None:
             return {"account": Account_id, "status": "failed", "error": f"drive upload failed: {err}"}
         list_account_ids=json.dumps(Account_id)
@@ -325,7 +311,7 @@ def create_pinterest_video_pin_full(access_token, board_id, title, description, 
 def upload_pin_from_file(access_token, title, board_id, publish_now, timee, user_id, upload_tmp_path, mimetype, Account_id, typeee,description=""):
     if not publish_now:
         service = dpp.get_drive_service(user_id)
-        drive_file_id, err = upload_path_to_drive(service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype)
+        drive_file_id, err = dpp.upload_path_to_drive(service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype)
         if err is not None:
             return {"account": Account_id, "status": "failed", "error": f"drive upload failed: {err}"}
         list_account_ids=json.dumps(Account_id)
@@ -347,25 +333,6 @@ def upload_pin_from_file(access_token, title, board_id, publish_now, timee, user
             return { "status": "failed", "error": error_detail}
         except requests.RequestException as e:
             return { "status": "failed", "error": str(e)}
-
-def upload_path_to_drive(service, file_path, filename, mimetype):
-    make_public = True
-    drive_file_id = None
-    try:
-        file_metadata = {"name": filename}
-        media_upload = MediaFileUpload(file_path, mimetype=mimetype, resumable=True)
-        created_file = service.files().create(body=file_metadata, media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType",).execute()
-        drive_file_id = created_file["id"]
-        if make_public:
-            service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
-        return drive_file_id, None
-    except HttpError as e:
-        if drive_file_id:
-            try:
-                service.files().delete(fileId=drive_file_id).execute()
-            except HttpError:
-                pass
-        return None, str(e)
 
 def generate_pkce_pair():
     code_verifier = secrets.token_urlsafe(64)[:128]
