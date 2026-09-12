@@ -80,6 +80,40 @@ def get_service(token,user_id):
         logger.warning("Stored credentials may not cover all requested scopes.")
     return build('gmail', 'v1', credentials=creds)
 
+def save_tokens_web(user_id, creds, google_account_id,email_addr=None):
+    payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(),"Account_id":google_account_id ,"Timestamp": datetime.now(timezone.utc).isoformat()}
+    if email_addr:
+        payload["Email"] = email_addr
+    rows = dbimp.select_rows_web(TABLE_NAME, select="id", filters={"id": user_id})
+    if rows:
+        dbimp.update_rows_web(TABLE_NAME, payload, filters={"id": user_id})
+    else:
+        dbimp.insert_rows_web(TABLE_NAME, {"id": user_id, **payload})
+
+def get_service_web(user_id):
+    rows = dbimp.select_rows_web(TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"id": user_id})
+    row = rows[0] if rows else None
+    if not row or not row.get("Access_token"):
+        return None
+    creds = Credentials(token=row["Access_token"], refresh_token=row["Refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
+    if row.get("Token_expire"):
+        creds.expiry = datetime.fromisoformat(row["Token_expire"])
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            try:
+                resp = requests.get(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/profile",headers={"Authorization": f"Bearer {creds.token}"},).json()
+                email = resp.get("emailAddress")
+            except Exception:
+                email = None
+            save_tokens_web(user_id, creds, email_addr=email)  # save refreshed token regardless
+        else:
+            return None
+    if set(SCOPES) - set(getattr(creds, 'scopes', None) or SCOPES):
+        logger.warning("Stored credentials may not cover all requested scopes.")
+    return build('gmail', 'v1', credentials=creds)
+
 def _validate_email_address(address: str, label: str = "recipient") -> None:
     if not address or not isinstance(address, str):
         raise ValueError(f"Invalid {label} email address: {address!r}")

@@ -5,6 +5,7 @@ import sqlite3
 import X.login as x
 import os 
 import threads.login as thhh
+import campaign as campp
 import pinterst.login as pin 
 import Drive.dep as dpp
 import youtube.login as you
@@ -139,6 +140,13 @@ if __name__ == "__main__":
             if typess == "Pin_video_later":
                 pin.post_late(username_id , access_tok , text1, text2, text3, "video" ,media_id)
                 delete_by_id(row_id)
+            if typess == "email_later":
+                campp.upload_lategmail(username_id , text1, text2, text3,media_id)
+                delete_by_id(row_id)
+            if typess == "message_later":
+                campp.upload_latewhat(username_id , text1, text2, text3, media_id)
+                delete_by_id(row_id)
+            
         time.sleep(1)
 # had to shift from the token to another method in which the token doesn't require to publish or do anything 
 

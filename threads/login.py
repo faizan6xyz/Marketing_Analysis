@@ -219,10 +219,10 @@ def get_access_token_by_username(token, user_id, username):
                 access_token = refreshed
     return access_token,account_id, None
 
-def _authenticate(request):
-    token = request.form.get("token")
-    username = request.form.get("username")
-    text = request.form.get("text", "")
+def _authenticate(data):
+    token = data.get("token")
+    username = data.get("username")
+    text = data.get("text", "")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return None,None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
@@ -365,7 +365,7 @@ def post_threads_text():
     up = now + timedelta(hours=23)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
-    access_token, threads_user_id, text, err = _authenticate(request)
+    access_token, threads_user_id, text, err = _authenticate(data)
     if err:
         return err
     try:
@@ -376,10 +376,10 @@ def post_threads_text():
 
 @app.route("/post/threads/image", methods=["POST"])
 def post_threads_image():
-    access_token, threads_user_id, text, err = _authenticate(request)
+    data = request.get_json(silent=True) or {}
+    access_token, threads_user_id, text, err = _authenticate(data)
     if err:
         return err
-    data = request.get_json(silent=True) or {}
     image_url = data.get("image_url")
     publish = data.get("publish")
     timee_raw = data.get("time") or {}
@@ -402,10 +402,10 @@ def post_threads_image():
 
 @app.route("/post/threads/video", methods=["POST"])
 def post_threads_video():
-    access_token, threads_user_id, text, err = _authenticate(request)
+    data = request.get_json(silent=True) or {}
+    access_token, threads_user_id, text, err = _authenticate(data)
     if err:
         return err
-    data = request.get_json(silent=True) or {}
     video_url = data.get("video_url")
     publish = data.get("publish")
     timee_raw = data.get("time") or {}
@@ -428,10 +428,10 @@ def post_threads_video():
 
 @app.route("/post/threads/carousel", methods=["POST"])
 def post_threads_carousel():
-    access_token, threads_user_id, text, err = _authenticate(request)
+    data = request.get_json(silent=True) or {}
+    access_token, threads_user_id, text, err = _authenticate(data)
     if err:
         return err
-    data = request.get_json(silent=True) or {}
     items = data.get("items", [])
     publish = data.get("publish")
     timee_raw = data.get("time") or {}

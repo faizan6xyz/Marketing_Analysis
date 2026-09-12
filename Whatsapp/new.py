@@ -30,7 +30,7 @@ REQUEST_TIMEOUT = 15
 MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 1.5
 MAX_TEXT_LENGTH = 1800
-MAX_FILE_SIZE_BYTES = {    "image": 5 * 1024 * 1024,    "audio": 16 * 1024 * 1024,    "video": 16 * 1024 * 1024,    "document": 100 * 1024 * 1024,}
+MAX_FILE_SIZE_BYTES = {    "image": 5 * 1024 * 1024,    "audio": 5 * 1024 * 1024,    "video": 20 * 1024 * 1024,    "document": 30 * 1024 * 1024,}
 VALID_MEDIA_TYPES = set(MAX_FILE_SIZE_BYTES.keys())
 MAX_BUTTONS = 3
 MAX_BUTTON_TITLE_LEN = 20
@@ -178,13 +178,23 @@ def check_user_id(token,user_id):
     exist = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})
     return bool(exist)
 
-def refresh_token(token,user_id, access_token):
+def refresh_token(token,Account_id, access_token):
     resp = requests.get( f"https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token", params={"grant_type": "fb_exchange_token", "client_id": WA_APP_ID,"client_secret": APP_SECRET,"fb_exchange_token": access_token,},).json()
     new_token = resp.get("access_token")
     seconds = resp.get("expires_in")
     if new_token and seconds:
         new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows(token,TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"id": user_id},)
+        dbimp.update_rows(token,TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"Account_id": Account_id},)
+        return new_token
+    return access_token
+
+def refresh_token_web(Account_id, access_token):
+    resp = requests.get( f"https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token", params={"grant_type": "fb_exchange_token", "client_id": WA_APP_ID,"client_secret": APP_SECRET,"fb_exchange_token": access_token,},).json()
+    new_token = resp.get("access_token")
+    seconds = resp.get("expires_in")
+    if new_token and seconds:
+        new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+        dbimp.update_rows_web(TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"Account_id": Account_id},)
         return new_token
     return access_token
 
