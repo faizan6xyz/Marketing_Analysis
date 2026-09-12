@@ -85,6 +85,7 @@ if __name__ == "__main__":
         now = datetime.now(timezone.utc).isoformat()
         due = get_containers_due(now)
         for row_id, container_id, access_tok, username_id , typess,media_id,hourss,text1,text2,text3 in due:
+            # addd the another way to schedule cause container expires in the 24 hours
             if typess == "container":
                 aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
                 delete_by_id(row_id)
@@ -111,18 +112,27 @@ if __name__ == "__main__":
                 content = you.shorts_schedule(username_id, media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
-            # if typess == "tweet":
-            #     content = x.get_tweet_metrics(username_id ,media_id, access_tok)
-            #     dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
-            #     delete_by_id(row_id)
-            # if typess == "photo_tweet" :
-            #     content = x.get_tweet_metrics(username_id ,media_id, access_tok)
-            #     dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
-            #     delete_by_id(row_id)
-            # if typess == "video_tweet":
-            #     content = x.get_tweet_metrics(username_id ,media_id, access_tok)
-            #     dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
-            #     delete_by_id(row_id)
+            if typess == "tweet":
+                content = x.get_tweet_metrics(username_id ,media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "photo_tweet" :
+                content = x.get_tweet_metrics(username_id ,media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "video_tweet":
+                content = x.get_tweet_metrics(username_id ,media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "tweet_later":
+                x.post_later("tweet_later", username_id,text1 )
+                delete_by_id(row_id)
+            if typess == "photo_tweet_later":
+                x.post_later("photo_tweet_later", username_id,text1 )
+                delete_by_id(row_id)
+            if typess == "video_tweet_later":
+                x.post_later("video_tweet_later", username_id,text1 )
+                delete_by_id(row_id)
             if typess == "pin_photo": 
                 content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Pinterst", filename="postanalysis.txt", data_to_append=content)
