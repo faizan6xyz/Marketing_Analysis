@@ -223,20 +223,23 @@ def xcccc(user_id,access_token,media_id,typee):
         timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
         sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
 
-def _authenticate(request):
-    token = request.form.get("token")
-    username = request.form.get("username")
-    text = request.form.get("text", "")
-    tokench = au.process(token=token)
+def _authenticate(data,tokench):
+    usernames = data.get("usernames")
+    text = data.get("text", "")
+    access_tokens = []
+    account_ids = []
     if not tokench["status"]:
         return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200) , None
     user_id = tokench["user_id"]
-    if not username:
+    if not usernames:
         return None, None, (jsonify({"error": "username is required"}), 400) , None
-    access_token, err, account_id = get_access_token_by_username(tokench["token"], user_id, username)
+    for username in usernames :
+        access_token, err, account_id = get_access_token_by_username(tokench["token"], user_id, username)
+        access_tokens.append(access_token)
+        account_ids.append(account_id)
     if err:
         return None, None, err ,None
-    return access_token, text, None , account_id
+    return access_tokens, text, None , account_ids
 
 def refresh_x_token(token,user_id, account_id, refresh_token):
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
@@ -344,20 +347,41 @@ def x_dataget():
 
 @app.route("/post/x/text", methods=["POST"])
 def post_to_x_text():
-    access_token, text, err, account_id = _authenticate(request)
-    if err:
-        return err
+    data = request.get_json(silent = True) or {}
+    token = data.get("token")
+    tokench = au.process(token=token)
+    access_token, text, err, account_id = _authenticate(data,tokench)
     if not text:
         return jsonify({"error": "text is required"}), 400
-    tweet_id = _post_tweet(access_token, text)
-    if not tweet_id:
-        return jsonify({"error": "failed to create post"}), 400
-    xcccc(account_id, access_token, tweet_id, "tweet")
+    if timee is None:
+        return jsonify({"error": "invalid or missing date/time"}), 400
+    publish = data.get("publish")
+    timee_raw = data.get("time")
+    timee = parse_datetime(timee_raw)
+    publish_now = str(publish).strip().lower() == "true"
+    now = datetime.now(timezone.utc)
+    lb = now + timedelta(seconds=180)
+    up = now + timedelta(hours=72)
+    if timee < lb or timee > up:
+        return jsonify({"error": "invalid time for the posting"}), 400
+    if err:
+        return err
+    if not publish_now :
+        list_account_ids = json.dumps(account_id)
+        sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="tweet_later", text1=text, text2="" , text3="", media_id="")
+    for acccount ,acesss in zip(account_id,access_token) :
+        tweet_id = _post_tweet(acesss, text)
+        if not tweet_id:
+            continue
+        xcccc(acccount, acesss, tweet_id, "tweet")
     return jsonify({"success": True, "post_id": tweet_id}), 200
 
 @app.route("/post/x/photo", methods=["POST"])
 def post_to_x_photo():
-    access_token, text, err ,account_id= _authenticate(request)
+    data = request.get_json(silent=True) or {}
+    token = data.get("token")
+    tokench = au.process(token=token)
+    access_token, text, err, account_id = _authenticate(data, tokench)
     if err:
         return err
     files = request.files.getlist("file")
@@ -368,9 +392,24 @@ def post_to_x_photo():
     non_images = [f for f in files if not (f.mimetype or "").startswith("image/")]
     if non_images:
         return jsonify({"error": "unsupported file type in upload"}), 400
+    publish = data.get("publish")
+    timee_raw = data.get("time")
+    timee = parse_datetime(timee_raw)
+    publish_now = str(publish).strip().lower() == "true"
+    if not publish_now:
+        if timee is None:
+            return jsonify({"error": "invalid time format"}), 400
+        now = datetime.now(timezone.utc)
+        lb = now + timedelta(seconds=180)
+        up = now + timedelta(hours=72)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
     media_ids = []
+    drvie_id = []
+    service = dpp.get_drive_service(tokench["user_id"]) if not publish_now else None
     for f in files:
         tmp_path = None
+        media_id = None
         try:
             suffix = os.path.splitext(f.filename or "")[1] or ".jpg"
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -379,26 +418,42 @@ def post_to_x_photo():
             file_size_bytes = os.path.getsize(tmp_path)
             if file_size_bytes > image_size:
                 return jsonify({"error": f"image {f.filename} exceeds max size"}), 400
+            if not publish_now:
+                drive_file_id, drive_err = dpp.upload_path_to_drive( service, tmp_path, os.path.basename(tmp_path), f.mimetype )
+                if drive_err:
+                    return jsonify({"error": f"failed to save {f.filename} for scheduling"}), 400
+                drvie_id.append(drive_file_id)
+                continue
             with open(tmp_path, "rb") as fh:
-                media_id = upload_image(access_token, fh.read())
+                bytesss = fh.read()
+            media_id = upload_image(access_token[0], bytesss)
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
         if not media_id:
             return jsonify({"error": f"image upload failed for {f.filename}"}), 400
         media_ids.append(media_id)
-        tweet_id, post_err = create_tweet_with_media(access_token, text, media_ids)
+    if not publish_now:
+        list_account_ids = json.dumps(account_id)
+        drvie_ids = json.dumps(drvie_id)
+        sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="photo_tweet_later", text1=text, text2="", text3="", media_id=drvie_ids, )
+        return jsonify({"success": True}), 200
+    results = []
+    for acccount, acesss in zip(account_id, access_token):
+        tweet_id, post_err = create_tweet_with_media(acesss, text, media_ids)
         if post_err:
-            return jsonify({"error": "failed to create post", "detail": post_err}), 400
-        xcccc(account_id, access_token, tweet_id, "photo_tweet")
-        return jsonify({"success": True, "post_id": tweet_id, "media_ids": media_ids}), 200
-    if post_err:
-        return jsonify({"error": "failed to create post", "detail": post_err}), 400
-    return jsonify({"success": True, "post_id": tweet_id, "media_ids": media_ids}), 200
+            results.append({"account": acccount, "success": False, "error": post_err})
+            continue
+        xcccc(acccount, acesss, tweet_id, "photo_tweet")
+        results.append({"account": acccount, "success": True, "post_id": tweet_id})
+    return jsonify({"success": True, "results": results, "media_ids": media_ids}), 200
 
 @app.route("/post/x/video", methods=["POST"])
 def post_to_x_video():
-    access_token, text, err ,account_id= _authenticate(request)
+    data = request.get_json(silent=True) or {}
+    token = data.get("token")
+    tokench = au.process(token=token)
+    access_token, text, err, account_id = _authenticate(data, tokench)
     if err:
         return err
     files = request.files.getlist("file")
@@ -409,7 +464,20 @@ def post_to_x_video():
     f = files[0]
     if not (f.mimetype or "").startswith("video/"):
         return jsonify({"error": "unsupported file type in upload"}), 400
+    publish = data.get("publish")
+    timee_raw = data.get("time")
+    timee = parse_datetime(timee_raw)
+    publish_now = str(publish).strip().lower() == "true"
+    if not publish_now:
+        if timee is None:
+            return jsonify({"error": "invalid time format"}), 400
+        now = datetime.now(timezone.utc)
+        lb = now + timedelta(seconds=180)
+        up = now + timedelta(hours=72)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
     tmp_path = None
+    media_id = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp_path = tmp.name
@@ -417,20 +485,31 @@ def post_to_x_video():
         file_size_bytes = os.path.getsize(tmp_path)
         if get_video_duration(tmp_path) > duation or file_size_bytes > video_size:
             return jsonify({"error": "video exceeds allowed duration or size"}), 400
+        if not publish_now:
+            service = dpp.get_drive_service(tokench["user_id"])
+            drive_file_id, drive_err = dpp.upload_path_to_drive( service, tmp_path, os.path.basename(tmp_path), "video/mp4" )
+            if drive_err:
+                return jsonify({"error": "failed to save video for scheduling"}), 400
+            list_account_ids = json.dumps(account_id)
+            sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="video_later", text1=text, text2="", text3="", media_id=drive_file_id, )
+            return jsonify({"success": True}), 200
         with open(tmp_path, "rb") as file:
-            media_id = upload_video(access_token, file.read(), f.mimetype)
+            bytesss = file.read()
+        media_id = upload_video(access_token[0], bytesss, f.mimetype)
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
     if not media_id:
         return jsonify({"error": "video upload failed"}), 400
-    tweet_id, post_err = create_tweet_with_media(access_token, text, [media_id])
-    if post_err:
-        return jsonify({"error": "failed to create post", "detail": post_err}), 400
-    xcccc(account_id,access_token,tweet_id,"video_tweet")
-    if post_err:
-        return jsonify({"error": "failed to create post", "detail": post_err}), 400
-    return jsonify({"success": True, "post_id": tweet_id, "media_ids": [media_id]}), 200
+    results = []
+    for acccount, acesss in zip(account_id, access_token):
+        tweet_id, post_err = create_tweet_with_media(acesss, text, [media_id])
+        if post_err:
+            results.append({"account": acccount, "success": False, "error": post_err})
+            continue
+        xcccc(acccount, acesss, tweet_id, "video_tweet")
+        results.append({"account": acccount, "success": True, "post_id": tweet_id})
+    return jsonify({"success": True, "results": results, "media_ids": [media_id]}), 200
 
 @app.route("/x/analytics/posts", methods=["GET"])
 @limiter.limit("10 per minute")
