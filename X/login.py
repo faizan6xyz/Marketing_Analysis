@@ -224,10 +224,12 @@ def xcccc(user_id,access_token,media_id,typee):
         sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
 
 def _authenticate(data,tokench):
-    usernames = data.get("usernames")
+    usernames = data.get("username")
     text = data.get("text", "")
     access_tokens = []
     account_ids = []
+    if not isinstance(usernames, list):
+            return None , (jsonify({"error": "username is not the list"}),400) , None , None 
     if not tokench["status"]:
         return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200) , None
     user_id = tokench["user_id"]
@@ -343,7 +345,6 @@ def x_dataget():
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
-
 
 @app.route("/post/x/text", methods=["POST"])
 def post_to_x_text():

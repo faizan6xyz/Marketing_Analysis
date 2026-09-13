@@ -176,8 +176,8 @@ def campaign():
     campaign_name = data.get("campaign_name")
     body = data.get("body")
     try:
-        target = json.loads(data.get("target") or "[]")
-        names = json.loads(data.get("name") or "[]")
+        target = data.get("target") or "[]"
+        names = data.get("name") or "[]"
     except json.JSONDecodeError:
         cleanup_local_files()
         return jsonify({"error": "'target' and 'name' must be valid JSON arrays"}), 400

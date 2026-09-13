@@ -221,18 +221,25 @@ def get_access_token_by_username(token, user_id, username):
 
 def _authenticate(data):
     token = data.get("token")
-    username = data.get("username")
+    usernames = data.get("username")
+    if not usernames:
+        return None,None,None, (jsonify({"error": "username is required"}), 400)
+    if not isinstance(usernames, list):
+        return None , (jsonify({"error": "username is not the list"}),400) , None , None 
     text = data.get("text", "")
     tokench = au.process(token=token)
     if not tokench["status"]:
         return None,None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
     user_id = tokench["user_id"]
-    if not username:
-        return None,None,None, (jsonify({"error": "username is required"}), 400)
-    access_token,threads_user_id , err = get_access_token_by_username(tokench["token"], user_id, username)
-    if err:
-        return None, None, err
-    return access_token, threads_user_id , text, None
+    access_tokens = []
+    threads_user_ids = []
+    for username in usernames :
+        access_token,threads_user_id , err = get_access_token_by_username(tokench["token"], user_id, usernames)
+        if err:
+            return None, None, err
+        access_tokens.append(access_token)
+        threads_user_ids.append(threads_user_id)    
+    return access_tokens, threads_user_ids , text, None
 
 @app.route("/auth/threads/login")
 def threads_login():
@@ -365,19 +372,23 @@ def post_threads_text():
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
-    access_token, threads_user_id, text, err = _authenticate(data)
+    access_tokens, threads_user_ids, text, err = _authenticate(data)
     if err:
         return err
     try:
-        thread_id = _publish_threads_post(publish_now,timee,access_token, threads_user_id, "TEXT", text=text)
+        thread_ids = []
+        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
+            thread_id = _publish_threads_post(publish_now,timee,access_token, threads_user_id, "TEXT", text=text)
+            if thread_id :
+                thread_ids.append(thread_id)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
-    return jsonify({"success": True, "thread_id": thread_id}), 200
+    return jsonify({"success": True, "thread_id": thread_ids}), 200
 
 @app.route("/post/threads/image", methods=["POST"])
 def post_threads_image():
     data = request.get_json(silent=True) or {}
-    access_token, threads_user_id, text, err = _authenticate(data)
+    access_tokens, threads_user_ids, text, err = _authenticate(data)
     if err:
         return err
     image_url = data.get("image_url")
@@ -395,15 +406,19 @@ def post_threads_image():
     if not image_url:
         return jsonify({"error": "image_url is required"}), 400
     try:
-        thread_id = _publish_threads_post(publish_now,timee, access_token, threads_user_id, "IMAGE", text=text, image_url=image_url)
+        thread_ids = []
+        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
+            thread_id = _publish_threads_post(publish_now,timee, access_token, threads_user_id, "IMAGE", text=text, image_url=image_url)
+            if thread_id :
+                thread_ids.append(thread_id)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
-    return jsonify({"success": True, "thread_id": thread_id}), 200
+    return jsonify({"success": True, "thread_id": thread_ids}), 200
 
 @app.route("/post/threads/video", methods=["POST"])
 def post_threads_video():
     data = request.get_json(silent=True) or {}
-    access_token, threads_user_id, text, err = _authenticate(data)
+    access_tokens, threads_user_ids, text, err = _authenticate(data)
     if err:
         return err
     video_url = data.get("video_url")
@@ -421,15 +436,19 @@ def post_threads_video():
     if not video_url:
         return jsonify({"error": "video_url is required"}), 400
     try:
-        thread_id = _publish_threads_post( publish_now,timee,access_token, threads_user_id, "VIDEO", text=text, video_url=video_url )
+        thread_ids = []
+        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
+            thread_id = _publish_threads_post( publish_now,timee,access_token, threads_user_id, "VIDEO", text=text, video_url=video_url )
+            if thread_id :
+                thread_ids.append(thread_id)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
-    return jsonify({"success": True, "thread_id": thread_id}), 200
+    return jsonify({"success": True, "thread_id": thread_ids}), 200
 
 @app.route("/post/threads/carousel", methods=["POST"])
 def post_threads_carousel():
     data = request.get_json(silent=True) or {}
-    access_token, threads_user_id, text, err = _authenticate(data)
+    access_tokens, threads_user_ids, text, err = _authenticate(data)
     if err:
         return err
     items = data.get("items", [])
@@ -447,19 +466,23 @@ def post_threads_carousel():
     if not items:
         return jsonify({"error": "items is required for carousel posts"}), 400
     try:
-        creation_id = create_threads_carousel(access_token, threads_user_id, items, caption=text)
-        if not creation_id:
-            raise RuntimeError("failed to create carousel container")
-        is_published = wait_for_threads_container(access_token, creation_id)
-        if not is_published:
-            raise RuntimeError("carousel container failed to reach FINISHED state")
-        if publish_now :
-            thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
-            if not thread_id:
-                raise RuntimeError("failed to publish carousel thread")
-        if not publish:
-            sccc.insert_time(threads_user_id,creation_id,time,access_token)
-            return creation_id
+        thread_ids = []
+        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
+            creation_id = create_threads_carousel(access_token, threads_user_id, items, caption=text)
+            if not creation_id:
+                raise RuntimeError("failed to create carousel container")
+            is_published = wait_for_threads_container(access_token, creation_id)
+            if not is_published:
+                raise RuntimeError("carousel container failed to reach FINISHED state")
+            if publish_now :
+                thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
+                if not thread_id:
+                    raise RuntimeError("failed to publish carousel thread")
+            if not publish:
+                sccc.insert_time(threads_user_id,creation_id,time,access_token)
+                return creation_id
+            if thread_id :
+                thread_ids.append(thread_id)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
-    return jsonify({"success": True, "thread_id": thread_id}), 200
+    return jsonify({"success": True, "thread_id": thread_ids}), 200

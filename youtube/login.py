@@ -258,6 +258,41 @@ def post_later(channel_id, file_id, text1, text2, text3):
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
+def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
+    account_ids = []
+    for account_title in account_channel_title :
+        rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "channel_title": account_title},)
+        if not rows:
+            return False
+        channel_id = rows[0]["Account_id"]
+        account_ids.append(channel_id)
+    if not publish_now:
+        service = dpp.get_drive_service(user_id)
+        drive_file_id, err = dpp.upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
+        if err is not None:
+            return False
+        channel_id  = json.dumps(account_ids)
+        sccc.insert_post( user_id=channel_id, scheduled_time=timee, access_token="", typeee="Shorts_later", text1=caption, text2=description, text3=tags, media_id=drive_file_id, )
+        return {"account": channel_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
+    video_ids = []
+    for channel_id in account_ids :
+        creds = get_youtube_credentials_for_account(token, user_id, channel_id)
+        if not creds:
+            return False
+        try:
+            response = upload_video_to_youtube_channel(creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags)
+            video_id = response.get("id")
+            try:
+                xcccc(channel_id, creds.token, video_id, "shorts")
+            except Exception as e:
+                return False
+            video_ids.append(video_id)
+        except HttpError as e:
+            return False
+        except Exception as e:
+            return False
+    return video_id
+
 def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, description="", tags=None, category_id="22", privacy_status="public"):
     youtube_service = build("youtube", "v3", credentials=creds)
     media = MediaFileUpload(tmp_path, mimetype=mimetype, chunksize=10 * 1024 * 1024, resumable=True)
@@ -346,41 +381,6 @@ def list_youtube_accounts():
     rows = dbimp.select_rows(token, TABLE_NAME, select="Account_id,channel_title", filters={"id": user_id})
     return jsonify({"accounts": rows or []})
 
-def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
-    account_ids = []
-    for account_title in account_channel_title :
-        rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "channel_title": account_title},)
-        if not rows:
-            return False
-        channel_id = rows[0]["Account_id"]
-        account_ids.append(channel_id)
-    if not publish_now:
-        service = dpp.get_drive_service(user_id)
-        drive_file_id, err = dpp.upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
-        if err is not None:
-            return False
-        channel_id  = json.dumps(account_ids)
-        sccc.insert_post( user_id=channel_id, scheduled_time=timee, access_token="", typeee="Shorts_later", text1=caption, text2=description, text3=tags, media_id=drive_file_id, )
-        return {"account": channel_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
-    video_ids = []
-    for channel_id in account_ids :
-        creds = get_youtube_credentials_for_account(token, user_id, channel_id)
-        if not creds:
-            return False
-        try:
-            response = upload_video_to_youtube_channel(creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags)
-            video_id = response.get("id")
-            try:
-                xcccc(channel_id, creds.token, video_id, "shorts")
-            except Exception as e:
-                return False
-            video_ids.append(video_id)
-        except HttpError as e:
-            return False
-        except Exception as e:
-            return False
-    return video_id
-
 @app.route("/youtube/upload/short", methods=["POST"])
 @limiter.limit("5 per minute")
 def upload():
@@ -395,7 +395,9 @@ def upload():
     publish = data.get("publish", "true")
     timee_raw = data.get("time")
     publish_now = str(publish).strip().lower() == "true"
-    accounts = data.get("accounts")
+    accounts = data.get("username")
+    if not isinstance(accounts, list):
+        return jsonify({"error": "accounts must be a list"}), 400
     timee = parse_datetime(timee_raw)
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
