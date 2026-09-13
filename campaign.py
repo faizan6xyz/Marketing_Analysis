@@ -130,7 +130,7 @@ def campaign():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=48)
+    up = now + timedelta(hours=72)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     if not token:

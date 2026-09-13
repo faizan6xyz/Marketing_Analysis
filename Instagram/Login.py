@@ -343,7 +343,7 @@ def story():
         return jsonify({"error": "invalid type or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=48)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
@@ -408,7 +408,7 @@ def photo():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=48)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
@@ -477,7 +477,7 @@ def video():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=48)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
@@ -540,7 +540,7 @@ def carousel():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=48)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})

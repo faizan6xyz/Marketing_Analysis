@@ -487,7 +487,7 @@ def post_to_pinterest_photo():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=48)
+    up = now + timedelta(hours=72)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     tmp_path = None
@@ -528,7 +528,7 @@ def post_to_pinterest_video():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=48)
+    up = now + timedelta(hours=72)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     if not board_id:

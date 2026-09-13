@@ -362,7 +362,7 @@ def post_threads_text():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=23)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     access_token, threads_user_id, text, err = _authenticate(data)
@@ -389,7 +389,7 @@ def post_threads_image():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=23)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     if not image_url:
@@ -415,7 +415,7 @@ def post_threads_video():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=23)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     if not video_url:
@@ -441,7 +441,7 @@ def post_threads_carousel():
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=23)
+    up = now + timedelta(hours=24)
     if timee < lb or timee > up:
         return jsonify({"error": "invalid time for the posting"}), 400
     if not items:
