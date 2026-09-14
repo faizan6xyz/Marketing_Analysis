@@ -1,5 +1,4 @@
 import os
-import re
 import time
 import json
 import uuid
@@ -47,6 +46,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 PAYPAL_TABLE = "Paypal"
 VERIFY_TABLE = "Paypal_verify"
 PLAN_CATALOG = json.loads(_require("PAYPAL_PLANS"))
+#     {"basic_monthly": {"amount": 49900, "currency": "INR"}, "pro_monthly": {"amount": 99900, "currency": "INR"} }
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("paypal_app")
 TRUSTED_CERT_HOSTS = ("api.paypal.com", "api.sandbox.paypal.com")
@@ -115,7 +115,11 @@ def save_order(token,user_id, paypal_order_id, cart_id, plan_key) -> bool:
     return _update_succeeded(resp)
 
 def mark_order_paid(user_id, paypal_order_id) -> bool:
-    dbimp.update_rows_web("users",{"Paid": True} , {"user_id" : user_id})
+    rows = dbimp.select_rows_web(PAYPAL_TABLE , select="Plan" , filters={"id": user_id, "Paypal_order_id": paypal_order_id})
+    if not rows :
+        return False
+    plan_id = rows[0]["Plan"]
+    dbimp.update_rows_web("users",{"Paid": True,"Plan":plan_id} , {"user_id" : user_id})
     resp = dbimp.update_rows_web(PAYPAL_TABLE, {"Paid": 1, "Status": "COMPLETED", "Updated_at": _now()}, {"id": user_id, "Paypal_order_id": paypal_order_id, "Paid": 0},)
     return _update_succeeded(resp)
 

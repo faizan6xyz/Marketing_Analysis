@@ -39,6 +39,7 @@ WEBHOOK_SECRET = _require("RAZORPAY_WEBHOOK_SECRET")
 RATE_LIMIT_STORAGE_URI = _require("RATE_LIMIT_STORAGE_URI")
 try:
     Plan = json.loads(_require("RAZORPAY_Plan"))
+#     {"basic_monthly": {"amount": 49900, "currency": "INR"}, "pro_monthly": {"amount": 99900, "currency": "INR"} }
 except json.JSONDecodeError as e:
     raise RuntimeError(f"RAZORPAY_Plan env var is not valid JSON: {e}") from e
 app.secret_key = _require("FLASK_SECRET_KEY")
@@ -269,14 +270,15 @@ def capture_payment(payment_id):
 def _set_order_status(order_id: str, status: str):
     if not order_id:
         return
-    rows = dbimp.select_rows_web(TABLE_NAME, select="Status,id", filters={"Order_id": order_id})
+    rows = dbimp.select_rows_web(TABLE_NAME, select="Status,id,Plan_id", filters={"Order_id": order_id})
     row = rows[0] if rows else None
     user_id = row["id"]
+    Plan_id = row["Plan_id"]
     current = row["Status"] if row else None
     if current and _STATUS_RANK.get(status, 0) < _STATUS_RANK.get(current, 0):
         return
     dbimp.update_rows_web(TABLE_NAME, {"Status": status, "Updates_at": _now()}, {"Order_id": order_id})
-    dbimp.update_rows_web("users", {"Paid": True} , {"user_id": user_id})
+    dbimp.update_rows_web("users", {"Paid": True,"Plan":Plan_id} , {"user_id": user_id})
 
 def _handle_payment_captured(event: dict):
     payment_entity = event.get("payload", {}).get("payment", {}).get("entity", {})
