@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 import time
 import Instagram.upload as aaaa
 import sqlite3
@@ -12,6 +12,15 @@ DB = "schedule.db"
 
 def get_conn():
     return sqlite3.connect(DB)
+
+def is_valid_iso_format(value: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        datetime.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
 
 def init_db():
     conn = get_conn()
@@ -32,27 +41,31 @@ def init_db():
 
 def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()
-    conn.execute("INSERT INTO schedule (user_id, container_id, time, type , access_token) VALUES (?, ?, ?, ?, ?)",(user_id, container_id, scheduled_time,"container",access_token))
-    conn.commit()
-    conn.close()
+    if is_valid_iso_format(scheduled_time):
+        conn.execute("INSERT INTO schedule (user_id, container_id, time, type , access_token) VALUES (?, ?, ?, ?, ?)",(user_id, container_id, scheduled_time,"container",access_token))
+        conn.commit()
+        conn.close()
 
 def insert_post(user_id, scheduled_time, access_token, typeee, text1 , text2 , text3 , media_id):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()
-    conn.execute("INSERT INTO schedule (user_id, time, access_token , type , text1 , text2 , text3 ,media_id) VALUES (?, ?, ?, ?, ?, ? , ? , ?)",(user_id, scheduled_time,access_token,typeee,text1,text2,text3,media_id))
-    conn.commit()
-    conn.close()
+    if is_valid_iso_format(scheduled_time):
+        conn.execute("INSERT INTO schedule (user_id, time, access_token , type , text1 , text2 , text3 ,media_id) VALUES (?, ?, ?, ?, ?, ? , ? , ?)",(user_id, scheduled_time,access_token,typeee,text1,text2,text3,media_id))
+        conn.commit()
+        conn.close()
 
 def insert__story(user_id,  scheduled_time, access_token,media_id,hour,typee):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()
-    conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour) VALUES (?, ?, ?,?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id,hour))
-    conn.commit()
-    conn.close()
+    if is_valid_iso_format(scheduled_time):
+        conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour) VALUES (?, ?, ?,?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id,hour))
+        conn.commit()
+        conn.close()
 
 def insert__story1(user_id,  scheduled_time, access_token,media_id,typee):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()
-    conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (?, ?, ?, ?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id))
-    conn.commit()
-    conn.close()
+    if is_valid_iso_format(scheduled_time):    
+        conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (?, ?, ?, ?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id))
+        conn.commit()
+        conn.close()
 
 def get_containers_due(now):
     conn = get_conn()
@@ -63,9 +76,10 @@ def get_containers_due(now):
 
 def update_container_schedule(container_id, sctime):
     conn = get_conn()
-    conn.execute("UPDATE schedule SET time = ? WHERE container_id = ?", (sctime, container_id))
-    conn.commit()
-    conn.close()
+    if is_valid_iso_format(sctime):
+        conn.execute("UPDATE schedule SET time = ? WHERE container_id = ?", (sctime, container_id))
+        conn.commit()
+        conn.close()
 
 def delete_by_id(row_id):
     conn = get_conn()
