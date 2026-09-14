@@ -48,6 +48,7 @@ def build_flow():
 
 def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
     payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(),"Account_id":google_account_id ,"Timestamp": datetime.now(timezone.utc).isoformat()}
+    dbimp.update_rows(token,"users",{"Gmail":True},{"user_id":user_id})
     if email_addr:
         payload["Email"] = email_addr
     rows = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})

@@ -59,7 +59,7 @@ filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": 
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
     dbimp.insert_rows(token,table_name, {"id" : user_id , "Timestamp":timestamp ,"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token" : fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.encode()).decode(), "Connected" : 1 , "Scopes" : SCOPES,"Email":mail})
-    
+    dbimp.update_rows(token,"users",{"Gdrive":True},{"user_id":user_id})
 
 def Update_token(token , user_id, access_token, refresh_token, expiry):
     dbimp.update_rows_web(token , table_name, {"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token": fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.isoformat().encode()).decode()}, {"id" : user_id})

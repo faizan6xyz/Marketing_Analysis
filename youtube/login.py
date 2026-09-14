@@ -112,6 +112,7 @@ def credentials_from_json(creds_json: str) -> Credentials:
 
 def save_youtube_account(token, user_id, channel_id, channel_title, creds: Credentials):
     payload = { "id": user_id, "Account_id": channel_id, "channel_title": channel_title, "Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": _expiry_to_iso(creds.expiry), "Timestamp": datetime.now(timezone.utc).isoformat(), }
+    dbimp.update_rows(token,"users",{"Youtube":True},{"user_id":user_id})
     rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "Account_id": channel_id},    )
     if rows:
         dbimp.update_rows(token, TABLE_NAME, payload, filters={"id": user_id, "Account_id": channel_id})

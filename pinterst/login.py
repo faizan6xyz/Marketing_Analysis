@@ -430,6 +430,7 @@ def pinterest_dataget():
         return jsonify({"error": "invalid timestamp/expire format"}), 400
     try:
         dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "Access_token": access_token, "Refresh_token": refresh_token, "Timestamp": timestamp, "Token_expire": expirey, "Username": username, "Account_id": account_id, }, filters={"id": user_id}, ) 
+        dbimp.update_rows(token,"users",{"Pinterst":True},{"user_id":user_id})
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
