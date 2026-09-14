@@ -3,13 +3,11 @@ import time
 import Instagram.upload as aaaa
 import sqlite3
 import X.login as x
-import os 
 import threads.login as thhh
 import campaign as campp
 import pinterst.login as pin 
 import Drive.dep as dpp
 import youtube.login as you
-youtube_api = os.environ.get("youtube_api")
 DB = "schedule.db"
 
 def get_conn():
@@ -28,8 +26,7 @@ def init_db():
                     hour INTEGER ,
                     text1 TEXT ,
                     text2 TEXT ,
-                    text3 TEXT 
-                     ) """)
+                    text3 TEXT  ) """)
     conn.commit()
     conn.close()
 
