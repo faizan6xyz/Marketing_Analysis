@@ -186,12 +186,8 @@ def campaign():
         cleanup_local_files()
         return jsonify({"error": "'target' and 'name' must be valid JSON arrays"}), 400
     now = datetime.now(timezone.utc)
-    if platform == "whatsapp":
-        if not lmmm.checkk(tokench["token"],user_id,now,"Whatsapp", len(target)):
-            return jsonify({"error": "limit has been reached"}) ,400
-    elif platform == "gmail":
-        if not lmmm.checkk(tokench["token"],user_id,now,"Gmail", len(target)):
-            return jsonify({"error": "limit has been reached"}) ,400
+    if not lmmm.checkk(tokench["token"],user_id,now,len(target)):
+        return jsonify({"error": "limit has been reached"}) ,400
     if len(media) > MAX_MEDIA_ITEMS:
         cleanup_local_files()
         return jsonify({"error": f"too many media files to send (max {MAX_MEDIA_ITEMS})"}), 400

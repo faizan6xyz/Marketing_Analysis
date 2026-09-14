@@ -401,7 +401,7 @@ def upload():
     if not isinstance(accounts, list):
         return jsonify({"error": "accounts must be a list"}), 400
     now = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],user_id,now,"Youtube", len(accounts)):
+    if not lmmm.checkk(tokench["token"],user_id,now,len(accounts)):
         return jsonify({"error": "limit has been reached"}) ,400
     timee = parse_datetime(timee_raw)
     if timee is None:

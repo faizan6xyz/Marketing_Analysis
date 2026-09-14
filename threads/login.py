@@ -233,7 +233,7 @@ def _authenticate(data):
         return None,None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
     user_id = tokench["user_id"]
     now = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],user_id,now,"Threads", len(usernames)):
+    if not lmmm.checkk(tokench["token"],user_id,now, len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     access_tokens = []
     threads_user_ids = []

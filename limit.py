@@ -26,22 +26,22 @@ def get_conn():
 def init_db():
     conn = get_conn()
     try:
-        conn.execute(""" CREATE TABLE IF NOT EXISTS rate_limit ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, Start_time TEXT NOT NULL, End_time TEXT NOT NULL, request_count INTEGER NOT NULL DEFAULT 0, platform TEXT NOT NULL ) """)
-        conn.execute(""" CREATE INDEX IF NOT EXISTS idx_rate_limit_lookup ON rate_limit (user_id, platform, Start_time, End_time)  """)
+        conn.execute(""" CREATE TABLE IF NOT EXISTS rate_limit ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, Start_time TEXT NOT NULL, End_time TEXT NOT NULL, request_count INTEGER NOT NULL DEFAULT 0 ) """)
+        conn.execute(""" CREATE INDEX IF NOT EXISTS idx_rate_limit_lookup ON rate_limit (user_id, Start_time, End_time)  """)
         conn.commit()
     finally:
         conn.close()
 
-def get_or_create_window(user_id, now_ts, platform):
+def get_or_create_window(user_id, now_ts):
     conn = get_conn()
     try:
-        cur = conn.execute( """SELECT request_count, id FROM rate_limit WHERE Start_time < ? AND End_time > ? AND user_id = ? AND platform = ?""",(now_ts, now_ts, user_id, platform), )
+        cur = conn.execute( """SELECT request_count, id FROM rate_limit WHERE Start_time < ? AND End_time > ? AND user_id = ? """,(now_ts, now_ts, user_id), )
         row = cur.fetchone()
         if row:
             return row["request_count"], row["id"]
         start = datetime.now(timezone.utc).isoformat()
         end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-        cur = conn.execute( "INSERT INTO rate_limit (user_id, Start_time, End_time, request_count, platform) VALUES (?,?,?,?,?)", (user_id, start, end, 0, platform),)
+        cur = conn.execute( "INSERT INTO rate_limit (user_id, Start_time, End_time, request_count, ) VALUES (?,?,?,?,?)", (user_id, start, end, 0),)
         conn.commit()
         return 0, cur.lastrowid
     finally:
@@ -56,7 +56,7 @@ def try_increment(row_id, amount, limit):
     finally:
         conn.close()
 
-def checkk(token, user_id, now_ts, platform, requestss: int) :
+def checkk(token, user_id, now_ts, requestss: int) :
     rows = dbimp.select_rows(token, "users", select="Paid,Plan", filters={"user_id": user_id})
     if not rows:
         return False
@@ -67,7 +67,7 @@ def checkk(token, user_id, now_ts, platform, requestss: int) :
     if limit is None:
         logger.warning("No rate limit configured for plan %r", plan)
         return False
-    _, row_id = get_or_create_window(user_id, now_ts, platform)
+    _, row_id = get_or_create_window(user_id, now_ts)
     return try_increment(row_id, requestss, int(limit))
 
 def delete_by_time(timee):

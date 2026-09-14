@@ -344,7 +344,7 @@ def story():
     if timee is None:
         return jsonify({"error": "invalid type or missing date/time"}), 400
     now = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
@@ -411,7 +411,7 @@ def photo():
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
@@ -482,7 +482,7 @@ def video():
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
@@ -547,7 +547,7 @@ def carousel():
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
