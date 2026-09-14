@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import authnew as au
+import limit as lmmm
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
@@ -230,6 +231,9 @@ def _authenticate(data,tokench):
     account_ids = []
     if not isinstance(usernames, list):
             return None , (jsonify({"error": "username is not the list"}),400) , None , None 
+    now = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],user_id,now,"X", len(usernames)):
+        return jsonify({"error": "limit has been reached"}) ,400
     if not tokench["status"]:
         return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200) , None
     user_id = tokench["user_id"]

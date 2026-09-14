@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from flask_cors import CORS
 from flask import Flask, request, redirect, jsonify
 from datetime import datetime, timezone, timedelta
+import limit as lmmm
 import Drive.dep as dpp
 import authnew as au
 from moviepy import VideoFileClip
@@ -343,6 +344,8 @@ def story():
     if timee is None:
         return jsonify({"error": "invalid type or missing date/time"}), 400
     now = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+        return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:
@@ -408,6 +411,8 @@ def photo():
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+        return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:
@@ -477,6 +482,8 @@ def video():
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+        return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:
@@ -540,6 +547,8 @@ def carousel():
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
     now = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now,"Instagram", len(usernames)):
+        return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:

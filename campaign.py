@@ -6,6 +6,7 @@ import authnew as au
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import Drive.dep as dpp
+import limit as lmmm
 import Whatsapp.new as whatt
 import tempfile
 import Gmail.Read_mails as gc
@@ -136,6 +137,8 @@ def campaign():
     if not token:
         return jsonify({"error": "'token' is required"}), 400
     platform = data.get("platform")
+    if platform not in ("whatsapp","gmail"):
+        return jsonify({"error": "wrong platofrm"}) , 400
     saved_files = []
     failed_result = []
     media = []
@@ -175,12 +178,20 @@ def campaign():
         media = [ { "path": f["path"],"filename": f["filename"], "type": guess_media_type(f["mime_type"]),"mime_type": f["mime_type"],} for f in saved_files]
     campaign_name = data.get("campaign_name")
     body = data.get("body")
+    tokench = au.process(token=token)
     try:
         target = data.get("target") or "[]"
         names = data.get("name") or "[]"
     except json.JSONDecodeError:
         cleanup_local_files()
         return jsonify({"error": "'target' and 'name' must be valid JSON arrays"}), 400
+    now = datetime.now(timezone.utc)
+    if platform == "whatsapp":
+        if not lmmm.checkk(tokench["token"],user_id,now,"Whatsapp", len(target)):
+            return jsonify({"error": "limit has been reached"}) ,400
+    elif platform == "gmail":
+        if not lmmm.checkk(tokench["token"],user_id,now,"Gmail", len(target)):
+            return jsonify({"error": "limit has been reached"}) ,400
     if len(media) > MAX_MEDIA_ITEMS:
         cleanup_local_files()
         return jsonify({"error": f"too many media files to send (max {MAX_MEDIA_ITEMS})"}), 400
@@ -223,7 +234,6 @@ def campaign():
         if invalid:
             cleanup_local_files()
             return jsonify({"error": "invalid entries in 'target'", "invalid": invalid[:10]}), 400
-    tokench = au.process(token=token)
     if not tokench["status"]:
         cleanup_local_files()
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403

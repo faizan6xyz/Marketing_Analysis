@@ -69,7 +69,7 @@ def insert__story1(user_id,  scheduled_time, access_token,media_id,typee):    # 
 
 def get_containers_due(now):
     conn = get_conn()
-    cur = conn.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < ?", (now))
+    cur = conn.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < ?", (now,))
     rows = cur.fetchall()
     conn.close()
     return rows

@@ -1,4 +1,5 @@
 import os
+import limit as lmmm
 import json
 import secrets
 import tempfile
@@ -399,10 +400,12 @@ def upload():
     accounts = data.get("username")
     if not isinstance(accounts, list):
         return jsonify({"error": "accounts must be a list"}), 400
+    now = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],user_id,now,"Youtube", len(accounts)):
+        return jsonify({"error": "limit has been reached"}) ,400
     timee = parse_datetime(timee_raw)
     if timee is None:
         return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=72)
     if timee < lb or timee > up:

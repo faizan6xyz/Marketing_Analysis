@@ -4,6 +4,7 @@ import time
 import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
+import limit as lmmm
 from flask import Flask, request, redirect, jsonify
 from datetime import datetime, timezone, timedelta
 import Instagram.schedule_video as sccc
@@ -231,6 +232,9 @@ def _authenticate(data):
     if not tokench["status"]:
         return None,None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200)
     user_id = tokench["user_id"]
+    now = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],user_id,now,"Threads", len(usernames)):
+        return jsonify({"error": "limit has been reached"}) ,400
     access_tokens = []
     threads_user_ids = []
     for username in usernames :
