@@ -115,6 +115,12 @@ def create_payment():
         return jsonify({"error": "invalid_plan_id"}), 400
     plan = Plan[plan_id]
     amount_paise = plan["amount"]
+    ro = dbimp.select_rows(tokench["token"],"users",select="Paid",filters={"user_id":user_id})
+    if not ro :
+        return jsonify({"error":"user_not_exist"}) , 400
+    paid = ro[0]["Paid"]
+    if paid :
+        return jsonify({"error":"user paid Already"}) , 400
     currency = body.get("currency", plan["currency"])
     if currency != plan["currency"]:
         return jsonify({"error": "unsupported_currency"}), 400
@@ -263,12 +269,14 @@ def capture_payment(payment_id):
 def _set_order_status(order_id: str, status: str):
     if not order_id:
         return
-    rows = dbimp.select_rows_web(TABLE_NAME, select="Status", filters={"Order_id": order_id})
+    rows = dbimp.select_rows_web(TABLE_NAME, select="Status,id", filters={"Order_id": order_id})
     row = rows[0] if rows else None
+    user_id = row["id"]
     current = row["Status"] if row else None
     if current and _STATUS_RANK.get(status, 0) < _STATUS_RANK.get(current, 0):
         return
     dbimp.update_rows_web(TABLE_NAME, {"Status": status, "Updates_at": _now()}, {"Order_id": order_id})
+    dbimp.update_rows_web("users", {"Paid": True} , {"user_id": user_id})
 
 def _handle_payment_captured(event: dict):
     payment_entity = event.get("payload", {}).get("payment", {}).get("entity", {})

@@ -115,6 +115,7 @@ def save_order(token,user_id, paypal_order_id, cart_id, plan_key) -> bool:
     return _update_succeeded(resp)
 
 def mark_order_paid(user_id, paypal_order_id) -> bool:
+    dbimp.update_rows_web("users",{"Paid": True} , {"user_id" : user_id})
     resp = dbimp.update_rows_web(PAYPAL_TABLE, {"Paid": 1, "Status": "COMPLETED", "Updated_at": _now()}, {"id": user_id, "Paypal_order_id": paypal_order_id, "Paid": 0},)
     return _update_succeeded(resp)
 
@@ -293,6 +294,12 @@ def create_payment():
         return jsonify({"status": "failed" , "reason": tokench["reason"]})
     user_id = tokench['user_id']
     check = logincheck(tokench['token'],user_id)
+    ro = dbimp.select_rows(tokench["token"],"users",select="Paid",filters={"user_id":user_id})
+    if not ro :
+        return jsonify({"error":"user_not_exist"}) , 400
+    paid = ro[0]["Paid"]
+    if paid :
+        return jsonify({"error":"user paid Already"}) , 400
     if not check["logged_in"] :
         return jsonify({"status": False}), 401
     if not cart_id:
