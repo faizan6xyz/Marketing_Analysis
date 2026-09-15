@@ -185,7 +185,7 @@ def campaign():
     except json.JSONDecodeError:
         cleanup_local_files()
         return jsonify({"error": "'target' and 'name' must be valid JSON arrays"}), 400
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).isoformat()
     if not lmmm.checkk(tokench["token"],user_id,now,len(target)):
         return jsonify({"error": "limit has been reached"}) ,400
     if len(media) > MAX_MEDIA_ITEMS:

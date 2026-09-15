@@ -400,7 +400,7 @@ def upload():
     accounts = data.get("username")
     if not isinstance(accounts, list):
         return jsonify({"error": "accounts must be a list"}), 400
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).isoformat()
     if not lmmm.checkk(tokench["token"],user_id,now,len(accounts)):
         return jsonify({"error": "limit has been reached"}) ,400
     timee = parse_datetime(timee_raw)

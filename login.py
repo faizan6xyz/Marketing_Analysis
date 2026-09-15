@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import limit as lmmmm
 from datetime import datetime, timezone
 import database.UserDB as dbimp
 import authnew as au
@@ -143,6 +144,22 @@ def check_accounts():
         return jsonify({"status": False, "reason": "unable to check db"}), 500
     merged = { "instagram": all_values(data0, "Username"), "gmail": all_values(data1, "Email"), "drive": all_values(data2, "Email"),"whatsapp": all_values(data3, "Phone_no"), "threads": all_values(data4, "Username"), "youtube": all_values(data5, "channel_title"), "pinterest": all_values(data6, "Username"), "x": all_values(data7, "Username"), }
     return jsonify({"status": True, "data": merged}), 200
+
+
+@app.route("/limit", methods=["POST"])
+def limit():
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return jsonify({"status": False, "reason": tokench["reason"]}), 402
+    user_id = tokench["user_id"]
+    if not user_id:
+        return jsonify({"status": False, "reason": "Invalid user_id"}), 401
+    now = datetime.now(timezone.utc).isoformat()
+    current_count, row_id = lmmmm.get_or_create_window(user_id, now)
+    if current_count :
+        return jsonify({"status":True , "limit":current_count }) , 200 
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
