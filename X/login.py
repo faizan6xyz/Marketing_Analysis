@@ -68,13 +68,7 @@ def get_tweet_metrics(x_user_id, tweet_id, access_token):
     resp.raise_for_status()
     t = resp.json()["data"]
     pm = t.get("public_metrics", {})
-    user_url = f"https://api.x.com/2/users/{x_user_id}"
-    user_params = {"user.fields": "public_metrics"}
-    resp = requests.get(user_url, headers=headers, params=user_params, timeout=10)
-    resp.raise_for_status()
-    u = resp.json()["data"]
-    followers = u["public_metrics"]["followers_count"]
-    return f"{t.get('id')},{t.get('created_at')},{pm.get('impression_count')},{pm.get('like_count')},{pm.get('retweet_count')},{pm.get('reply_count')},{pm.get('bookmark_count')},{followers}"
+    return f"{t.get('id')},{t.get('created_at')},{pm.get('impression_count')},{pm.get('like_count')},{pm.get('retweet_count')},{pm.get('reply_count')},{pm.get('bookmark_count')}"
 
 def upload_video(access_token, file_bytes, mime_type="video/mp4"):
     total_bytes = len(file_bytes)

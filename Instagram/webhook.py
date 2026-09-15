@@ -48,19 +48,23 @@ def receive_webhook():
             media_id = value.get("media", {}).get("id")
         if not from_user_id or not media_id:
             continue  # nothing usable in this entry, move to next
-        access_rows = dbimp.select_rows_web(table, select="id,File", filters={"Account_id": ig_account_id})
+        access_rows = dbimp.select_rows_web(table, select="id,Access_token", filters={"Account_id": ig_account_id})
         access = access_rows[0] if access_rows else None
         if not access:
             return jsonify({"error": "no access record found for account"}), 404
         user_id = access["id"]
+        AKk = access["Access_token"]
         expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
         token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
         df = dp.read_csv_from_drive(token, "Instagram", "workflowcomment.json", as_json=True)
         dfid = df.get(media_id, {})
+        if not dfid :
+            return jsonify({"error": "from_user_id and reply are required"}), 400
         reply = dfid.get("reply")
         if not reply:
             return jsonify({"error": "from_user_id and reply are required"}), 400
-        result = uploadd.send_message(from_user_id, reply, token)  # <- fixed: use token, not access_token list
+        access_token = uploadd.refresh_token11( ig_account_id, AKk)
+        result = uploadd.send_message(from_user_id, reply, access_token)  # <- fixed: use token, not access_token list
         if not result["success"]:
             return jsonify(result), 400
         return jsonify(result), 200

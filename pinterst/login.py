@@ -126,7 +126,7 @@ def get_pinterest_pin_analytics_csv(username_id,pin_id, access_token):
 def _authenticate(data):
     token = data.get("token")
     usernames = data.get("username")
-    if not isinstance(usernames, list):
+    if not isinstance(usernames, list): 
         return None , (jsonify({"error": "username is not the list"}),400) , None , None 
     tokench = au.process(token=token)
     access_tokens = []

@@ -351,6 +351,6 @@ def scccc(user_id,access_token,media_id,typee):
         sccc.insert__story(user_id, timesss, access_token,media_id,i,typee)
 
 def xcccc(user_id,access_token,media_id,typee):
-    for i in range(7): 
+    for i in range(10): 
         timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
         sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
