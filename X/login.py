@@ -74,8 +74,7 @@ def get_tweet_metrics(x_user_id, tweet_id, access_token):
     resp.raise_for_status()
     u = resp.json()["data"]
     followers = u["public_metrics"]["followers_count"]
-    profile_clicks = None  
-    return f"{t.get('id')},{t.get('created_at')},{pm.get('impression_count')},{pm.get('like_count')},{pm.get('retweet_count')},{pm.get('reply_count')},{pm.get('bookmark_count')},{profile_clicks},{followers}"
+    return f"{t.get('id')},{t.get('created_at')},{pm.get('impression_count')},{pm.get('like_count')},{pm.get('retweet_count')},{pm.get('reply_count')},{pm.get('bookmark_count')},{followers}"
 
 def upload_video(access_token, file_bytes, mime_type="video/mp4"):
     total_bytes = len(file_bytes)
@@ -147,7 +146,7 @@ def _post_tweet(access_token, text, media_ids=None):
         return None
     return tweet_id
 
-def post_later(tpyee, Account_id, text, file_ids=None):
+def post_later(tpyee, Account_id, text, text2 ,file_ids=None):
     Account_ids = json.loads(Account_id[0])
     rows = dbimp.select_rows_web("X", select="id", filters={"Account_id": Account_ids})
     if not rows:
@@ -169,8 +168,12 @@ def post_later(tpyee, Account_id, text, file_ids=None):
                     with open(tmp_path, "rb") as file:
                         if tpyee == "photo_later":
                             media_id = upload_image(access_token, file.read())
+                            if text2 == "true" :
+                                xcccc(acc_id, access_token, tweet_id, "photo_tweet")
                         else: 
                             media_id = upload_video(access_token, file.read())
+                            if text2 == "true" :
+                                xcccc(acc_id, access_token, tweet_id, "photo_tweet")
                     media_ids_by_account[acc_id].append(media_id)
             finally:
                 os.remove(tmp_path)
@@ -182,6 +185,8 @@ def post_later(tpyee, Account_id, text, file_ids=None):
         for acc_id in Account_ids:
             access_token = refresh_x_token11(acc_id)
             tweet_id = _post_tweet(access_token, text)
+            if text2 == "true" :
+                xcccc(acc_id, access_token, tweet_id, "tweet")
             results[acc_id] = (tweet_id, None)
     else:
         return False
@@ -229,11 +234,19 @@ def _authenticate(data,tokench):
     text = data.get("text", "")
     access_tokens = []
     account_ids = []
+    analysis = data.get("anal",False)
+    anal = str(analysis).strip().lower() == "true"
     if not isinstance(usernames, list):
             return None , (jsonify({"error": "username is not the list"}),400) , None , None 
     now = datetime.now(timezone.utc).isoformat()
-    if not lmmm.checkk(tokench["token"],user_id,now, len(usernames)):
-        return jsonify({"error": "limit has been reached"}) ,400
+    if not anal :
+        counntttt = len(username) * 2 
+        if not lmmm.checkk(tokench["token"],user_id,now, counntttt):
+            return jsonify({"error": "limit has been reached"}) ,400
+    else :
+        counntttt = len(username) * 2 + len(username) * 14
+        if not lmmm.checkk(tokench["token"],user_id,now, counntttt):
+            return jsonify({"error": "limit has been reached"}) ,400
     if not tokench["status"]:
         return None, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 200) , None
     user_id = tokench["user_id"]
@@ -365,6 +378,8 @@ def post_to_x_text():
     timee_raw = data.get("time")
     timee = parse_datetime(timee_raw)
     publish_now = str(publish).strip().lower() == "true"
+    analysis = data.get("anal",False)
+    anal = str(analysis).strip().lower() == "true"
     now = datetime.now(timezone.utc)
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=72)
@@ -374,12 +389,16 @@ def post_to_x_text():
         return err
     if not publish_now :
         list_account_ids = json.dumps(account_id)
-        sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="tweet_later", text1=text, text2="" , text3="", media_id="")
+        if anal :
+            sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="tweet_later", text1=text, text2="true" , text3="", media_id="")
+        elif not anal :
+            sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="tweet_later", text1=text, text2="" , text3="", media_id="")
     for acccount ,acesss in zip(account_id,access_token) :
         tweet_id = _post_tweet(acesss, text)
         if not tweet_id:
             continue
-        xcccc(acccount, acesss, tweet_id, "tweet")
+        if anal :
+            xcccc(acccount, acesss, tweet_id, "tweet")
     return jsonify({"success": True, "post_id": tweet_id}), 200
 
 @app.route("/post/x/photo", methods=["POST"])
@@ -401,7 +420,9 @@ def post_to_x_photo():
     publish = data.get("publish")
     timee_raw = data.get("time")
     timee = parse_datetime(timee_raw)
+    analysis = data.get("anal",False)
     publish_now = str(publish).strip().lower() == "true"
+    anal = str(analysis).strip().lower() == "true"
     if not publish_now:
         if timee is None:
             return jsonify({"error": "invalid time format"}), 400
@@ -442,7 +463,10 @@ def post_to_x_photo():
     if not publish_now:
         list_account_ids = json.dumps(account_id)
         drvie_ids = json.dumps(drvie_id)
-        sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="photo_tweet_later", text1=text, text2="", text3="", media_id=drvie_ids, )
+        if anal :
+            sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="photo_tweet_later", text1=text, text2="true", text3="", media_id=drvie_ids, )
+        elif not anal :
+            sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="photo_tweet_later", text1=text, text2="", text3="", media_id=drvie_ids, )
         return jsonify({"success": True}), 200
     results = []
     for acccount, acesss in zip(account_id, access_token):
@@ -450,7 +474,8 @@ def post_to_x_photo():
         if post_err:
             results.append({"account": acccount, "success": False, "error": post_err})
             continue
-        xcccc(acccount, acesss, tweet_id, "photo_tweet")
+        if anal :
+            xcccc(acccount, acesss, tweet_id, "photo_tweet")
         results.append({"account": acccount, "success": True, "post_id": tweet_id})
     return jsonify({"success": True, "results": results, "media_ids": media_ids}), 200
 
@@ -474,6 +499,8 @@ def post_to_x_video():
     timee_raw = data.get("time")
     timee = parse_datetime(timee_raw)
     publish_now = str(publish).strip().lower() == "true"
+    analysis = data.get("anal",False)
+    anal = str(analysis).strip().lower() == "true"
     if not publish_now:
         if timee is None:
             return jsonify({"error": "invalid time format"}), 400
@@ -497,6 +524,9 @@ def post_to_x_video():
             if drive_err:
                 return jsonify({"error": "failed to save video for scheduling"}), 400
             list_account_ids = json.dumps(account_id)
+        if anal :
+            sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="video_later", text1=text, text2="true", text3="", media_id=drive_file_id, )
+        elif not anal :
             sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="video_later", text1=text, text2="", text3="", media_id=drive_file_id, )
             return jsonify({"success": True}), 200
         with open(tmp_path, "rb") as file:
@@ -513,7 +543,8 @@ def post_to_x_video():
         if post_err:
             results.append({"account": acccount, "success": False, "error": post_err})
             continue
-        xcccc(acccount, acesss, tweet_id, "video_tweet")
+        if anal :
+            xcccc(acccount, acesss, tweet_id, "video_tweet")
         results.append({"account": acccount, "success": True, "post_id": tweet_id})
     return jsonify({"success": True, "results": results, "media_ids": [media_id]}), 200
 
