@@ -71,6 +71,38 @@ def refresh_threads_tokenww(expire, access, thread_user_id):
     else:
         return access
 
+def get_thread_metrics_csv(user_id: str, media_id: str, access_token: str) -> str:
+    expire  = datetime.now(timezone.utc)
+    access_token = refresh_threads_tokenww(expire,access_token,user_id)
+    base_url = "https://graph.threads.net/v1.0"
+    media_metrics = ["views", "likes", "replies", "reposts", "shares"]
+    media_resp = requests.get( f"{base_url}/{media_id}/insights", params={ "metric": ",".join(media_metrics), "access_token": access_token, }, )
+    media_resp.raise_for_status()
+    media_data = media_resp.json().get("data", [])
+    metrics = {m: 0 for m in media_metrics}
+    for entry in media_data:
+        name = entry.get("name")
+        values = entry.get("values", [])
+        if name in metrics and values:
+            metrics[name] = values[0].get("value", 0)
+    followers_resp = requests.get( f"{base_url}/{user_id}/threads_insights", params={ "metric": "followers_count", "access_token": access_token, }, )
+    followers_resp.raise_for_status()
+    followers_data = followers_resp.json().get("data", [])
+    followers_count = 0
+    for entry in followers_data:
+        if entry.get("name") == "followers_count":
+            values = entry.get("values", [])
+            if values:
+                followers_count = values[0].get("value", 0)
+    v, l, r, rp, s = (metrics["views"], metrics["likes"], metrics["replies"],
+                       metrics["reposts"], metrics["shares"])
+    return f"{media_id},{v},{l},{r},{rp},{s},{followers_count}"
+
+def xcccc(user_id,access_token,media_id,typee):
+    for i in range(7): 
+        timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
+        sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
+
 def get_all_threads_media(access_token, account_id, page_size=100):
     media = []
     url = f"https://graph.threads.net/v1.0/{account_id}/threads"
@@ -386,6 +418,7 @@ def post_threads_text():
             thread_id = _publish_threads_post(publish_now,timee,access_token, threads_user_id, "TEXT", text=text)
             if thread_id :
                 thread_ids.append(thread_id)
+            xcccc(threads_user_id,access_token,thread_id,"text1")
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -416,6 +449,7 @@ def post_threads_image():
             thread_id = _publish_threads_post(publish_now,timee, access_token, threads_user_id, "IMAGE", text=text, image_url=image_url)
             if thread_id :
                 thread_ids.append(thread_id)
+            xcccc(threads_user_id,access_token,thread_id,"photo1")
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -446,6 +480,7 @@ def post_threads_video():
             thread_id = _publish_threads_post( publish_now,timee,access_token, threads_user_id, "VIDEO", text=text, video_url=video_url )
             if thread_id :
                 thread_ids.append(thread_id)
+            xcccc(threads_user_id,access_token,thread_id,"video1")
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -483,6 +518,7 @@ def post_threads_carousel():
                 thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
                 if not thread_id:
                     raise RuntimeError("failed to publish carousel thread")
+                xcccc(threads_user_id,access_token,thread_id,"carousel1")
             if not publish:
                 sccc.insert_time(threads_user_id,creation_id,time,access_token)
                 return creation_id

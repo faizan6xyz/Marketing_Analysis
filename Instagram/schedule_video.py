@@ -119,6 +119,22 @@ if __name__ == "__main__":
                 content = aaaa.get_media_analytics(username_id,media_id,access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 delete_by_id(row_id)
+            if typess == "text1" :
+                content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "photo1" :
+                content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "video1" :
+                content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
+            if typess == "carousel1" :
+                content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
+                dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
+                delete_by_id(row_id)
             if typess == "shorts": 
                 content = you.shorts_schedule(username_id, media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
