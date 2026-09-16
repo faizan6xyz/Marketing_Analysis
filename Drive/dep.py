@@ -50,7 +50,7 @@ campaigns_content8 = "Pin_ID,Published_At,Impressions,Saves,Clicks,Outbound_Clic
 
 filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": "{}",},
           "Whatsapp": {"campains.txt": campaigns_content1,"workflowmessage.json": "{}",},
-          "Instagram": {"workflowmessage.json": "{}","workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
+          "Instagram": {"workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
           "Threads" : {"postanalysis.txt": campaigns_content2,"workflowcomment.json": "{}"},
           "Youtube" : { "postanalysis.txt":campaigns_content6 },
           "x": {"postanalysis.txt":campaigns_content7 } ,

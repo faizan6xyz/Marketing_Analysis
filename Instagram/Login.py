@@ -387,6 +387,8 @@ def photo():
     caption = data.get("caption", "")
     timee_raw = data.get("time") or {}
     token = data.get("token")
+    comment = data.get("comment") 
+    message = data.get("message") 
     usernames = data.get("username")
     if not isinstance(usernames, list):
         usernames = [usernames] if usernames else []
@@ -415,7 +417,6 @@ def photo():
     now1 = datetime.now(timezone.utc).isoformat()
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-        return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:
@@ -423,6 +424,7 @@ def photo():
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
+    daat = {}
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
@@ -435,10 +437,13 @@ def photo():
             continue
         try:
             id_post = uploadd.post_photo(access_token=access_token,ig_user_id=account_id,image_url=media_url,caption=caption,media_size=media_size,publish=publish_now,timmmm=timee,)
+            if publish_now  and comment and message:
+                daat[id_post] = {"message": message, "comment": comment}
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post photo: {e}"})
             continue
         results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
+    dpp.append_to_file(user_id=tokench["user_id"], platform="Instagram", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
@@ -453,6 +458,8 @@ def video():
     duration = data.get("duration")
     timee_raw = data.get("time") or {}
     token = data.get("token")
+    comment = data.get("comment") 
+    message = data.get("message") 
     usernames = data.get("username")
     if not isinstance(usernames, list):
         usernames = [usernames] if usernames else []
@@ -488,7 +495,6 @@ def video():
     now1 = datetime.now(timezone.utc).isoformat()
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-        return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:
@@ -496,6 +502,7 @@ def video():
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
+    daat = {}
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
@@ -508,10 +515,13 @@ def video():
             continue
         try:
             id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,)
+            if publish_now  and comment and message:
+                daat[id_post] = {"message": message, "comment": comment}
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post video: {e}"})
             continue
         results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
+    dpp.append_to_file(user_id=tokench["user_id"], platform="Instagram", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
@@ -525,6 +535,8 @@ def carousel():
     is_video = data.get("is_video", [])
     timee_raw = data.get("time") or {}
     token = data.get("token")
+    comment = data.get("comment") 
+    message = data.get("message") 
     usernames = data.get("username")
     if not isinstance(usernames, list):
         usernames = [usernames] if usernames else []
@@ -555,7 +567,6 @@ def carousel():
     now1 = datetime.now(timezone.utc).isoformat()
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-        return jsonify({"error": "limit has been reached"}) ,400
     lb = now + timedelta(seconds=180)
     up = now + timedelta(hours=24)
     if timee < lb or timee > up:
@@ -563,6 +574,7 @@ def carousel():
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
+    daat = {}
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
@@ -575,10 +587,13 @@ def carousel():
             continue
         try:
             id_post = uploadd.post_carousel(access_token=access_token,ig_user_id=account_id,is_video=is_videoo,media_size=media_sizee,media_duration=media_durationn,media_urls=media_urls,publish=publish_now,caption=caption,timmmm=timee, )
+            if publish_now  and comment and message:
+                daat[id_post] = {"message": message, "comment": comment}
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post carousel: {e}"})
             continue
         results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
+    dpp.append_to_file(user_id=tokench["user_id"], platform="Instagram", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 

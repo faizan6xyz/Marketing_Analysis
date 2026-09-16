@@ -1,6 +1,7 @@
 import database.UserDB as dbimp
 import os
 import time
+import json
 import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
@@ -8,6 +9,7 @@ import limit as lmmm
 from flask import Flask, request, redirect, jsonify
 from datetime import datetime, timezone, timedelta
 import Instagram.schedule_video as sccc
+import Drive.dep as dpp
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import authnew as au
@@ -399,6 +401,10 @@ def posts_with_metrics():
 def post_threads_text():
     data = request.get_json(silent=True) or {}
     publish = data.get("publish")
+    comment = data.get("comment") 
+    message = data.get("message") 
+    token = data.get("token")
+    tokench = au.process(token=token)
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
     timee = parse_datetime(timee_raw)
@@ -414,11 +420,16 @@ def post_threads_text():
         return err
     try:
         thread_ids = []
-        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
-            thread_id = _publish_threads_post(publish_now,timee,access_token, threads_user_id, "TEXT", text=text)
-            if thread_id :
+        daat = {}
+        for access_token, threads_user_id in zip(access_tokens, threads_user_ids):
+            thread_id = _publish_threads_post(publish_now, timee, access_token, threads_user_id, "TEXT", text=text)
+            if thread_id:
                 thread_ids.append(thread_id)
-            xcccc(threads_user_id,access_token,thread_id,"text1")
+                xcccc(threads_user_id, access_token, thread_id, "text1")
+                if comment and message:
+                    daat[thread_id] = {"message": message, "comment": comment}
+        if daat:
+            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -430,6 +441,10 @@ def post_threads_image():
     if err:
         return err
     image_url = data.get("image_url")
+    comment = data.get("comment") 
+    message = data.get("message") 
+    token = data.get("token")
+    tokench = au.process(token=token)
     publish = data.get("publish")
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
@@ -445,11 +460,16 @@ def post_threads_image():
         return jsonify({"error": "image_url is required"}), 400
     try:
         thread_ids = []
+        daat = {}
         for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
             thread_id = _publish_threads_post(publish_now,timee, access_token, threads_user_id, "IMAGE", text=text, image_url=image_url)
             if thread_id :
                 thread_ids.append(thread_id)
-            xcccc(threads_user_id,access_token,thread_id,"photo1")
+                xcccc(threads_user_id,access_token,thread_id,"photo1")
+                if comment and message:
+                    daat[thread_id] = {"message": message, "comment": comment}
+        if daat:
+            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -462,6 +482,10 @@ def post_threads_video():
         return err
     video_url = data.get("video_url")
     publish = data.get("publish")
+    comment = data.get("comment") 
+    message = data.get("message") 
+    token = data.get("token")
+    tokench = au.process(token=token)
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
     timee = parse_datetime(timee_raw)
@@ -476,11 +500,16 @@ def post_threads_video():
         return jsonify({"error": "video_url is required"}), 400
     try:
         thread_ids = []
+        daat = {}
         for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
             thread_id = _publish_threads_post( publish_now,timee,access_token, threads_user_id, "VIDEO", text=text, video_url=video_url )
             if thread_id :
                 thread_ids.append(thread_id)
-            xcccc(threads_user_id,access_token,thread_id,"video1")
+                xcccc(threads_user_id,access_token,thread_id,"video1")
+                if comment and message:
+                    daat[thread_id] = {"message": message, "comment": comment}
+        if daat:
+            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -492,6 +521,10 @@ def post_threads_carousel():
     if err:
         return err
     items = data.get("items", [])
+    comment = data.get("comment") 
+    message = data.get("message") 
+    token = data.get("token")
+    tokench = au.process(token=token)
     publish = data.get("publish")
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
@@ -507,6 +540,7 @@ def post_threads_carousel():
         return jsonify({"error": "items is required for carousel posts"}), 400
     try:
         thread_ids = []
+        daat = {}
         for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
             creation_id = create_threads_carousel(access_token, threads_user_id, items, caption=text)
             if not creation_id:
@@ -524,6 +558,10 @@ def post_threads_carousel():
                 return creation_id
             if thread_id :
                 thread_ids.append(thread_id)
+                if comment and message:
+                    daat[thread_id] = {"message": message, "comment": comment}
+        if daat:
+            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
