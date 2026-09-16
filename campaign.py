@@ -124,6 +124,7 @@ def campaign():
     data = request.get_json(silent=True) or {}
     token = data.get("token")
     publish = data.get("publish")
+    reply = data.get("reply")
     timee_raw = data.get("time")
     timee = parse_datetime(timee_raw)
     publish_now = str(publish).strip().lower() == "true"
@@ -297,6 +298,11 @@ def campaign():
             except Exception as e:
                 logger.exception("campaign send failed for %s", recipient)
                 results.append({"to": recipient, "status": "failed", "error": str(e)})
+        label_id = gc.get_or_create_label(gmail_service, campaign_name)
+        query_string = 'from:(' + ' OR '.join(target) + ')'
+        criteria = {'query': query_string}
+        action = { 'addLabelIds': [label_id], 'removeLabelIds': []}
+        result = gc.create_filter(gmail_service, criteria, action)
     elif platform == "whatsapp":
         number = data.get("number")
         if not publish_now:

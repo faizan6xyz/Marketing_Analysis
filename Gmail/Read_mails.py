@@ -354,6 +354,15 @@ def create_filter(service, criteria, action):
     body = {'criteria': criteria, 'action': action}
     return service.users().settings().filters().create(userId='me', body=body).execute()
 
+def get_or_create_label(service, label_name):
+    labels = service.users().labels().list(userId='me').execute().get('labels', [])
+    for label in labels:
+        if label['name'] == label_name:
+            return label['id']
+    label_body = {'name': label_name,'labelListVisibility': 'labelShow', 'messageListVisibility': 'show' }
+    new_label = service.users().labels().create(userId='me', body=label_body).execute()
+    return new_label['id']
+
 def list_filters(service):
     return service.users().settings().filters().list(userId='me').execute().get('filter', [])
 
