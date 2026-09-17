@@ -74,7 +74,7 @@ def receive_webhook():
         user_id = access["id"]
         Token_expire = datetime.fromisoformat(access["Token_expire"])
         expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-        token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
+        token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)    # dont need to create either retrieve or jsut use the web one
         df = dp.read_csv_from_drive(token, "Threads", "workflowcomment.json", as_json=True)
         dfid = df.get(media_id, {})
         reply = dfid.get("reply")

@@ -55,7 +55,7 @@ def receive_webhook():
         user_id = access["id"]
         AKk = access["Access_token"]
         expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-        token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
+        token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)  # dont genrate the token here use the pre made or use the web one to reads
         df = dp.read_csv_from_drive(token, "Instagram", "workflowcomment.json", as_json=True)
         dfid = df.get(media_id, {})
         if not dfid :
@@ -83,11 +83,6 @@ def handle_comment_event(account_id, value):
     from_username = value.get("from", {}).get("username")
     media_id = value.get("media", {}).get("id")
     return {"account_id": account_id, "comment_id": comment_id, "from_user_id": from_user_id, "from_username": from_username,  "media_id": media_id,}
-
-def subscribe_page_to_webhooks(page_id, page_access_token): # run it once for the subscription
-    url = f"https://graph.facebook.com/v25.0/{page_id}/subscribed_apps"   # webhook require facebook api and link the facebook account with it 
-    resp = requests.post( url,params={"subscribed_fields": "comments", "access_token": page_access_token},)
-    return resp.json()
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
