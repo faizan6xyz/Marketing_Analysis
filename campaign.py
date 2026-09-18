@@ -109,7 +109,7 @@ def upload_lategmail(Account_id , text1, text2, text3, file_id):
         tmp_path , mimetype,name = dpp.download_drive_file_to_temp(service,fileeee)
         attachment_paths.append(tmp_path)
         attachment_labels.append(name)
-    gmail_service = gc.get_service_web(user_id)
+    gmail_service = gc.get_service_web(user_id,Account_id)
     for recipient, recipient_name in zip(target, names):
         content = f"{recipient},{campaign_name},{now},,"
         if attachment_labels and attachment_paths :

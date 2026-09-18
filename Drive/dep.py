@@ -567,33 +567,6 @@ def list_files():
             break
     return jsonify({ "count": len(all_files), "files": all_files })
 
-def read_csv_from_drive(file_id):
-    body = request.get_json(silent=True) or {}
-    token= body.get("token")
-    tokench = au.process(token=token)
-    if not file_id :
-        return jsonify({"error" : "File_id is required "}) , 500
-    service, err = authenticate_and_get_service(tokench["user_id"])
-    if err:
-        return err
-    try:
-        drive_request = service.files().get_media(fileId=file_id)
-        buffer = io.BytesIO()
-        downloader = MediaIoBaseDownload(buffer, drive_request)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-        buffer.seek(0)
-    except Exception as e:
-        return jsonify({ "error": "Failed to read CSV from Google Drive", "details": str(e)}), 500
-    try :
-        df = pd.read_csv(buffer)
-    except pd.errors.EmptyDataError:
-        return jsonify({ "error": "The CSV file is empty" }), 400
-    except pd.errors.ParserError:
-        return jsonify({"error": "The file is not a valid CSV" }), 400
-    return jsonify({"CSV": df.to_dict(orient="records")}), 200  
-
 def append_csv_to_drive(file_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
