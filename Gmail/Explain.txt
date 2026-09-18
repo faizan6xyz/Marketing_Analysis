@@ -47,4 +47,26 @@ Walking through it step by step
     
     4. You store tokens per user, not one global token. This is the part that changes from your current single-user script. Right now you have one token.pickle because there's one user (you). For multi-user, you need a lookup: given a user_id, fetch that user's token from a database, use it to build the Gmail service for that request, and never mix rows.
     
-    5. Calling the API becomes "which user am I acting as right now." Every API call is scoped to whichever token you loaded — same credentials.json app identity in the background, but a completely separate Gmail account depending on which user's row you pulled.
+    5. Calling the API becomes "which user am I acting as right now." Every API call is scoped to whichever token you loaded — same credentials.json app identity in the background, but a completely separate Gmail account depending on which user's row you pulled.\
+
+
+
+
+
+webhook :
+
+1. Set up Google Cloud Pub/Sub
+    In the same GCP project as your Gmail API credentials:
+
+    gcloud pubsub topics create gmail-notifications
+    gcloud pubsub subscriptions create gmail-notifications-sub \
+    --topic=gmail-notifications \
+    --push-endpoint=https://yourdomain.com/webhook/gmail \
+    --push-auth-service-account=your-service-account@project.iam.gserviceaccount.com
+
+2. Grant Gmail permission to publish to your topic
+    Gmail's own service account needs publish rights on the topic:
+
+    gcloud pubsub topics add-iam-policy-binding gmail-notifications \
+    --member="serviceAccount:gmail-api-push@system.gserviceaccount.com" \
+    --role="roles/pubsub.publisher"

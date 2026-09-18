@@ -91,8 +91,8 @@ def save_tokens_web(user_id, creds, google_account_id,email_addr=None):
     else:
         dbimp.insert_rows_web(TABLE_NAME, {"id": user_id, **payload})
 
-def get_service_web(user_id):
-    rows = dbimp.select_rows_web(TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"id": user_id})
+def get_service_web(user_id,Account_id):
+    rows = dbimp.select_rows_web(TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"id": user_id,"Account_id":Account_id})
     row = rows[0] if rows else None
     if not row or not row.get("Access_token"):
         return None
