@@ -1,9 +1,7 @@
-import requests
 import os
 import hmac
 import hashlib
 from datetime import datetime, timezone, timedelta
-import requests
 import database.UserDB as dbimp
 import upload as uploadd
 import authnew as au

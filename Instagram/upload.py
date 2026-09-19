@@ -1,10 +1,9 @@
 import re
 import time
-import Instagram.schedule_video as sccc
 import logging
 import requests
+import Instagram.schedule_video as sccc
 import database.UserDB as dbimp
-import authnew as au
 from datetime import datetime, timezone,timedelta
 from urllib.parse import urlparse
 logging.basicConfig(level=logging.INFO)
