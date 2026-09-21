@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify , make_response
 from flask_cors import CORS
 import limit as lmmmm
 from datetime import datetime, timezone
@@ -68,8 +68,14 @@ def signup():
         insert = None
         insert_error = str(e)
     if not insert:
-        return jsonify({"Token": token, "Statusdb": False, "detail": insert_error}), 200
-    return jsonify({"Token": token, "Statusdb": True, "next": "/details"}), 200
+        body = {"Statusdb": False, "detail": "Could not save details"}
+        status = 202
+    else:
+        body = {"Statusdb": True, "next": "/details"}
+        status = 200
+    resp = make_response(jsonify(body), status)
+    resp.set_cookie( 'authToken', token,httponly=True , secure=True, samesite='Strict', max_age=60 * 60 * 2, path='/', )
+    return resp
 
 @app.route("/details", methods=["POST"])
 def details():
