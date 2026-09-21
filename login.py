@@ -43,7 +43,11 @@ def login():
         return jsonify({"error": "failed to fetch user record", "detail": str(e)}), 500
     if not rows:
         return jsonify({"error": "user record not found"}), 500
-    return jsonify({"user_id": res.user.id, "Token": rows[0]["Token"]}), 200
+    body = jsonify({"user_id": res.user.id, "Token": rows[0]["Token"]})
+    status = 200
+    resp = make_response(jsonify(body), status)
+    resp.set_cookie( 'authToken', token,httponly=True , secure=True, samesite='Strict', max_age=60 * 60 * 2, path='/', )
+    return resp
 
 @app.route("/signup", methods=["POST"])
 def signup():
