@@ -161,6 +161,10 @@ def limit():
     if current_count :
         return jsonify({"status":True , "limit":current_count }) , 200 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}, 200
+
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
     # user_id = '451d8b58-4575-4b7b-9158-cb39dc3aed1e'
