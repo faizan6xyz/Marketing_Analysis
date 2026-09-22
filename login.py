@@ -38,6 +38,22 @@ def logi():
 @app.route("/login", methods=["POST"])
 def login():
     body = request.get_json(silent=True) or {}
+    # oauthh = body.get("oauth")
+    # if oauthh.strip().lower() == "google":
+    #     try:
+    #         res = supabase.auth.sign_in_with_oauth({ "provider": "google", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
+    #         if res.user is None:
+    #             return jsonify({"error": "invalid credentials"}), 401
+    #     except Exception as e:
+    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
+    # oauthh = body.get("oauth")
+    # if oauthh.strip().lower() == "facebook":
+    #     try:
+    #         res = supabase.auth.sign_in_with_oauth({ "provider": "facebook", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
+    #         if res.user is None:
+    #             return jsonify({"error": "invalid credentials"}), 401
+    #     except Exception as e:
+    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
     mail = body.get("email")
     passw = body.get("password")
     if not mail or not passw:
@@ -65,6 +81,22 @@ def login():
 @app.route("/signup", methods=["POST"])
 def signup():
     body = request.get_json(silent=True) or {}
+    # oauthh = body.get("oauth")
+    # if oauthh.strip().lower() == "google":
+    #     try:
+    #         res = supabase.auth.sign_in_with_oauth({ "provider": "google", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
+    #         if res.user is None:
+    #             return jsonify({"error": "invalid credentials"}), 401
+    #     except Exception as e:
+    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
+    # oauthh = body.get("oauth")
+    # if oauthh.strip().lower() == "facebook":
+    #     try:
+    #         res = supabase.auth.sign_in_with_oauth({ "provider": "facebook", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
+    #         if res.user is None:
+    #             return jsonify({"error": "invalid credentials"}), 401
+    #     except Exception as e:
+    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
     mail = body.get("email")
     passw = body.get("password")
     if not mail or not passw:
