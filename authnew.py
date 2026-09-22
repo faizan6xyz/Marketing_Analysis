@@ -45,11 +45,15 @@ def process(token):
     expected_sign = hmac.new(SECRET_KEY, f"{user_id}.{time}".encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected_sign, sign):
         return {"status" : False, "reason" : "invalid signature"}
-    if datetime.now(timezone.utc) > datetime.fromisoformat(time) and datetime.now(timezone.utc) - datetime.fromisoformat(time) < timedelta(hours=2): 
+    now = datetime.now(timezone.utc)
+    token_time = datetime.fromisoformat(time)
+    if now > token_time and now - token_time < timedelta(hours=2):
         time = datetime.now(timezone.utc) + timedelta(minutes=20)
         token_new = jsonspoof(user_id=user_id , timestamp=time)
         dbimp.update_token_by_token(token=token,new_token=token_new)
         return {"status" : True , "token" : token_new , "user_id":user_id }
+    if now > token_time and now - token_time >= timedelta(hours=2):
+        return {"status" : False, "reason" : "token expired"}
     return {"status" : True , "token" : token , "user_id":user_id }
 
 def paidcheck(token , user_id):  # this will be used in the analytics and locks the premium features 

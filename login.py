@@ -22,6 +22,19 @@ def all_values(rows, key):
         return []
     return [row.get(key) for row in rows]
 
+@app.route("/refresh", methods=["POST"])
+def logi():
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return jsonify({"success": False, "message": "token_invlaid"}), 400
+    new_token = tokench["token"]
+    status = 200
+    resp = make_response(jsonify({"Token": new_token}), status)
+    resp.set_cookie( 'authToken', new_token,httponly=True , secure=True, samesite='Strict', max_age=60 * 60 * 2, path='/', )
+    return resp
+
 @app.route("/login", methods=["POST"])
 def login():
     body = request.get_json(silent=True) or {}
@@ -177,7 +190,3 @@ def health():
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
-    # user_id = '451d8b58-4575-4b7b-9158-cb39dc3aed1e'
-    # token = "NDUxZDhiNTgtNDU3NS00YjdiLTkxNTgtY2IzOWRjM2FlZDFl.MjAyNi0wOC0zMCAxMTo1ODowOS41ODg0NTYrMDA6MDA=.NGFiYTVmNGEyYjAxZjM4ZDBmM2M2OTVhODcyMTg2OTQwOTg2OGU0ZmRlNjY2M2ZiNWJhODMzZThiYmJmYjc0ZQ=="
-    # data0 = dbimp.select_rows(token, "Instagram", select="Username", filters={"id": user_id})
-    # print(data0)

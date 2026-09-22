@@ -329,6 +329,8 @@ def story():
     if media_size is None or not token:
         return jsonify({"error": "url and media size is required"}), 400
     tokench = au.process(token)
+    if not tokench["status"]:
+        return jsonify({"success": False, "message": "token_invlaid"}), 400
     media_size = _coerce_int(media_size)
     duration = _coerce_int(duration)
     if media_size is None or duration is None:
@@ -397,6 +399,8 @@ def photo():
     if media_size is None:
         return jsonify({"error": "url and media size is required"}), 400
     tokench = au.process(token)
+    if not tokench["status"]:
+        return jsonify({"success": False, "message": "token_invlaid"}), 400
     media_size = _coerce_int(media_size)
     service = dpp.authenticate_and_get_service(token)
     data , error , code  = get_files_and_upload_to_drive(service=service,type="photo")
@@ -468,6 +472,8 @@ def video():
     if media_size is None:
         return jsonify({"error": "url and media size is required"}), 400
     tokench = au.process(token)
+    if not tokench["status"]:
+        return jsonify({"success": False, "message": "token_invlaid"}), 400
     media_size = _coerce_int(media_size)
     as_reeel = True
     duration = _coerce_int(duration)
@@ -547,6 +553,8 @@ def carousel():
     if len(media_size) == len(media_duration):
         return jsonify({"success": False, "message": "media_urls, is_video, media_size, and media_duration must all be the same length"}), 400
     tokench = au.process(token)
+    if not tokench["status"]:
+        return jsonify({"success": False, "message": "token_invlaid"}), 400
     is_videoo = [str(p).strip().lower() == "true" for p in is_video]
     media_sizee = [_coerce_int(p) for p in media_size]
     if any(v is None for v in media_sizee):
