@@ -58,6 +58,7 @@ def get_conn():
 def init_db():
     with closing(get_conn()) as conn:
         with conn:
+            # save the password in the hashed format and then check the email exist and heashed password is same as db for the login 
             conn.execute(""" CREATE TABLE IF NOT EXISTS users ( id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,token TEXT UNIQUE) """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_users_token ON users(token)")
 
