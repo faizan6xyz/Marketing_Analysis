@@ -50,7 +50,7 @@ def process(token):
     if now > token_time and now - token_time < timedelta(hours=2):
         time = datetime.now(timezone.utc) + timedelta(minutes=20)
         token_new = jsonspoof(user_id=user_id , timestamp=time)
-        dbimp.update_token_by_token(token=token,new_token=token_new)
+        # dbimp.update_token_by_token(token=token,new_token=token_new)   needs to be remvoed cause we deleted the token part from the sqllite db , now we are using the user_id
         return {"status" : True , "token" : token_new , "user_id":user_id }
     if now > token_time and now - token_time >= timedelta(hours=2):
         return {"status" : False, "reason" : "token expired"}
