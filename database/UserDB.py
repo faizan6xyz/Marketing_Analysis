@@ -1,14 +1,16 @@
-from datetime import datetime, timezone
-from supabase_auth.errors import AuthApiError
+from datetime import datetime, timezone , timedelta
 import os
 import json
 from typing import Any, Optional
+import hmac
+import hashlib
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import sqlite3
 from contextlib import closing
 import valkey
 load_dotenv()
+SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 email = os.environ.get("email")
@@ -16,8 +18,6 @@ passw = os.environ.get("pass")
 DB = "users.db"
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Set SUPABASE_URL and SUPABASE_KEY in your environment or .env file")
-TABLE_NAME = "users"
-_session_cache: dict[str, Any] = {}  
 VALKEY_HOST = os.environ.get("VALKEY_HOST", "localhost")
 VALKEY_PORT = int(os.environ.get("VALKEY_PORT", 6379))
 VALKEY_DB = int(os.environ.get("VALKEY_DB", 0))
@@ -27,30 +27,38 @@ def _row_cache_key(table_name: str, filters: Optional[dict[str, Any]], select: s
     key_data = { "filters": filters or {}, "select": select, "order_by": order_by, "ascending": ascending, "limit": limit, }
     return f"rows:{table_name}:{json.dumps(key_data, sort_keys=True, default=str)}"
 
-def _is_session_valid(session) -> bool:
-    if session is None:
-        return False
-    return session.expires_at is not None and session.expires_at > datetime.now(timezone.utc).timestamp() + 10
+def retrieve(user_id):
+    with closing(get_conn()) as conn:
+        row = conn.execute( "SELECT Access_token, Refresh_token, Expire FROM access_tokens WHERE user_id = ?",(user_id,),).fetchone()
+        if not row:
+            return False
+        access, refresh, expire = row
+        if not access or not refresh or not expire:
+            return False
+        expire_dt = datetime.fromisoformat(expire)
+        if expire_dt.tzinfo is None:              # safety: treat naive as UTC
+            expire_dt = expire_dt.replace(tzinfo=timezone.utc)
+        if expire_dt > datetime.now(timezone.utc) + timedelta(minutes=1):
+            return access
+        try:
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            session = supabase.auth.refresh_session(refresh).session
+        except Exception as e:
+            print(f"refresh failed for {user_id}: {e}")
+            return False
+        access = session.access_token
+        refresh = session.refresh_token
+        new_expire = datetime.fromtimestamp(session.expires_at, timezone.utc).isoformat()
+        with conn: 
+            conn.execute( "UPDATE access_tokens SET Access_token = ?, Refresh_token = ?, Expire = ? WHERE user_id = ?", (access, refresh, new_expire, user_id), )
+        return access
 
-def get_authenticated_client(token: str) -> Client:
+def get_authenticated_client(user_id: str) -> Client:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    cached = _session_cache.get(token)
-    if _is_session_valid(cached):
-        supabase.auth.set_session(cached.access_token, cached.refresh_token)
+    access_token = retrieve(user_id)
+    if access_token:
+        supabase.postgrest.auth(access_token)
         return supabase
-    row = get_user_by_token(token=token)
-    if row is None:
-        raise ValueError(f"Invalid or unknown token: {token!r}")
-    email, password = row
-    try:
-        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-    except AuthApiError as e:
-        if "invalid" in str(e).lower() or e.status == 400:
-            res = supabase.auth.sign_up({"email": email, "password": password})
-        else:
-            raise
-    _session_cache[token] = res.session
-    return supabase
 
 def get_conn():
     return sqlite3.connect(DB)
@@ -58,29 +66,43 @@ def get_conn():
 def init_db():
     with closing(get_conn()) as conn:
         with conn:
-            # save the password in the hashed format and then check the email exist and heashed password is same as db for the login 
-            conn.execute(""" CREATE TABLE IF NOT EXISTS users ( id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,token TEXT UNIQUE) """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_token ON users(token)")
+            conn.execute(""" CREATE TABLE IF NOT EXISTS users ( id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,user_id TEXT UNIQUE) """)
+            conn.execute(""" CREATE TABLE IF NOT EXISTS access_tokens ( user_id TEXT PRIMARY KEY ,Access_token TEXT UNIQUE NOT NULL,Refresh_token TEXT NOT NULL, Expire TEXT NOT NULL , ) """)
 
-def insert_user(email, password, token=None):
+def insert_user(email, password, user_id =None):
     with closing(get_conn()) as conn:
         with conn:
-            conn.execute("INSERT INTO users (email, password, token) VALUES (?, ?, ?)",(email, password, token),)
+            conn.execute("INSERT INTO users (email, password, user_id) VALUES (?, ?, ?)",(email, password, user_id),)
 
-def get_user_by_token(token) -> Optional[tuple]:
+def get_user_by_token(user_id) :
     with closing(get_conn()) as conn:
-        cur = conn.execute("SELECT email, password FROM users WHERE token = ?", (token,))
+        cur = conn.execute("SELECT email, password FROM users WHERE user_id = ?", (user_id,))
         return cur.fetchone()
 
-def update_token_by_token(token, new_token):
+def add_new_user(email:str,password:str):
+    if not email or not password :
+        return False
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+    if not res :
+        return False
+    passworddd = hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).hexdigest()
+    user_id = res.user.id
     with closing(get_conn()) as conn:
-        with conn:
-            conn.execute("UPDATE users SET token = ? WHERE token = ?",(new_token, token),)
+        conn.execute("INSERT INTO users (email, password, user_id) VALUES (?, ?, ?)",(email, passworddd, user_id),)
+        return True
 
-def update_token_by_mail(email, token):
+def User_exist_check(email :str ,password:str,user_id : str):
+    if not email or not password or not user_id :
+        return False 
+    passworddd = hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).hexdigest()
     with closing(get_conn()) as conn:
-        with conn:
-            conn.execute("UPDATE users SET token = ? WHERE email = ?",(token, email),)
+        cur = conn.execute("SELECT password , user_id FROM users WHERE email = ?", (email,))
+        passwork , user_id1 =  cur.fetchone()
+    if not passwork or not user_id1 :
+        return False
+    if passworddd == passwork and user_id == user_id1 :
+        return True
 
 def _apply_filters(query, filters: dict[str, Any]):
     for column, condition in filters.items():
