@@ -59,13 +59,14 @@ def login():
     if not mail or not passw:
         return jsonify({"error": "email and password are required"}), 400
     try:
+        # check if the user exist here using the db for the login 
         res = supabase.auth.sign_in_with_password({"email": mail, "password": passw})
         if res.user is None:
             return jsonify({"error": "invalid credentials"}), 401
     except Exception as e:
         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
     created_at = datetime.now(timezone.utc).isoformat()
-    token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)
+    token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)  # give th new token after refreshing the old one which one is in the db 
     try:
         rows = dbimp.select_rows(token, "users", select="Token", filters={"user_id": res.user.id})
     except Exception as e:
