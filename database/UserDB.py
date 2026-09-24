@@ -70,40 +70,32 @@ def init_db():
             conn.execute(""" CREATE TABLE IF NOT EXISTS users ( id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,user_id TEXT UNIQUE) """)
             conn.execute(""" CREATE TABLE IF NOT EXISTS access_tokens ( user_id TEXT PRIMARY KEY ,Access_token TEXT UNIQUE NOT NULL,Refresh_token TEXT NOT NULL, Expire TEXT NOT NULL ) """)
 
-def insert_user(email, password, user_id =None):
-    with closing(get_conn()) as conn:
-        with conn:
-            conn.execute("INSERT INTO users (email, password, user_id) VALUES (?, ?, ?)",(email, password, user_id),)
-
-def get_user_by_token(user_id) :
-    with closing(get_conn()) as conn:
-        cur = conn.execute("SELECT email, password FROM users WHERE user_id = ?", (user_id,))
-        return cur.fetchone()
-
-def add_new_user(email:str,password:str):
-    if not email or not password :
+def add_new_user(email: str, password: str):
+    if not email or not password:
         return False
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-    if not res :
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+    except Exception:
         return False
-    passworddd = hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).hexdigest()
-    user_id = res.user.id
-    with closing(get_conn()) as conn:
-        conn.execute("INSERT INTO users (email, password, user_id) VALUES (?, ?, ?)",(email, passworddd, user_id),)
+    hashed = hmac.new(SECRET_KEY, password.encode(), hashlib.sha256).hexdigest()
+    try:
+        with closing(get_conn()) as conn:
+            with conn:
+                conn.execute("INSERT INTO users (email, password, user_id) VALUES (?, ?, ?)",(email, hashed, res.user.id))
         return True
-
-def User_exist_check(email :str ,password:str,user_id : str):
-    if not email or not password or not user_id :
-        return False 
-    passworddd = hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).hexdigest()
-    with closing(get_conn()) as conn:
-        cur = conn.execute("SELECT password , user_id FROM users WHERE email = ?", (email,))
-        passwork , user_id1 =  cur.fetchone()
-    if not passwork or not user_id1 :
+    except sqlite3.IntegrityError:
         return False
-    if passworddd == passwork and user_id == user_id1 :
-        return True
+
+def User_exist_check(email: str, password: str, user_id: str) -> bool:
+    if not email or not password or not user_id:
+        return False
+    hashed = hmac.new(SECRET_KEY, password.encode(), hashlib.sha256).hexdigest()
+    with closing(get_conn()) as conn:
+        row = conn.execute("SELECT password, user_id FROM users WHERE email = ?", (email,)).fetchone()
+    if not row:
+        return False
+    return hmac.compare_digest(hashed, row[0]) and hmac.compare_digest(user_id, row[1])
 
 def _apply_filters(query, filters: dict[str, Any]):
     for column, condition in filters.items():
