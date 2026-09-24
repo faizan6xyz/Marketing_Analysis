@@ -7,6 +7,7 @@ import hashlib
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import sqlite3
+import authnew as au
 from contextlib import closing
 import valkey
 load_dotenv()
@@ -67,7 +68,7 @@ def init_db():
     with closing(get_conn()) as conn:
         with conn:
             conn.execute(""" CREATE TABLE IF NOT EXISTS users ( id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,user_id TEXT UNIQUE) """)
-            conn.execute(""" CREATE TABLE IF NOT EXISTS access_tokens ( user_id TEXT PRIMARY KEY ,Access_token TEXT UNIQUE NOT NULL,Refresh_token TEXT NOT NULL, Expire TEXT NOT NULL , ) """)
+            conn.execute(""" CREATE TABLE IF NOT EXISTS access_tokens ( user_id TEXT PRIMARY KEY ,Access_token TEXT UNIQUE NOT NULL,Refresh_token TEXT NOT NULL, Expire TEXT NOT NULL ) """)
 
 def insert_user(email, password, user_id =None):
     with closing(get_conn()) as conn:
@@ -138,12 +139,14 @@ def _apply_filters(query, filters: dict[str, Any]):
     return query
 
 def insert_rows(token, table_name: str, data: dict[str, Any] | list[dict[str, Any]]) -> list[dict]:
-    supabase = get_authenticated_client(token)
+    tokench = au.process(token)
+    supabase = get_authenticated_client(tokench["user_id"])
     response = supabase.table(table_name).insert(data).execute()
     return response.data
 
 def update_rows(token, table_name: str, updates: dict[str, Any], filters: dict[str, Any]) -> list[dict]:
-    supabase = get_authenticated_client(token)
+    tokench = au.process(token)
+    supabase = get_authenticated_client(tokench["user_id"])
     query = supabase.table(table_name).update(updates)
     query = _apply_filters(query, filters)
     response = query.execute()
@@ -152,7 +155,8 @@ def update_rows(token, table_name: str, updates: dict[str, Any], filters: dict[s
     return response.data
 
 def delete_rows(token, table_name: str, filters: dict[str, Any]) -> list[dict]:
-    supabase = get_authenticated_client(token)
+    tokench = au.process(token)
+    supabase = get_authenticated_client(tokench["user_id"])
     query = supabase.table(table_name).delete()
     query = _apply_filters(query, filters)
     response = query.execute()
@@ -163,7 +167,8 @@ def select_rows(token, table_name: str, filters: Optional[dict[str, Any]] = None
     cached = vk.get(cache_key)
     if cached is not None:
         return json.loads(cached)
-    supabase = get_authenticated_client(token)
+    tokench = au.process(token)
+    supabase = get_authenticated_client(tokench["user_id"])
     query = supabase.table(table_name).select(select)
     if filters:
         query = _apply_filters(query, filters)
