@@ -1,10 +1,10 @@
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from flask import Flask, request, jsonify , make_response
+from flask import Flask, request, jsonify, make_response , redirect
 from flask_cors import CORS
 import limit as lmmmm
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import authnew as au
 load_dotenv()
@@ -15,89 +15,106 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
+TOKEN_TTL = timedelta(hours=2)
 
 def all_values(rows, key):
     if not rows:
         return []
     return [row.get(key) for row in rows]
 
+def set_auth_cookie(resp, token):
+    resp.set_cookie( "authToken", token, httponly=True, secure=True, samesite="Strict", max_age=int(TOKEN_TTL.total_seconds()), path="/",    )
+    return resp
+
+def start_oauth(provider):
+    try:
+        res = supabase.auth.sign_in_with_oauth({ "provider": provider, "options": {"redirect_to": "http://localhost:5000/auth/callback"} })
+    except Exception as e:
+        return jsonify({"error": "oauth init failed", "detail": str(e)}), 500
+    if not res.url:
+        return jsonify({"error": "failed to get oauth url"}), 500
+    return jsonify({"redirect_url": res.url}), 200
+
+def start_oauth1(provider):
+    try:
+        res = supabase.auth.sign_in_with_oauth({ "provider": provider, "options": {"redirect_to": "http://localhost:5000/auth/callback"} })
+    except Exception as e:
+        return "oauth init failed", 500
+    if not res.url:
+        return "failed to get oauth url" , 500
+    return res.url , 200
+
 @app.route("/refresh", methods=["POST"])
 def logi():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
-    tokench = au.process(token=token)
-    if not tokench["status"]:
-        return jsonify({"success": False, "message": "token_invlaid"}), 400
+    if not token:
+        return jsonify({"success": False, "message": "token_missing"}), 400
+    try:
+        tokench = au.process(token=token)
+    except Exception as e:
+        return jsonify({"success": False, "message": "token_invalid", "detail": str(e)}), 400
+    if not tokench.get("status"):
+        return jsonify({"success": False, "message": "token_invalid"}), 400
     new_token = tokench["token"]
-    status = 200
-    resp = make_response(jsonify({"Token": new_token}), status)
-    resp.set_cookie( 'authToken', new_token,httponly=True , secure=True, samesite='Strict', max_age=60 * 60 * 2, path='/', )
-    return resp
+    resp = make_response(jsonify({"Token": new_token}), 200)
+    return set_auth_cookie(resp, new_token)
 
 @app.route("/login", methods=["POST"])
 def login():
     body = request.get_json(silent=True) or {}
-    # oauthh = body.get("oauth")
-    # if oauthh.strip().lower() == "google":
-    #     try:
-    #         res = supabase.auth.sign_in_with_oauth({ "provider": "google", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
-    #         if res.user is None:
-    #             return jsonify({"error": "invalid credentials"}), 401
-    #     except Exception as e:
-    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
-    # oauthh = body.get("oauth")
-    # if oauthh.strip().lower() == "facebook":
-    #     try:
-    #         res = supabase.auth.sign_in_with_oauth({ "provider": "facebook", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
-    #         if res.user is None:
-    #             return jsonify({"error": "invalid credentials"}), 401
-    #     except Exception as e:
-    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
+    oauthh = (body.get("oauth") or "").strip().lower()
+    if oauthh in ("google", "facebook"):
+        url , code = start_oauth1(oauthh)
+        if code == 200 :
+            return redirect(url)
     mail = body.get("email")
     passw = body.get("password")
     if not mail or not passw:
         return jsonify({"error": "email and password are required"}), 400
     try:
-        # check if the user exist here using the db for the login 
-        res = supabase.auth.sign_in_with_password({"email": mail, "password": passw})
-        if res.user is None:
-            return jsonify({"error": "invalid credentials"}), 401
+        user_id = dbimp.User_exist_check(email=mail, password=passw)
     except Exception as e:
         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
-    created_at = datetime.now(timezone.utc).isoformat()
-    token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)  # give th new token after refreshing the old one which one is in the db 
+    if not user_id:
+        return jsonify({"error": "invalid credentials"}), 401
+    created_at = datetime.now(timezone.utc) + TOKEN_TTL
+    token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
-        rows = dbimp.select_rows(token, "users", select="Token", filters={"user_id": res.user.id})
+        dbimp.update_row("users", {"Token": token}, filters={"user_id": user_id})  # adjust to real dbimp API
+        rows = dbimp.select_rows(token, "users", select="Token", filters={"user_id": user_id})
     except Exception as e:
         return jsonify({"error": "failed to fetch user record", "detail": str(e)}), 500
     if not rows:
         return jsonify({"error": "user record not found"}), 500
-    body = jsonify({"user_id": res.user.id, "Token": rows[0]["Token"]})
-    status = 200
-    resp = make_response(jsonify(body), status)
-    resp.set_cookie( 'authToken', token,httponly=True , secure=True, samesite='Strict', max_age=60 * 60 * 2, path='/', )
-    return resp
+    resp = make_response(jsonify({"user_id": user_id, "Token": rows[0]["Token"]}), 200)
+    return set_auth_cookie(resp, token)
+
+@app.route("/auth/callback", methods=["GET"])  
+def callback():
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"error": "missing code"}), 400
+    try:
+        session = supabase.auth.exchange_code_for_session({"auth_code": code})
+    except Exception as e:
+        return jsonify({"error": "oauth exchange failed", "detail": str(e)}), 401
+    user_id = session.user.id
+    if not dbimp.oauthchck(user_id=user_id):
+        dbimp.create_oauth_user(user_id=user_id, email=session.user.email)  
+    created_at = datetime.now(timezone.utc) + TOKEN_TTL
+    token = au.jsonspoof(user_id=user_id, timestamp=created_at)
+    dbimp.update_row("users", {"Token": token}, filters={"user_id": user_id})
+    resp = make_response(jsonify({"user_id": user_id, "Token": token}), 200)
+    return set_auth_cookie(resp, token)
 
 @app.route("/signup", methods=["POST"])
 def signup():
     body = request.get_json(silent=True) or {}
-    # oauthh = body.get("oauth")
-    # if oauthh.strip().lower() == "google":
-    #     try:
-    #         res = supabase.auth.sign_in_with_oauth({ "provider": "google", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
-    #         if res.user is None:
-    #             return jsonify({"error": "invalid credentials"}), 401
-    #     except Exception as e:
-    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
-    # oauthh = body.get("oauth")
-    # if oauthh.strip().lower() == "facebook":
-    #     try:
-    #         res = supabase.auth.sign_in_with_oauth({ "provider": "facebook", "options": { "redirect_to": "http://localhost:5000/auth/callback" } })
-    #         if res.user is None:
-    #             return jsonify({"error": "invalid credentials"}), 401
-    #     except Exception as e:
-    #         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
+    oauthh = (body.get("oauth") or "").strip().lower()
+    if oauthh in ("google", "facebook"):
+        return start_oauth(oauthh)
     mail = body.get("email")
     passw = body.get("password")
     if not mail or not passw:
@@ -108,24 +125,21 @@ def signup():
         return jsonify({"error": "signup failed", "detail": str(e)}), 400
     if res.user is None:
         return jsonify({"message": "signup started, check email to confirm"}), 202
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(timezone.utc) + TOKEN_TTL  # was a naive isoformat string before — now matches /login
     token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)
-    dbimp.insert_user(email=mail, password=passw, token=token)
-    insert_error = None
     try:
-        insert = dbimp.insert_rows(token, "users", {"user_id": res.user.id, "created_at": created_at, "Token": token})
+        insert = dbimp.insert_rows(token, "users", { "user_id": res.user.id, "email": mail, "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })
     except Exception as e:
         insert = None
         insert_error = str(e)
     if not insert:
-        body = {"Statusdb": False, "detail": "Could not save details"}
+        resp_body = {"Statusdb": False, "detail": "Could not save details"}
         status = 202
     else:
-        body = {"Statusdb": True, "next": "/details"}
+        resp_body = {"Statusdb": True, "next": "/details"}
         status = 200
-    resp = make_response(jsonify(body), status)
-    resp.set_cookie( 'authToken', token,httponly=True , secure=True, samesite='Strict', max_age=60 * 60 * 2, path='/', )
-    return resp
+    resp = make_response(jsonify(resp_body), status)
+    return set_auth_cookie(resp, token)
 
 @app.route("/details", methods=["POST"])
 def details():

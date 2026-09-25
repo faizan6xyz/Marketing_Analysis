@@ -110,6 +110,13 @@ def _load_tokens(user_id):
         return None
     return row
 
+def oauthchck(user_id:str):
+    with closing(get_conn()) as conn:
+        row = conn.execute("SELECT Access_token, Refresh_token, Expire FROM access_tokens WHERE user_id = ?",(user_id,),).fetchone()
+    if not row or not all(row):
+        return None
+    return row
+
 def _is_fresh(expire: str) -> bool:
     expire_dt = datetime.fromisoformat(expire)
     if expire_dt.tzinfo is None:
@@ -221,8 +228,8 @@ def add_new_user(email:str,password:str):
         return False
     return True
 
-def User_exist_check(email :str ,password:str,user_id : str):
-    if not email or not password or not user_id :
+def User_exist_check(email :str ,password:str):
+    if not email or not password :
         return False
     with closing(get_conn()) as conn:
         cur = conn.execute("SELECT password , user_id FROM users WHERE email = ?", (email,))
@@ -232,7 +239,7 @@ def User_exist_check(email :str ,password:str,user_id : str):
     passwork , user_id1 = row
     if not passwork or not user_id1 :
         return False
-    if not (_verify_password(password, passwork) and hmac.compare_digest(user_id, user_id1)) :
+    if not _verify_password(password, passwork) :
         return False
     if not passwork.startswith("scrypt$") :
         try:
@@ -240,7 +247,7 @@ def User_exist_check(email :str ,password:str,user_id : str):
                 conn.execute("UPDATE users SET password = ? WHERE email = ?", (_hash_password(password), email),)
         except sqlite3.Error as e:
             log.warning("password hash upgrade failed: %s", e)
-    return True
+    return user_id1
 
 def _apply_filters(query, filters: dict[str, Any]):
     for column, condition in filters.items():
