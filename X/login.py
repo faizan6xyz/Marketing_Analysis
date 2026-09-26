@@ -59,6 +59,12 @@ def refresh_x_token11( account_id):
     dbimp.update_rows_web( TABLE_NAME, {"Access_token": new_access, "Refresh_token": new_refresh, "Token_expire": expire_time}, filters={"Account_id": account_id})
     return new_access
 
+def parse_aware_timestamp(timestamp: str) -> datetime:
+    dt = datetime.fromisoformat(timestamp)
+    if dt.tzinfo is None:
+        raise ValueError(f"Timestamp '{timestamp}' has no timezone offset")
+    return dt.astimezone(timezone.utc)
+
 def get_tweet_metrics(x_user_id, tweet_id, access_token):
     access_token = refresh_x_token11(x_user_id)
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -347,9 +353,9 @@ def x_dataget():
     if not all([token, access_token, user_id, timestamp, expirey, username, account_id]):
         return jsonify({"error": "missing required fields"}), 400
     try:
-        datetime.fromisoformat(timestamp)
-        datetime.fromisoformat(expirey)
-    except ValueError:
+        timestamp = parse_aware_timestamp(timestamp)
+        expirey = parse_aware_timestamp(expirey)
+    except (ValueError, TypeError):
         return jsonify({"error": "invalid timestamp/expire format"}), 400
     try:
         dbimp.update_rows( token, TABLE_NAME, { "Access_token": access_token, "Refresh_token": refresh_token, "Timestamp": timestamp, "Token_expire": expirey, "Username": username, "Account_id": account_id, }, filters={"id": user_id}, ) 

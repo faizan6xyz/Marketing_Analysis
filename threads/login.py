@@ -1,7 +1,6 @@
 import database.UserDB as dbimp
 import os
 import time
-import json
 import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
@@ -20,7 +19,7 @@ CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
-THREADS_TABLE_NAME = "threads"
+THREADS_TABLE_NAME = "Threads"
 THREADS_APP_ID = os.environ.get("Threads_app_id")
 THREADS_APP_SECRET = os.environ.get("Threads_app_secrects")
 THREADS_REDIRECT_URI = os.environ.get("THREADS_REDIRECT_URI")
@@ -72,6 +71,12 @@ def refresh_threads_tokenww(expire, access, thread_user_id):
         return new_access
     else:
         return access
+
+def parse_aware_timestamp(timestamp: str) -> datetime:
+    dt = datetime.fromisoformat(timestamp)
+    if dt.tzinfo is None:
+        raise ValueError(f"Timestamp '{timestamp}' has no timezone offset")
+    return dt.astimezone(timezone.utc)
 
 def get_thread_metrics_csv(user_id: str, media_id: str, access_token: str) -> str:
     expire  = datetime.now(timezone.utc)
@@ -358,9 +363,9 @@ def threads_dataget():
     if not all([token, access_token, user_id, timestamp, expirey, account_id]):
         return jsonify({"error": "missing required fields"}), 400
     try:
-        datetime.fromisoformat(timestamp)
-        datetime.fromisoformat(expirey)
-    except ValueError:
+        timestamp = parse_aware_timestamp(timestamp)
+        expirey = parse_aware_timestamp(expirey)
+    except (ValueError, TypeError):
         return jsonify({"error": "invalid timestamp/expire format"}), 400
     try:
         dbimp.update_rows( token, THREADS_TABLE_NAME, {"Access_token": access_token, "Timestamp": timestamp, "Token_expire": expirey, "Username": username,  "Account_id": account_id, }, filters={"id": user_id}, )
