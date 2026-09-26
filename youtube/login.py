@@ -25,13 +25,13 @@ import authnew as au
 import Drive.dep as dpp
 YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/drive.readonly",]
 CLIENT_SECRETS_FILE = "client_secret.json"
-BASE_URL = os.environ.get("baseurl")
+BASE_URL = os.environ.get("BASE_URL")
 STATE_MAX_AGE = 600  # seconds
 MAX_VIDEO_SIZE = 30 * 1024 * 1024  # 30 MB
 RESUMABLE_UPLOAD_MAX_RETRIES = 5
 RETRIABLE_STATUS_CODES = (500, 502, 503, 504)
 MAX_UPLOAD_WORKERS = 4
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+YOUTUBE_API_KEY = os.getenv("Youtube_api_key")
 YOUTUBE_DATA_URL = "https://www.googleapis.com/youtube/v3"
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 app = Flask(__name__)

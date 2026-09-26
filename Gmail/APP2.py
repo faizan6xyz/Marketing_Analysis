@@ -16,21 +16,18 @@ frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gmail_api")
-API_KEY = os.environ.get("GMAIL_API_KEY")  # set this in env, required
 MAX_ATTACHMENTS = 10
 MAX_ATTACHMENT_MB = 15
 app.config['MAX_CONTENT_LENGTH'] = MAX_ATTACHMENT_MB * MAX_ATTACHMENTS * 1024 * 1024
 ALLOWED_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.xlsx', '.csv', '.txt', '.zip'}
-UPLOAD_ROOT = os.path.abspath('uploads')
-ATTACH_ROOT = os.path.abspath('attachments')
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
-STATE_MAX_AGE = 600  # seconds
+STATE_MAX_AGE = 600  
 MESSAGE_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{5,50}$')
 USER_ID_RE = re.compile(r'^[a-zA-Z0-9_.@-]{1,100}$')
-PUBSUB_VERIFICATION_TOKEN = os.environ.get("PUBSUB_VERIFICATION_TOKEN")  # set this in env
+PUBSUB_VERIFICATION_TOKEN = os.environ.get("PUBSUB_VERIFICATION_TOKEN") 
 LABEL_NAME_RE = re.compile(r'^[\w\s/.-]{1,100}$')
-BASE_URL = os.environ.get("baseurl")
+BASE_URL = os.environ.get("BASE_URL")
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 
 def get_valid_user_id(token):
@@ -406,7 +403,5 @@ def get_label_messages():
         return safe_error(e)
 
 if __name__ == '__main__':
-    os.makedirs(UPLOAD_ROOT, exist_ok=True)
-    os.makedirs(ATTACH_ROOT, exist_ok=True)
     debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
     app.run(debug=debug_mode, port=int(os.environ.get("PORT", 5000)))

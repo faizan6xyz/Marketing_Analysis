@@ -13,7 +13,6 @@ from google.auth.exceptions import RefreshError, TransportError, GoogleAuthError
 from googleapiclient.discovery import build
 import json
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from cryptography.fernet import Fernet
 import requests
 import database.UserDB as dbimp
 from io import BytesIO
@@ -26,18 +25,17 @@ app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
-SECRET_KEY = os.environ.get("token_secret", "").encode("utf-8")
-CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")  
-REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI")
+SECRET_KEY = os.environ.get("SECRET_KEY_HMAC", "").encode("utf-8")
+CLIENT_ID = os.environ.get("client_id")
+CLIENT_SECRET = os.environ.get("client_secrect")  
+BASE_URL = os.environ.get("BASE_URL")
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-fernet = Fernet(os.environ.get("FERNET_KEY").encode())
 serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds, state link expires after 10 min
 table_name = "Drive" 
 APP_FOLDER = "Leo_Social"
 PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin","youtube","uplaod"]
-BASE_URL = ""
+BASE_URL = os.environ.get("BASE_URL")
 SUBFOLDERS = "Analytics"
 campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
 campaigns_content1 = "phone_no,capaign_name,send_time,recieve_time,interest"
@@ -58,11 +56,11 @@ filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": 
 
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
-    dbimp.insert_rows(token,table_name, {"id" : user_id , "Timestamp":timestamp ,"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token" : fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.encode()).decode(), "Connected" : 1 , "Scopes" : SCOPES,"Email":mail})
+    dbimp.insert_rows(token,table_name, {"id" : user_id , "Timestamp":timestamp ,"Access_token" : access_token, "Refresh_token" : refresh_token, "Token_expire": expiry, "Connected" : 1 , "Scopes" : SCOPES,"Email":mail})
     dbimp.update_rows(token,"users",{"Gdrive":True},{"user_id":user_id})
 
 def Update_token(token , user_id, access_token, refresh_token, expiry):
-    dbimp.update_rows_web(token , table_name, {"Access_token" : fernet.encrypt(access_token.encode()).decode(), "Refresh_token": fernet.encrypt(refresh_token.encode()).decode(), "Token_expire": fernet.encrypt(expiry.isoformat().encode()).decode()}, {"id" : user_id})
+    dbimp.update_rows_web(token , table_name, {"Access_token" : access_token, "Refresh_token": refresh_token, "Token_expire": expiry}, {"id" : user_id})
 
 def load_tokens(user_id):
     rows = dbimp.select_rows_web(table_name , select="Access_token,Refresh_token,Token_expire,Connected" , filters= {"id" : user_id})
@@ -73,7 +71,7 @@ def load_tokens(user_id):
     refresh_token = row["Refresh_token"]
     expiry = row["Token_expire"]
     connected = row["Connected"]
-    return {"access_token": fernet.decrypt(access_token.encode()).decode(), "refresh_token": fernet.decrypt(refresh_token.encode()).decode(), "token_expiry": fernet.decrypt(expiry.encode()).decode() , "connected": bool(connected) }
+    return {"access_token": access_token , "refresh_token": refresh_token, "token_expiry":expiry , "connected": bool(connected) }
 
 def mark_disconnected(user_id):
     dbimp.update_rows_web(table_name , {"Connected" : 0 } , {"id" : user_id} )
@@ -112,7 +110,7 @@ def upload_path_to_drive(service, file_path, filename, mimetype):
         return None, str(e)
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [REDIRECT_URI], }}, scopes=SCOPES,redirect_uri=REDIRECT_URI)
+    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/auth/drivecallback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/auth/drivecallback",)
 
 def get_drive_service(user_id):
     tokens = load_tokens(user_id)

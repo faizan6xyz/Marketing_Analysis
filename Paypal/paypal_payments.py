@@ -18,7 +18,6 @@ from cryptography import x509
 from urllib.parse import urlparse
 from flask_cors import CORS
 from datetime import datetime, timezone
-from supabase import create_client, Client
 load_dotenv()
 import database.UserDB as dbimp
 
@@ -39,14 +38,11 @@ RETURN_URL = os.environ.get("RETURN_URL", "https://example.com/success")
 CANCEL_URL = os.environ.get("CANCEL_URL", "https://example.com/cancel")
 RATE_LIMIT_STORAGE_URI = _require("RATE_LIMIT_STORAGE_URI")
 PAYPAL_ENV = os.environ.get("PAYPAL_ENV", "sandbox")
-BASE_URL = "https://api-m.paypal.com" if PAYPAL_ENV == "live" else "https://api-m.sandbox.paypal.com"
-SUPABASE_URL = _require("SUPABASE_URL")
-SUPABASE_KEY = _require("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-PAYPAL_TABLE = "Paypal"
-VERIFY_TABLE = "Paypal_verify"
 PLAN_CATALOG = json.loads(_require("PAYPAL_PLANS"))
 #     {"basic_monthly": {"amount": 49900, "currency": "INR"}, "pro_monthly": {"amount": 99900, "currency": "INR"} }
+BASE_URL = "https://api-m.paypal.com" if PAYPAL_ENV == "live" else "https://api-m.sandbox.paypal.com"
+PAYPAL_TABLE = "Paypal"
+VERIFY_TABLE = "Paypal_verify"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("paypal_app")
 TRUSTED_CERT_HOSTS = ("api.paypal.com", "api.sandbox.paypal.com")
@@ -60,9 +56,6 @@ CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS
 class PayPalError(Exception):
     pass
 
-def get_all_users(limit: int = 100) -> list[dict]:
-    response = supabase.table("users").select("*").limit(limit).execute()
-    return response.data
 
 def _update_succeeded(resp) -> bool:
     if resp is None:

@@ -11,21 +11,15 @@ from googleapiclient.errors import HttpError
 import requests
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-from supabase import create_client, Client
-load_dotenv()
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise RuntimeError("Set SUPABASE_URL and SUPABASE_KEY in your environment or .env file")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 TABLE_NAME = "Gmail"
 import logging
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gmail_client")
+BASE_URL = os.environ.get("BASE_URL")
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
-GMAIL_REDIRECT_URI = os.environ.get("GMAIL_REDIRECT_URI")
-GMAIL_SCOPES = os.environ.get("GMAIL_SCOPES")
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 if not GMAIL_SCOPES or not GMAIL_SCOPES.strip():
     raise EnvironmentError("GMAIL_SCOPES environment variable is not set or empty.")
 cleaned = [scope.strip() for scope in GMAIL_SCOPES.split(",") if scope.strip()]
@@ -44,7 +38,7 @@ RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503}
 ALLOWED_ATTACHMENT_EXTENSIONS = { '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.ppt', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mp3', }
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [GMAIL_REDIRECT_URI], }}, scopes=SCOPES, redirect_uri=GMAIL_REDIRECT_URI)
+    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/oauth/gmail/callback"], }}, scopes=SCOPES, redirect_uri=f"{BASE_URL}/oauth/gmail/callback")
 
 def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
     payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(),"Account_id":google_account_id ,"Timestamp": datetime.now(timezone.utc).isoformat()}

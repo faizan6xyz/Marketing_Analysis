@@ -24,16 +24,16 @@ CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
-X_CLIENT_ID = os.getenv("X_CLIENT_ID")
-X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
-X_REDIRECT_URI = os.getenv("X_REDIRECT_URI")
+X_CLIENT_ID = os.getenv("x_client_id")
+X_CLIENT_SECRET = os.getenv("x_client_secret")
+X_REDIRECT_URI = os.getenv("x_redirect_uri")
+BASE_URL = os.getenv("BASE_URL")
 STATE_MAX_AGE = 600  # seconds
 TWEET_URL = "https://api.twitter.com/2/tweets"
 TABLE_NAME = "X"
 SCOPE = "tweet.read users.read offline.access"
 AUTH_URL = "https://twitter.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
-BASE_URL = ""
 image_size = 5 * 1024 * 1024
 video_size = 500 * 1024 * 1024
 MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
