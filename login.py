@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from flask import Flask, request, jsonify, make_response , redirect
 from flask_cors import CORS
+import csv
 import limit as lmmmm
+import pandas as pd
 from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import authnew as au
@@ -15,7 +17,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 TOKEN_TTL = timedelta(hours=2)
 
 def all_values(rows, key):
@@ -24,17 +26,8 @@ def all_values(rows, key):
     return [row.get(key) for row in rows]
 
 def set_auth_cookie(resp, token):
-    resp.set_cookie( "authToken", token, httponly=True, secure=True, samesite="Strict", max_age=int(TOKEN_TTL.total_seconds()), path="/",    )
+    resp.set_cookie( "authToken", token, httponly=True, secure=True, samesite="None", max_age=int(TOKEN_TTL.total_seconds()), path="/",    )
     return resp
-
-def start_oauth(provider):
-    try:
-        res = supabase.auth.sign_in_with_oauth({ "provider": provider, "options": {"redirect_to": "http://localhost:5000/auth/callback"} })
-    except Exception as e:
-        return jsonify({"error": "oauth init failed", "detail": str(e)}), 500
-    if not res.url:
-        return jsonify({"error": "failed to get oauth url"}), 500
-    return jsonify({"redirect_url": res.url}), 200
 
 def start_oauth1(provider):
     try:
@@ -105,8 +98,8 @@ def callback():
         dbimp.create_oauth_user(user_id=user_id, email=session.user.email)  
     created_at = datetime.now(timezone.utc) + TOKEN_TTL
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
-    dbimp.update_row("users", {"Token": token}, filters={"user_id": user_id})
-    resp = make_response(jsonify({"user_id": user_id, "Token": token}), 200)
+    dbimp.update_rows("users", {"Token": token}, filters={"user_id": user_id})
+    resp = make_response(redirect(f"{frontend}/dashboard"))  
     return set_auth_cookie(resp, token)
 
 @app.route("/signup", methods=["POST"])
@@ -114,7 +107,9 @@ def signup():
     body = request.get_json(silent=True) or {}
     oauthh = (body.get("oauth") or "").strip().lower()
     if oauthh in ("google", "facebook"):
-        return start_oauth(oauthh)
+        url , code = start_oauth1(oauthh)
+        if code == 200 :
+            return redirect(url)
     mail = body.get("email")
     passw = body.get("password")
     if not mail or not passw:
@@ -125,7 +120,7 @@ def signup():
         return jsonify({"error": "signup failed", "detail": str(e)}), 400
     if res.user is None:
         return jsonify({"message": "signup started, check email to confirm"}), 202
-    created_at = datetime.now(timezone.utc) + TOKEN_TTL  # was a naive isoformat string before — now matches /login
+    created_at = datetime.now(timezone.utc) + TOKEN_TTL 
     token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)
     try:
         insert = dbimp.insert_rows(token, "users", { "user_id": res.user.id, "email": mail, "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })
@@ -234,6 +229,25 @@ def limit():
 @app.get("/health")
 def health():
     return {"status": "ok"}, 200
+
+
+@app.route("/complaint", methods=["POST"])
+def submit_complaint():
+    body = request.get_json(silent=True) or {}
+    complaint = body.get("complaint")
+    token = body.get("token")
+    tokench = au.process(token)
+    if not tokench["status"]:
+        return jsonify({"status": False, "reason": tokench["reason"]}), 401
+    if not isinstance(complaint, str) or not complaint.strip():
+        return jsonify({"status": False, "error": "Complaint is required"}), 400
+    if len(complaint) > 400:
+        return jsonify({"status": False, "error": "Issue length too long"}), 400
+    user_id = tokench["user_id"]
+    with open("complaint.csv", "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([user_id, complaint, datetime.now(timezone.utc).isoformat()])
+    return jsonify({"status": True, "reason": "Issue has been submitted"}), 200
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
