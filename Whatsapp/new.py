@@ -10,14 +10,9 @@ from collections import defaultdict, deque
 import requests
 from flask import request, jsonify
 import database.UserDB as dbimp
-from supabase import create_client, Client
-
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 WA_APP_ID = os.getenv("WA_APP_ID")
 WA_REDIRECT_URI = os.getenv("WA_REDIRECT_URI")
 GRAPH_VERSION = "v20.0"
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 TABLE_NAME = "WhatsApp"
 SCOPE = "whatsapp_business_management,whatsapp_business_messaging,business_management"
 SEND_API_KEY = os.environ.get("WHATSAPP_SEND_API_KEY")

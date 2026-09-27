@@ -10,7 +10,7 @@ import Drive.dep as dp
 from flask import Flask, request, jsonify
 app = Flask(__name__)
 VERIFY_TOKEN = os.getenv("TH_VERIFY_TOKEN")
-APP_SECRET = os.getenv("TH_APP_SECRET")
+APP_SECRET = os.getenv("Threads_app_secrects")
 table = "Threads"
 
 def create_threads_post(text, ACCESS_TOKEN, THREADS_USER_ID, reply_to_id=None):
