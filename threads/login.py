@@ -143,8 +143,19 @@ def get_threads_insights(access_token, media_ids, metric_types="views,likes,repl
         results[media_id] = {m["name"]: m.get("values", [{}])[0].get("value") for m in data}
     return results
 
-def _publish_threads_post(publish,time,access_token, threads_user_id, media_type, text, **kwargs):
-    creation_id = create_threads_container( access_token, threads_user_id, media_type, text=text, **kwargs )
+def _publish_threads_post(publish,time,access_token, threads_user_id, media_type, text, image_url = None , video_url = None):
+    neww = datetime.now(timezone.utc) + timedelta(hours=24)
+    newww = datetime.now(timezone.utc) + timedelta(days=5)
+    if media_type == "IMAGE":
+        media_id = image_url
+    elif media_type == "VIDEO":
+        media_id = video_url
+    else:
+        media_id = None
+    if time > neww and time < newww and not publish :
+        sccc.insert_post( user_id=threads_user_id, scheduled_time=time, access_token=access_token, typeee=f"{media_type.lower()}_later1", text1="" , text2="", text3=text,media_id=media_id)
+        return None
+    creation_id = create_threads_container( access_token, threads_user_id, media_type, text=text, image_url=image_url if image_url else None , video_url=video_url if video_url else None )
     if not creation_id:
         raise RuntimeError("failed to create container")
     is_published = wait_for_threads_container(access_token, creation_id)
@@ -412,14 +423,17 @@ def post_threads_text():
     tokench = au.process(token=token)
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee =  datetime.now(timezone.utc)
     access_tokens, threads_user_ids, text, err = _authenticate(data)
     if err:
         return err
@@ -453,14 +467,17 @@ def post_threads_image():
     publish = data.get("publish")
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee =  datetime.now(timezone.utc)
     if not image_url:
         return jsonify({"error": "image_url is required"}), 400
     try:
@@ -493,14 +510,17 @@ def post_threads_video():
     tokench = au.process(token=token)
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee =  datetime.now(timezone.utc)
     if not video_url:
         return jsonify({"error": "video_url is required"}), 400
     try:
