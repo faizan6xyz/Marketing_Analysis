@@ -1,4 +1,5 @@
 import re
+import json
 import time
 import logging
 import requests
@@ -86,6 +87,19 @@ def _request_with_retry(method: str, url: str, access_token: str = None, **kwarg
         return resp
     raise RuntimeError(_redact(f"Request to '{url}' failed after {MAX_RETRIES} attempts: {last_exc}", access_token))
 
+def access_tokenvali(account_id):
+    rows = dbimp.select_rows_web(TABLE_NAME, select="Access_token,Token_expire", filters={"Account_id": account_id})
+    if not rows :
+        return False
+    row = rows[0]
+    access_token = row["Access_token"]
+    raw_expiry = row["Token_expire"]
+    Token_expiry = datetime.fromisoformat(raw_expiry)
+    if Token_expiry.tzinfo is None:
+        Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
+    if Token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
+        access_token = refresh_token11( account_id, access_token)
+    return access_token
 
 def _post(endpoint: str, params: dict) -> dict:
     token = params.get("access_token")
@@ -141,19 +155,31 @@ def wait_for_container(access_token: str, container_id: str, timeout: int = 300,
 
 def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, caption: str = "", media_size: int = None, publish: bool = True, ) -> str:
     _validate_media_url(image_url)
+    neww = datetime.now(timezone.utc) + timedelta(hours=24)
+    newww = datetime.now(timezone.utc) + timedelta(days=5)
+    if timmmm.tzinfo is None:
+        raise ValueError("timmmm must be timezone-aware")
     caption = _check_caption(caption)
     if media_size is not None and media_size > MAX_PHOTO_BYTES:
         raise ValueError(f"Photo exceeds max size of {MAX_PHOTO_BYTES} bytes")
-    params = {"image_url": image_url, "caption": caption, "access_token": access_token, }
+    if timmmm > neww  and timmmm < newww  and not publish:
+        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token="",typeee="Photo_later", text1="", text2="", text3=caption, media_id=image_url, )
+        return "Photo added for scheduling"
+    params = { "image_url": image_url,
+        "caption": caption, "access_token": access_token, } 
     container = _post(f"{ig_user_id}/media", params)
     creation_id = container["id"]
     if not publish:
-        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container('photo',access_token, ig_user_id, creation_id)
+    return publish_container('photo', access_token, ig_user_id, creation_id)
 
 def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: int, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, ) -> str:
     _validate_media_url(video_url)
+    neww = datetime.now(timezone.utc) + timedelta(hours=24)
+    newww = datetime.now(timezone.utc) + timedelta(days=5)
+    if timmmm.tzinfo is None:
+        raise ValueError("timmmm must be timezone-aware")
     if cover_url is not None:
         if not as_reel:
             raise ValueError("cover_url (custom thumbnail) is only supported for Reels")
@@ -172,22 +198,36 @@ def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: in
     ratio = width / height
     if not (MIN_ASPECT_RATIO - 0.01 <= ratio <= MAX_ASPECT_RATIO + 0.01):
         raise ValueError(f"Aspect ratio {ratio:.2f} is outside the allowed range")
-    params = {"video_url": video_url,"caption": caption,"media_type": "REELS" if as_reel else "VIDEO", "access_token": access_token, }
+    if timmmm > neww  and timmmm < newww  and not publish:
+        text111 =  f"{height},{width},{cover_url},{media_duration}"
+        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token="", typeee="Reel_later" if as_reel else "Video_later", text1=as_reel, text2=text111, text3=caption, media_id=video_url, )
+        return "Video added for scheduling"
+    params = { "video_url": video_url, "caption": caption, "media_type": "REELS" if as_reel else "VIDEO", "access_token": access_token, }
     if cover_url is not None:
         params["cover_url"] = cover_url  # custom thumbnail image; takes precedence over thumb_offset
     container = _post(f"{ig_user_id}/media", params)
     creation_id = container["id"]
     wait_for_container(access_token, creation_id)
     if not publish:
-        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container("video",access_token, ig_user_id, creation_id)
+    return publish_container("video", access_token, ig_user_id, creation_id)
  
-def post_carousel(timmmm, access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True, ) -> str:
-    if len(media_urls) != len(is_video):
-        raise ValueError("media_urls and is_video must be the same length")
+def post_carousel(timmmm,access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True, ) -> str:
+    if not isinstance(media_duration, list):
+        media_duration = json.loads(media_duration)
+    if not isinstance(media_urls, list):
+        media_urls = json.loads(media_urls)
+    if not isinstance(is_video, list):
+        is_video = json.loads(is_video)
+    if not (len(media_urls) == len(is_video) == len(media_size) == len(media_duration)):
+        raise ValueError("media_urls, is_video, media_size, and media_duration must be the same length")
     if not (2 <= len(media_urls) <= 5):
-        raise ValueError("Carousels need 2-10 items")
+        raise ValueError("Carousels need 2-5 items")  # or 10 — confirm the real limit
+    neww = datetime.now(timezone.utc) + timedelta(hours=24)
+    newww = datetime.now(timezone.utc) + timedelta(days=5)
+    if timmmm.tzinfo is None:
+        raise ValueError("timmmm must be timezone-aware")
     caption = _check_caption(caption)
     for url, vid, siz, dura in zip(media_urls, is_video, media_size, media_duration):
         _validate_media_url(url)
@@ -199,6 +239,10 @@ def post_carousel(timmmm, access_token: str, ig_user_id: str,   media_size: list
         else:
             if siz > MAX_PHOTO_BYTES:
                 raise ValueError(f"Photo exceeds max size of {MAX_PHOTO_BYTES} bytes")
+    if timmmm > neww  and timmmm < newww  and not publish:
+        combined = media_size + media_duration
+        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token="", typeee="Carousel_later", text1=json.dumps(is_video), text2=json.dumps(combined), text3=caption, media_id=json.dumps(media_urls),)
+        return "Carousel added for scheduling"
     child_ids = []
     for url, vid in zip(media_urls, is_video):
         params = {"is_carousel_item": "true", "access_token": access_token}
@@ -212,16 +256,20 @@ def post_carousel(timmmm, access_token: str, ig_user_id: str,   media_size: list
         if vid:
             wait_for_container(access_token, child_id)
         child_ids.append(child_id)
-    params = { "media_type": "CAROUSEL", "children": ",".join(child_ids), "caption": caption, "access_token": access_token,}
+    params = {"media_type": "CAROUSEL", "children": ",".join(child_ids), "caption": caption, "access_token": access_token,}
     container = _post(f"{ig_user_id}/media", params)
     creation_id = container["id"]
     if not publish:
-        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container('carousel',access_token, ig_user_id, creation_id)
+    return publish_container('carousel', access_token, ig_user_id, creation_id)
 
-def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, media_url: str, is_video: bool = False, publish: bool = True, media_duration: int = 0, ) -> str:
+def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, media_url: str, is_video: bool = False, publish: bool = True, media_duration: int = 0) -> str:
     _validate_media_url(media_url)
+    neww = datetime.now(timezone.utc) + timedelta(hours=24)
+    newww = datetime.now(timezone.utc) + timedelta(days=5)
+    if timmmm.tzinfo is None:
+        raise ValueError("timmmm must be timezone-aware")
     if is_video:
         if media_size > MAX_VIDEO_BYTES:
             raise ValueError(f"Video exceeds max size of {MAX_VIDEO_BYTES} bytes")
@@ -230,6 +278,9 @@ def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, medi
     else:
         if media_size > MAX_PHOTO_BYTES:
             raise ValueError(f"Photo exceeds max size of {MAX_PHOTO_BYTES} bytes")
+    if timmmm > neww  and timmmm < newww  and not publish:
+        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token="", typeee="Story_later", text1=is_video, text2=media_duration if is_video else 0, text3="", media_id=media_url, )
+        return "Story Added For scheduling"
     params = {"media_type": "STORIES", "access_token": access_token}
     if is_video:
         params["video_url"] = media_url
@@ -240,9 +291,9 @@ def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, medi
     if is_video:
         wait_for_container(access_token, creation_id)
     if not publish:
-        sccc.insert_time(ig_user_id,creation_id,timmmm,access_token)
+        sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container("story",access_token, ig_user_id, creation_id)
+    return publish_container("story", access_token, ig_user_id, creation_id)
 
 def get_media_insights(media_id, access_token, story ):
     metrics = ("views","reach", "replies","shares","likes","navigation","profile_activity") if story else ("views","reach","likes","comments","saved","shares","total_interactions","profile_activity","follows","caption","timestamp")    

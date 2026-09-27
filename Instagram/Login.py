@@ -342,17 +342,20 @@ def story():
         return jsonify({"success": False, "message": str(e)}), 400
     video_type = str(is_video).strip().lower() == "true"
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid type or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    now1 = datetime.now(timezone.utc).isoformat()
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        now1 = datetime.now(timezone.utc).isoformat()
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee = now
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
@@ -414,17 +417,20 @@ def photo():
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    now1 = datetime.now(timezone.utc).isoformat()
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        now1 = datetime.now(timezone.utc).isoformat()
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee = now
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
@@ -494,17 +500,20 @@ def video():
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    now1 = datetime.now(timezone.utc).isoformat()
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        now1 = datetime.now(timezone.utc).isoformat()
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee = now
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
@@ -562,23 +571,26 @@ def carousel():
     media_durationn = [_coerce_int(p) for p in media_duration]
     if any(v is None for v in media_durationn):
         return jsonify({"success": False, "message": "one or more media_duration values are not valid ints"}), 400
-    publish_now = str(publish).strip().lower() == "true"
     service = dpp.authenticate_and_get_service(token)
     data , error , code  = get_files_and_upload_to_drive(service=service,type="carousel")
     if not data or data[0]["error"] :
         return jsonify({"error":error}) , code
     media_urls = [item["webViewLink"] for item in data]
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    now1 = datetime.now(timezone.utc).isoformat()
+    publish_now = str(publish).strip().lower() == "true"
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        now1 = datetime.now(timezone.utc).isoformat()
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee = now
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
