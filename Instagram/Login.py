@@ -347,14 +347,13 @@ def story():
         if timee is None:
             return jsonify({"error": "invalid type or missing date/time"}), 400
         now = datetime.now(timezone.utc)
-        now1 = datetime.now(timezone.utc).isoformat()
         lb = now + timedelta(minutes=5)
         up = now + timedelta(days=4)
         if timee < lb or timee > up:
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
-        timee = now
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
+        timee = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
@@ -422,14 +421,13 @@ def photo():
         if timee is None:
             return jsonify({"error": "invalid type or missing date/time"}), 400
         now = datetime.now(timezone.utc)
-        now1 = datetime.now(timezone.utc).isoformat()
         lb = now + timedelta(minutes=5)
         up = now + timedelta(days=4)
         if timee < lb or timee > up:
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
-        timee = now
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
+        timee = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
@@ -505,14 +503,13 @@ def video():
         if timee is None:
             return jsonify({"error": "invalid type or missing date/time"}), 400
         now = datetime.now(timezone.utc)
-        now1 = datetime.now(timezone.utc).isoformat()
         lb = now + timedelta(minutes=5)
         up = now + timedelta(days=4)
         if timee < lb or timee > up:
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
-        timee = now
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
+        timee = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
@@ -582,14 +579,13 @@ def carousel():
         if timee is None:
             return jsonify({"error": "invalid type or missing date/time"}), 400
         now = datetime.now(timezone.utc)
-        now1 = datetime.now(timezone.utc).isoformat()
         lb = now + timedelta(minutes=5)
         up = now + timedelta(days=4)
         if timee < lb or timee > up:
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
-        timee = now
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now1,len(usernames)):
+        timee = datetime.now(timezone.utc)
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
