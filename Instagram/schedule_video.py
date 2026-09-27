@@ -5,6 +5,7 @@ import sqlite3
 import X.login as x
 import threads.login as thhh
 import campaign as campp
+import json
 import pinterst.login as pin 
 import Drive.dep as dpp
 import youtube.login as you
@@ -88,8 +89,6 @@ def delete_by_id(row_id):
     conn.close()
 
 init_db()
-# timmm = (datetime.now(timezone.utc) + timedelta(seconds=5)).isoformat()
-# insert_time("sdidfbdzdf", "fgfgfd", timmm, "dsajhbdhf")
 
 if __name__ == "__main__":
     while True:
@@ -99,6 +98,37 @@ if __name__ == "__main__":
             # addd the another way to schedule cause container expires in the 24 hours
             if typess == "container":
                 aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
+                delete_by_id(row_id)
+            if typess == "Story_later":
+                access_token = aaaa.access_tokenvali(username_id)
+                if not access_token :
+                    continue
+                aaaa.post_story(now,access_token, username_id, 0, media_id, text1, True, text2)
+                delete_by_id(row_id)
+            if typess == "Photo_later":
+                access_token = aaaa.access_tokenvali(username_id)
+                if not access_token :
+                    continue
+                aaaa.post_photo(now,access_token, username_id,media_id, text3, 0, True)
+                delete_by_id(row_id)
+            if typess in ("Reel_later", "Video_later"):
+                access_token = aaaa.access_tokenvali(username_id)
+                if not access_token :
+                    continue
+                height, width, cover_url, media_duration = text2.split(",")
+                aaaa.post_video(now,access_token, username_id, height, width, media_id, 0 , text3, text1, cover_url,True, media_duration )
+                delete_by_id(row_id)
+            if typess == "Carousel_later":
+                access_token = aaaa.access_tokenvali(username_id)
+                if not access_token :
+                    continue
+                combi = json.loads(text2)
+                if len(combi) % 2 != 0:
+                    continue
+                lengthof = len(combi) // 2
+                media_size = combi[:lengthof]
+                media_duration = combi[lengthof:]
+                aaaa.post_carousel(now,access_token, username_id,  media_size, media_duration, media_id, text1, text3, True)
                 delete_by_id(row_id)
             if typess == "container1":
                 thhh.publish_threads_container_sc(user_id=username_id, access_token=access_tok, creation_id=container_id)
