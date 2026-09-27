@@ -5,6 +5,7 @@ import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
 import limit as lmmm
+import json
 from flask import Flask, request, redirect, jsonify
 from datetime import datetime, timezone, timedelta
 import Instagram.schedule_video as sccc
@@ -71,12 +72,71 @@ def refresh_threads_tokenww(expire, access, thread_user_id):
         return new_access
     else:
         return access
+    
+def refresh_threads_token11(expires, accesses, thread_user_ids):
+    new_accesses = []
+    for expire, access, thread_user_id in zip(expires, accesses, thread_user_ids):
+        expire_dt = datetime.fromisoformat(expire)
+        if expire_dt - datetime.now(timezone.utc) < timedelta(days=1):
+            resp = requests.get( THREADS_REFRESH_URL, params={"grant_type": "th_refresh_token", "access_token": access}, )
+            resp.raise_for_status()
+            data = resp.json()
+            new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
+            new_access = data["access_token"]
+            try:
+                dbimp.update_rows_web( THREADS_TABLE_NAME, { "Access_token": new_access, "Token_expire": new_expiry.isoformat(), }, filters={"Account_id": thread_user_id}, )
+            except Exception as e:
+                print(f"Failed to persist refreshed Threads token for {thread_user_id}: {e}")
+            new_accesses.append(new_access)
+        else:
+            new_accesses.append(access)
+    return new_accesses
 
 def parse_aware_timestamp(timestamp: str) -> datetime:
     dt = datetime.fromisoformat(timestamp)
     if dt.tzinfo is None:
         raise ValueError(f"Timestamp '{timestamp}' has no timezone offset")
     return dt.astimezone(timezone.utc)
+
+def process_threads_carousel(access_tokens, threads_user_ids, items, text, publish_now, timee, comment, message, user_id):
+    thread_ids = []
+    daat = {}
+    for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
+        creation_id = create_threads_carousel(access_token, threads_user_id, items, caption=text)
+        if not creation_id:
+            raise RuntimeError("failed to create carousel container")
+        is_published = wait_for_threads_container(access_token, creation_id)
+        if not is_published:
+            raise RuntimeError("carousel container failed to reach FINISHED state")
+        if publish_now :
+            thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
+            if not thread_id:
+                raise RuntimeError("failed to publish carousel thread")
+            xcccc(threads_user_id,access_token,thread_id,"carousel1")
+        if not publish_now:
+            sccc.insert_time(threads_user_id,creation_id,timee,access_token)
+            return creation_id
+        if thread_id :
+            thread_ids.append(thread_id)
+            if comment and message:
+                daat[thread_id] = {"message": message, "comment": comment}
+    if daat:
+        dpp.append_to_file(user_id=user_id, platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+    return thread_ids
+
+def process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, user_id,tpyee):
+    thread_ids = []
+    daat = {}
+    for access_token, threads_user_id in zip(access_tokens, threads_user_ids):
+        thread_id = _publish_threads_post(publish_now, timee, access_token, threads_user_id, "TEXT", text=text)
+        if thread_id:
+            thread_ids.append(thread_id)
+            xcccc(threads_user_id, access_token, thread_id, tpyee)
+            if comment and message:
+                daat[thread_id] = {"message": message, "comment": comment}
+    if daat:
+        dpp.append_to_file(user_id=user_id, platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+    return thread_ids
 
 def get_thread_metrics_csv(user_id: str, media_id: str, access_token: str) -> str:
     expire  = datetime.now(timezone.utc)
@@ -438,17 +498,7 @@ def post_threads_text():
     if err:
         return err
     try:
-        thread_ids = []
-        daat = {}
-        for access_token, threads_user_id in zip(access_tokens, threads_user_ids):
-            thread_id = _publish_threads_post(publish_now, timee, access_token, threads_user_id, "TEXT", text=text)
-            if thread_id:
-                thread_ids.append(thread_id)
-                xcccc(threads_user_id, access_token, thread_id, "text1")
-                if comment and message:
-                    daat[thread_id] = {"message": message, "comment": comment}
-        if daat:
-            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"text1")
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -481,17 +531,7 @@ def post_threads_image():
     if not image_url:
         return jsonify({"error": "image_url is required"}), 400
     try:
-        thread_ids = []
-        daat = {}
-        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
-            thread_id = _publish_threads_post(publish_now,timee, access_token, threads_user_id, "IMAGE", text=text, image_url=image_url)
-            if thread_id :
-                thread_ids.append(thread_id)
-                xcccc(threads_user_id,access_token,thread_id,"photo1")
-                if comment and message:
-                    daat[thread_id] = {"message": message, "comment": comment}
-        if daat:
-            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"photo1")
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -524,17 +564,7 @@ def post_threads_video():
     if not video_url:
         return jsonify({"error": "video_url is required"}), 400
     try:
-        thread_ids = []
-        daat = {}
-        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
-            thread_id = _publish_threads_post( publish_now,timee,access_token, threads_user_id, "VIDEO", text=text, video_url=video_url )
-            if thread_id :
-                thread_ids.append(thread_id)
-                xcccc(threads_user_id,access_token,thread_id,"video1")
-                if comment and message:
-                    daat[thread_id] = {"message": message, "comment": comment}
-        if daat:
-            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"video1")
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -553,40 +583,27 @@ def post_threads_carousel():
     publish = data.get("publish")
     timee_raw = data.get("time") or {}
     publish_now = str(publish).strip().lower() == "true"
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    now = datetime.now(timezone.utc)
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=24)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
+    if not publish_now :
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid type or missing date/time"}), 400
+        now = datetime.now(timezone.utc)
+        lb = now + timedelta(minutes=5)
+        up = now + timedelta(days=4)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    else :
+        timee =  datetime.now(timezone.utc)
+    neww = datetime.now(timezone.utc) + timedelta(hours=24)
+    newww = datetime.now(timezone.utc) + timedelta(days=5) 
+    if not publish and timee > neww and timee < newww :
+        combi = f"{comment},{message}"
+        sccc.insert_post( user_id=json.dumps(threads_user_ids), schedled_time=timee, access_token="", typeee="carousal_later1", text1=combi , text2=tokench["user_id"], text3=text,media_id=json.dumps(items))
+        return jsonify({"success": True, "Added": len(threads_user_ids) }), 200
     if not items:
         return jsonify({"error": "items is required for carousel posts"}), 400
     try:
-        thread_ids = []
-        daat = {}
-        for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
-            creation_id = create_threads_carousel(access_token, threads_user_id, items, caption=text)
-            if not creation_id:
-                raise RuntimeError("failed to create carousel container")
-            is_published = wait_for_threads_container(access_token, creation_id)
-            if not is_published:
-                raise RuntimeError("carousel container failed to reach FINISHED state")
-            if publish_now :
-                thread_id = publish_threads_container(access_token, threads_user_id, creation_id)
-                if not thread_id:
-                    raise RuntimeError("failed to publish carousel thread")
-                xcccc(threads_user_id,access_token,thread_id,"carousel1")
-            if not publish:
-                sccc.insert_time(threads_user_id,creation_id,time,access_token)
-                return creation_id
-            if thread_id :
-                thread_ids.append(thread_id)
-                if comment and message:
-                    daat[thread_id] = {"message": message, "comment": comment}
-        if daat:
-            dpp.append_to_file(user_id=tokench["user_id"], platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+        thread_ids = process_threads_carousel(access_tokens, threads_user_ids, items, text, publish_now, timee, comment, message, tokench["user_id"])
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
