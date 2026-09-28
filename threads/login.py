@@ -124,14 +124,25 @@ def process_threads_carousel(access_tokens, threads_user_ids, items, text, publi
         dpp.append_to_file(user_id=user_id, platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     return thread_ids
 
-def process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, user_id,tpyee):
+def process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, user_id,tpyee,image_url = None,video_url = None):
+    neww = datetime.now(timezone.utc) + timedelta(hours=24)
+    newww = datetime.now(timezone.utc) + timedelta(days=5)
+    if tpyee.lower() == "image":
+        media_id = image_url
+    elif tpyee.lower() == "video":
+        media_id = video_url
+    else:
+        media_id = None
+    if time > neww and time < newww and not publish_now :
+        sccc.insert_post( user_id=threads_user_id, scheduled_time=time, access_token=access_token, typeee=f"{tpyee.lower()}_later1", text1=f"{comment},{message}" , text2=user_id, text3=text,media_id=media_id)
+        return None
     thread_ids = []
     daat = {}
     for access_token, threads_user_id in zip(access_tokens, threads_user_ids):
-        thread_id = _publish_threads_post(publish_now, timee, access_token, threads_user_id, "TEXT", text=text)
+        thread_id = _publish_threads_post(publish_now, timee, access_token, threads_user_id, tpyee, text=text, image_url=image_url if image_url else None , video_url= video_url if video_url else None)
         if thread_id:
             thread_ids.append(thread_id)
-            xcccc(threads_user_id, access_token, thread_id, tpyee)
+            xcccc(threads_user_id, access_token, thread_id, f"{tpyee}1")
             if comment and message:
                 daat[thread_id] = {"message": message, "comment": comment}
     if daat:
@@ -203,18 +214,7 @@ def get_threads_insights(access_token, media_ids, metric_types="views,likes,repl
         results[media_id] = {m["name"]: m.get("values", [{}])[0].get("value") for m in data}
     return results
 
-def _publish_threads_post(publish,time,access_token, threads_user_id, media_type, text, image_url = None , video_url = None):
-    neww = datetime.now(timezone.utc) + timedelta(hours=24)
-    newww = datetime.now(timezone.utc) + timedelta(days=5)
-    if media_type == "IMAGE":
-        media_id = image_url
-    elif media_type == "VIDEO":
-        media_id = video_url
-    else:
-        media_id = None
-    if time > neww and time < newww and not publish :
-        sccc.insert_post( user_id=threads_user_id, scheduled_time=time, access_token=access_token, typeee=f"{media_type.lower()}_later1", text1="" , text2="", text3=text,media_id=media_id)
-        return None
+def _publish_threads_post(publish,time,access_token, threads_user_id, media_type ,text, image_url = None , video_url = None):
     creation_id = create_threads_container( access_token, threads_user_id, media_type, text=text, image_url=image_url if image_url else None , video_url=video_url if video_url else None )
     if not creation_id:
         raise RuntimeError("failed to create container")
@@ -498,7 +498,7 @@ def post_threads_text():
     if err:
         return err
     try:
-        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"text1")
+        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"text")
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -531,7 +531,7 @@ def post_threads_image():
     if not image_url:
         return jsonify({"error": "image_url is required"}), 400
     try:
-        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"photo1")
+        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"photo",image_url=image_url)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
@@ -564,7 +564,7 @@ def post_threads_video():
     if not video_url:
         return jsonify({"error": "video_url is required"}), 400
     try:
-        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"video1")
+        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"],"video",video_url=video_url)
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200

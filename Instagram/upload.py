@@ -215,11 +215,11 @@ def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: in
  
 def post_carousel(timmmm,access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True, ) -> str:
     if not isinstance(media_duration, list):
-        media_duration = json.loads(media_duration)
+        media_duration = json.loads(media_duration[0])
     if not isinstance(media_urls, list):
-        media_urls = json.loads(media_urls)
+        media_urls = json.loads(media_urls[0])
     if not isinstance(is_video, list):
-        is_video = json.loads(is_video)
+        is_video = json.loads(is_video[0])
     if not (len(media_urls) == len(is_video) == len(media_size) == len(media_duration)):
         raise ValueError("media_urls, is_video, media_size, and media_duration must be the same length")
     if not (2 <= len(media_urls) <= 5):

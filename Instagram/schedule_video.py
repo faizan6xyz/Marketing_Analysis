@@ -95,7 +95,6 @@ if __name__ == "__main__":
         now = datetime.now(timezone.utc).isoformat()
         due = get_containers_due(now)
         for row_id, container_id, access_tok, username_id , typess,media_id,hourss,text1,text2,text3 in due:
-            # addd the another way to schedule cause container expires in the 24 hours
             if typess == "container":
                 aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
                 delete_by_id(row_id)
@@ -132,6 +131,30 @@ if __name__ == "__main__":
                 delete_by_id(row_id)
             if typess == "container1":
                 thhh.publish_threads_container_sc(user_id=username_id, access_token=access_tok, creation_id=container_id)
+                delete_by_id(row_id)
+            if typess == "carousal_later1":
+                expire  = datetime.now(timezone.utc)
+                access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
+                comment , message = text1.split(",")
+                thhh.process_threads_carousel(access_token, username_id, media_id, text3, True, now, comment, message, text2)
+                delete_by_id(row_id)
+            if typess == "photo_later1":
+                expire  = datetime.now(timezone.utc)
+                access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
+                comment , message = text1.split(",")
+                thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"photo",image_url=media_id )
+                delete_by_id(row_id)
+            if typess == "text_later1":
+                expire  = datetime.now(timezone.utc)
+                access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
+                comment , message = text1.split(",")
+                thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"text" )
+                delete_by_id(row_id)
+            if typess == "video_later1":
+                expire  = datetime.now(timezone.utc)
+                access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
+                comment , message = text1.split(",")
+                thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"video",video_url=media_id )
                 delete_by_id(row_id)
             if typess == "story" :
                 content = aaaa.story_schedule(username_id,hourss,media_id,access_tok)
