@@ -100,7 +100,6 @@ def parse_aware_timestamp(timestamp: str) -> datetime:
 
 def process_threads_carousel(access_tokens, threads_user_ids, items, text, publish_now, timee, comment, message, user_id):
     thread_ids = []
-    daat = {}
     for access_token , threads_user_id in zip(access_tokens,threads_user_ids):
         creation_id = create_threads_carousel(access_token, threads_user_id, items, caption=text)
         if not creation_id:
@@ -119,9 +118,7 @@ def process_threads_carousel(access_tokens, threads_user_ids, items, text, publi
         if thread_id :
             thread_ids.append(thread_id)
             if comment and message:
-                daat[thread_id] = {"message": message, "comment": comment}
-    if daat:
-        dpp.append_to_file(user_id=user_id, platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+                sccc.inert_workflow(thread_id ,message , comment)
     return thread_ids
 
 def process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, user_id,tpyee,image_url = None,video_url = None):
@@ -137,16 +134,13 @@ def process_threads_text_posts(access_tokens, threads_user_ids, publish_now, tim
         sccc.insert_post( user_id=threads_user_id, scheduled_time=time, access_token=access_token, typeee=f"{tpyee.lower()}_later1", text1=f"{comment},{message}" , text2=user_id, text3=text,media_id=media_id)
         return None
     thread_ids = []
-    daat = {}
     for access_token, threads_user_id in zip(access_tokens, threads_user_ids):
         thread_id = _publish_threads_post(publish_now, timee, access_token, threads_user_id, tpyee, text=text, image_url=image_url if image_url else None , video_url= video_url if video_url else None)
         if thread_id:
             thread_ids.append(thread_id)
             xcccc(threads_user_id, access_token, thread_id, f"{tpyee}1")
             if comment and message:
-                daat[thread_id] = {"message": message, "comment": comment}
-    if daat:
-        dpp.append_to_file(user_id=user_id, platform="Threads", filename="workflowcomment.json", data_to_append=daat, as_json=True)
+                sccc.inert_workflow(thread_id ,message , comment)
     return thread_ids
 
 def get_thread_metrics_csv(user_id: str, media_id: str, access_token: str) -> str:

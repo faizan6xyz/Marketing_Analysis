@@ -124,7 +124,8 @@ def campaign():
     data = request.get_json(silent=True) or {}
     token = data.get("token")
     publish = data.get("publish")
-    reply = data.get("reply")
+    reply = data.get("reply") or ""
+    subject = data.get("subject") or ""
     timee_raw = data.get("time")
     timee = parse_datetime(timee_raw)
     publish_now = str(publish).strip().lower() == "true"
@@ -293,6 +294,7 @@ def campaign():
                     gc.send_message_with_attachments( service=gmail_service, to=recipient, subject=campaign_name or "", body_text=body, attachment_paths=attachment_paths, attachment_labels=attachment_labels, name=recipient_name,)
                 else:
                     gc.send_message(service=gmail_service, to=recipient, subject=campaign_name or "", body_text=body, name=recipient_name)
+                sccc.inert_workflow(campaign_name,reply,subject)
                 dpp.append_to_file(user_id=account_id, platform=platform, filename="campaigns.txt", data_to_append=content)
                 results.append({"to": recipient, "status": "sent"})
             except Exception as e:
@@ -354,6 +356,7 @@ def campaign():
                 whatt.send_whatsapp_message(PHONE_NUMBER_ID=account_id, ACCESS_TOKEN=acc, recipient_number=recipient, message_body=personalized_body)
                 for m in media:
                     whatt.send_whatsapp_media( PHONE_NUMBER_ID=account_id, ACCESS_TOKEN=acc, recipient_number=recipient, msg_type=m["type"], path=m["path"], caption=m.get("caption"), filename=m.get("filename"),)
+                sccc.inert_workflow(campaign_name,reply,subject)
                 dpp.append_to_file(user_id=account_id, platform=platform, filename="campaigns.txt", data_to_append=content)
                 results.append({"to": recipient, "status": "sent"})
             except Exception as e:

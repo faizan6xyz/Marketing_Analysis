@@ -2,6 +2,7 @@ from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 import tempfile
 import os
+import Instagram.schedule_video as sccc
 import database.UserDB as dbimp
 import requests
 from urllib.parse import urlencode
@@ -432,7 +433,6 @@ def photo():
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
-    daat = {}
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
@@ -446,13 +446,12 @@ def photo():
         try:
             id_post = uploadd.post_photo(access_token=access_token,ig_user_id=account_id,image_url=media_url,caption=caption,media_size=media_size,publish=publish_now,timmmm=timee,)
             if publish_now  and comment and message:
-                daat[id_post] = {"message": message, "comment": comment}
+                sccc.inert_workflow(id_post ,message , comment)
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post photo: {e}"})
             continue
         results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-    dpp.append_to_file(user_id=tokench["user_id"], platform="Instagram", filename="workflowcomment.json", data_to_append=daat, as_json=True)
-    overall_success = any(r["success"] for r in results)
+        overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
 @app.route("/instagram/upload/reel", methods=["POST"])
@@ -514,7 +513,6 @@ def video():
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
-    daat = {}
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
@@ -528,12 +526,11 @@ def video():
         try:
             id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,)
             if publish_now  and comment and message:
-                daat[id_post] = {"message": message, "comment": comment}
+                sccc.inert_workflow(id_post ,message , comment)
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post video: {e}"})
             continue
         results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-    dpp.append_to_file(user_id=tokench["user_id"], platform="Instagram", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
@@ -590,7 +587,6 @@ def carousel():
     rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["Username"]: row for row in rows}
     results = []
-    daat = {}
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
@@ -604,12 +600,11 @@ def carousel():
         try:
             id_post = uploadd.post_carousel(access_token=access_token,ig_user_id=account_id,is_video=is_videoo,media_size=media_sizee,media_duration=media_durationn,media_urls=media_urls,publish=publish_now,caption=caption,timmmm=timee, )
             if publish_now  and comment and message:
-                daat[id_post] = {"message": message, "comment": comment}
+                sccc.inert_workflow(id_post ,message , comment)
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post carousel: {e}"})
             continue
         results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-    dpp.append_to_file(user_id=tokench["user_id"], platform="Instagram", filename="workflowcomment.json", data_to_append=daat, as_json=True)
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
