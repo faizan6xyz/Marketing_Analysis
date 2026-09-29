@@ -54,6 +54,9 @@ filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": 
           "x": {"postanalysis.txt":campaigns_content7 } ,
           "Pinterst": {"postanalysis.txt":campaigns_content8}}
 
+
+# need to remove the workflow.json from each platform and add the workflow for each post , campin in valkey cache and sqlitedb . the newest one (post and campaign workflow ) will in be in the cache and the old ones would be gotten in the sqlite 
+
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
     dbimp.insert_rows(token,table_name, {"id" : user_id , "Timestamp":timestamp ,"Access_token" : access_token, "Refresh_token" : refresh_token, "Token_expire": expiry, "Connected" : 1 , "Scopes" : SCOPES,"Email":mail})
