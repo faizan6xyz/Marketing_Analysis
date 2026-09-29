@@ -266,10 +266,11 @@ if __name__ == "__main__":
             if typess == "message_later":
                 campp.upload_latewhat(username_id , text1, text2, text3, media_id)
                 delete_by_id(row_id)
-            
         time.sleep(1)
+
+# need to add the comment and message for the autmation in the sqlite after the schedule post for every single platform
+
+
 # had to shift from the token to another method in which the token doesn't require to publish or do anything 
-
-
 
 # add repeat of addition of scheledule of post1 type when every it deletes
