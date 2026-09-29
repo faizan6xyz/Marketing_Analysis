@@ -37,8 +37,25 @@ def init_db():
                     text1 TEXT ,
                     text2 TEXT ,
                     text3 TEXT  ) """)
+    conn.execute(""" CREATE TABLE IF NOT EXISTS workflow (
+                    id TEXT ,
+                    message TEXT ,
+                    comment TEXT ) """)
     conn.commit()
     conn.close()
+
+def inert_workflow(id_ , message , comment ):
+    conn = get_conn()
+    conn.execute("INSERT INTO workflow ( id , comment , message) values (?,?,?) " ,( id_,comment,message ))
+    conn.commit()
+    conn.close()
+
+def workflow_data(id_):
+    conn = get_conn()
+    cur = conn.execute("SELECT  message , comment FROM workdlow WHERE id = ? ",(id_))   # for the whatsapp theres no comment but for the gmail comment is the subject 
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument 
     conn = get_conn()

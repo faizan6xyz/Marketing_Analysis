@@ -6,6 +6,7 @@ import database.UserDB as dbimp
 import upload as uploadd
 import authnew as au
 import Drive.dep as dp
+import Instagram.schedule_video as sccc
 from flask import Flask, request, jsonify
 app = Flask(__name__)
 VERIFY_TOKEN = os.getenv("IG_VERIFY_TOKEN")
@@ -50,19 +51,12 @@ def receive_webhook():
         access = access_rows[0] if access_rows else None
         if not access:
             return jsonify({"error": "no access record found for account"}), 404
-        user_id = access["id"]
         AKk = access["Access_token"]
-        expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-        token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)  # dont genrate the token here use the pre made or use the web one to reads
-        df = dp.read_csv_from_drive(ig_account_id, "Instagram", "workflowcomment.json", as_json=True)
-        dfid = df.get(media_id, {})
-        if not dfid :
-            return jsonify({"error": "from_user_id and reply are required"}), 400
-        reply = dfid.get("reply")
+        reply , comment = sccc.workflow_data(media_id)
         if not reply:
             return jsonify({"error": "from_user_id and reply are required"}), 400
         access_token = uploadd.refresh_token11( ig_account_id, AKk)
-        result = uploadd.send_message(from_user_id, reply, access_token)  # <- fixed: use token, not access_token list
+        result = uploadd.send_message(from_user_id, reply, access_token) 
         if not result["success"]:
             return jsonify(result), 400
         return jsonify(result), 200

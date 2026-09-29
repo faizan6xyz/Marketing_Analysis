@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import threads.login as thhh
 import authnew as au
+import Instagram.schedule_video as sccc
 import Drive.dep as dp
 from flask import Flask, request, jsonify
 app = Flask(__name__)
@@ -13,7 +14,7 @@ VERIFY_TOKEN = os.getenv("TH_VERIFY_TOKEN")
 APP_SECRET = os.getenv("Threads_app_secrects")
 table = "Threads"
 
-def create_threads_post(text, ACCESS_TOKEN, THREADS_USER_ID, reply_to_id=None):
+def send_message(text, ACCESS_TOKEN, THREADS_USER_ID, reply_to_id=None):
     container_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
     container_params = {"media_type": "TEXT", "text": text, "access_token": ACCESS_TOKEN}
     if reply_to_id:
@@ -71,18 +72,13 @@ def receive_webhook():
         if not access:
             results.append({"entry": th_account_id, "error": "no access record found for account"})
             continue
-        user_id = access["id"]
         Token_expire = datetime.fromisoformat(access["Token_expire"])
-        expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-        token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)    # dont need to create either retrieve or jsut use the web one
-        df = dp.read_csv_from_drive(th_account_id, "Threads", "workflowcomment.json", as_json=True)
-        dfid = df.get(media_id, {})
-        reply = dfid.get("reply")
+        reply , comment = sccc.workflow_data(media_id)
         if not reply:
             results.append({"entry": th_account_id, "error": "no reply configured for this media_id"})
             continue
         access_token = thhh.refresh_threads_tokenww(Token_expire, access, th_account_id)
-        result = create_threads_post(reply, access_token, th_account_id, from_user_id)
+        result = send_message(reply, access_token, th_account_id, from_user_id)
         if not result["success"]:
             results.append({"entry": th_account_id, "error": result})
         else:

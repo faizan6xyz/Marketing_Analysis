@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 import os
+import Instagram.schedule_video as sccc
 import requests
 from flask import Flask, request, redirect, jsonify
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -157,14 +158,13 @@ def receive_webhook_message():
                     if body and body.strip().lower() == "no":
                         send_whatsapp_message(PHONE_NUMBER_ID=my_phone_number_id,ACCESS_TOKEN=acc,recipient_number=sender_wa_id,message_body="Thanks for replying , We recived your message ",)
                     if body and body.strip().lower() == "yes":
-                        workflow_map = dp.read_csv_from_drive(my_phone_number_id, "Whatsapp", "workflowmessage.json", as_json=True)
                         campaigns_df = dp.read_csv_from_drive(my_phone_number_id, "Whatsapp", "campains.txt", as_json=False)
                         matches = campaigns_df.loc[campaigns_df['phone_no'] == sender_wa_id, "capaign_name"]
                         if matches.empty:
                             log.warning(f"No campaign match found for {sender_wa_id} on 'yes' reply.")
                         else:
                             campaign_id = matches.iloc[-1]
-                            reply = workflow_map.get(campaign_id, {}).get("reply")
+                            reply , comment = sccc.workflow_data(campaign_id)
                             if reply:
                                 send_whatsapp_message(PHONE_NUMBER_ID=my_phone_number_id,ACCESS_TOKEN=acc,recipient_number=sender_wa_id,message_body=reply,)
                             else:

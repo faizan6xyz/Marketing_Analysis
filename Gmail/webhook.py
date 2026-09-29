@@ -6,6 +6,7 @@ import Gmail.Read_mails as gc
 import database.UserDB as dbimp
 from email.utils import parseaddr
 import Drive.dep as dpp
+import Instagram.schedule_video as sccc
 from flask import Flask,request, jsonify
 app = Flask(__name__)
 GMAIL_TOPIC_NAME = 'projects/YOUR_PROJECT_ID/topics/gmail-notifications'
@@ -29,39 +30,6 @@ def start_gmail_watch(service):
     request_body = { 'labelIds': ['INBOX'], 'topicName': 'projects/YOUR_PROJECT_ID/topics/gmail-notifications' }
     response = service.users().watch(userId='me', body=request_body).execute()   # this reutrns the historId and the expiretion in milliseconds
     return response
-
-@app.route('/webhook/gmail', methods=['POST'])
-def gmail_webhook():
-    envelope = request.get_json()
-    if not envelope or 'message' not in envelope:
-        return jsonify({'error': 'bad request'}), 400
-    message = envelope['message']
-    data = json.loads(base64.b64decode(message['data']).decode('utf-8'))
-    message_id = json.loads(base64.b64decode(message["messageId"]).decode('utf-8'))
-    email_address = data['emailAddress']
-    new_history_id = data['historyId']
-    rows = dbimp.select_rows_web("Gmail"  ,select="Account_id,id", filters={"Email":email_address})
-    if not rows : 
-        return False
-    account_id = rows[0]["Account_id"]
-    user_id = rows[0]["id"]
-    service = gc.get_service_web(user_id,account_id)
-    msg = service.users().messages().get( userId='me', id=message_id, format='metadata',metadataHeaders=['From', 'Subject', 'Date']).execute()
-    headers = {h['name']: h['value'] for h in msg['payload']['headers']}
-    _, sender = parseaddr(headers.get('From', ''))
-
-    df = dpp.read_csv_from_drive(account_id, "Gmail", "workflowmessage.json", as_json=True)
-    df1 = dpp.read_csv_from_drive(account_id, "Gmail", "campains.txt", as_json=False)
-    matches = df1.loc[df1['phone_no'] == sender, "capaign_name"]
-    if matches.empty:
-        return False
-    else:
-        campaign_id = matches.iloc[-1]
-        response = df.get(campaign_id ,{}).get("reply")
-        response_sub = df.get(campaign_id ,{}).get("subject")
-        if response_sub and response :
-            gc.send_message(service=service, to=sender, subject=response_sub or "", body_text=response)
-    return 200
 
 @app.route('/webhook/gmail', methods=['POST'])
 def gmail_webhook():
@@ -92,7 +60,6 @@ def gmail_webhook():
         print(f"history.list failed for {email_address}: {e}")
         dbimp.update_rows_web("Gmail", {"LastHistoryId": new_history_id},{"Email": email_address})
         return jsonify({'status': 'history stale, resynced'}), 200
-    df = dpp.read_csv_from_drive(account_id, "Gmail", "workflowmessage.json", as_json=True)
     df1 = dpp.read_csv_from_drive(account_id, "Gmail", "campains.txt", as_json=False)
     for record in history.get('history', []):
         for added in record.get('messagesAdded', []):
@@ -106,8 +73,7 @@ def gmail_webhook():
             if matches.empty:
                 continue
             campaign_id = matches.iloc[-1]
-            reply_text = df.get(campaign_id, {}).get("reply")
-            reply_subject = df.get(campaign_id, {}).get("subject")
+            reply_text , reply_subject = sccc.workflow_data(campaign_id)
             if reply_text and reply_subject:
                 gc.send_message( service=service, to=sender_email, subject=reply_subject, body_text=reply_text)
     dbimp.update_rows_web( "Gmail",  {"LastHistoryId": new_history_id},{"Email": email_address})
