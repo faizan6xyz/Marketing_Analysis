@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify, make_response , redirect
 from flask_cors import CORS
 import csv
 import limit as lmmmm
-import pandas as pd
+import Instagram.schedule_video as sccc
 from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import authnew as au
@@ -230,7 +230,6 @@ def limit():
 def health():
     return {"status": "ok"}, 200
 
-
 @app.route("/complaint", methods=["POST"])
 def submit_complaint():
     body = request.get_json(silent=True) or {}
@@ -248,6 +247,26 @@ def submit_complaint():
         writer = csv.writer(f)
         writer.writerow([user_id, complaint, datetime.now(timezone.utc).isoformat()])
     return jsonify({"status": True, "reason": "Issue has been submitted"}), 200
+
+@app.route("/add_workflow", methods=["POST"])
+def update_workflow():
+    body = request.get_json(silent=True) or {}
+    id_ = body.get("id")
+    comment = body.get("comment")
+    message = body.get("message")
+    token = body.get("token")
+    tokench = au.process(token)
+    if not tokench["status"]:
+        return jsonify({"status": False, "reason": tokench["reason"]}), 401
+    if not id_ or not comment or not message :
+        return jsonify({"status": False, "reason": "parameter missing"}), 400
+    if len(message) > 200 or len(comment) > 200:
+        return jsonify({"status": False, "reason": "value too long"}), 413
+    try:
+        sccc.workflow_data_change(id_, message, comment)
+    except Exception:
+        return jsonify({"status": False, "reason": "server error"}), 500
+    return jsonify({"status":True, "reason": "updated"}) ,200
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)

@@ -38,7 +38,7 @@ def init_db():
                     text2 TEXT ,
                     text3 TEXT  ) """)
     conn.execute(""" CREATE TABLE IF NOT EXISTS workflow (
-                    id TEXT ,
+                    id TEXT PRIMARY KEY ,
                     message TEXT ,
                     comment TEXT ) """)
     conn.commit()
@@ -50,9 +50,22 @@ def inert_workflow(id_ , message , comment ):
     conn.commit()
     conn.close()
 
+def workflow_data_change(id_, message, comment):
+    conn = get_conn()
+    try:
+        rows = conn.execute( "SELECT message, comment FROM workflow WHERE id = ?", (id_,)).fetchall()
+        if rows:
+            conn.execute( "UPDATE workflow SET message = ?, comment = ? WHERE id = ?", (message, comment, id_),)
+        else:
+            conn.execute( "INSERT INTO workflow (id, message, comment) VALUES (?, ?, ?)",(id_, message, comment),)
+        conn.commit()
+        return rows 
+    finally:
+        conn.close()
+
 def workflow_data(id_):
     conn = get_conn()
-    cur = conn.execute("SELECT  message , comment FROM workdlow WHERE id = ? ",(id_))   # for the whatsapp theres no comment but for the gmail comment is the subject 
+    cur = conn.execute("SELECT  message , comment FROM workflow WHERE id = ? ",(id_))   # for the whatsapp theres no comment but for the gmail comment is the subject 
     rows = cur.fetchall()
     conn.close()
     return rows
