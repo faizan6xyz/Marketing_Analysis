@@ -6,7 +6,9 @@ import hashlib
 from datetime import datetime, timezone, timedelta
 import os
 import database.UserDB as dbimp
-SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
+from dotenv import load_dotenv
+load_dotenv()
+SECRET_KEY = os.environ.get("SECRET_KEY")
 
 def random_text(limit):
     password = [ secrets.choice(string.ascii_uppercase), secrets.choice(string.ascii_lowercase),secrets.choice(string.digits),]

@@ -564,3 +564,7 @@ def post_to_pinterest_video():
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
     return jsonify({"success": True, "pin_id": pin.get("id")}), 200
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

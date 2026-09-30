@@ -601,3 +601,7 @@ def post_threads_carousel():
     except (requests.HTTPError, ValueError, RuntimeError) as e:
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

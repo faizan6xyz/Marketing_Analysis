@@ -7,6 +7,8 @@ import Instagram.schedule_video as sccc
 import database.UserDB as dbimp
 from datetime import datetime, timezone,timedelta
 from urllib.parse import urlparse
+from dotenv import load_dotenv
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ig_post")
 GRAPH_VERSION = "v25.0"
@@ -373,7 +375,7 @@ def story_schedule(ig_user_id,hour,media_id,access_token):
     nav_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "navigation","breakdown": "story_navigation_action_type","access_token": access_token,},timeout=10,).json()
     profile_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "profile_activity","breakdown": "action_type","access_token": access_token,},timeout=10,).json()
     flat_metrics = {item["name"]: item["values"][0]["value"] for item in insights_resp.get("data", [])}
-    return f"{media_id},{flat_metrics.get("views")},,{flat_metrics.get("reach")},{flat_metrics.get("replies")},{flat_metrics.get("shares")},{nav_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{flat_metrics.get("follows")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{hour},{meta_resp.get("thumbnail_url")},{one_hour_before}"
+    return f'{media_id},{flat_metrics.get("views")},,{flat_metrics.get("reach")},{flat_metrics.get("replies")},{flat_metrics.get("shares")},{nav_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{flat_metrics.get("follows")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{hour},{meta_resp.get("thumbnail_url")},{one_hour_before}'
 
 def publish_container(typee,access_token: str, ig_user_id: str, creation_id: str) -> str:
     access_token = refresh_token11(ig_user_id,access_token)
@@ -393,7 +395,7 @@ def get_media_analytics(ig_user_id , media_id,access_token):
     insights_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": ",".join(flat_metrics_list),"access_token": access_token,},timeout=10,).json()
     flat_metrics = {item["name"]: item["values"][0]["value"] for item in insights_resp.get("data", [])}
     profile_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights", params={"metric": "profile_activity", "breakdown": "action_type", "access_token": access_token,},timeout=10,).json()
-    return f"{media_id},{flat_metrics.get("views")},{flat_metrics.get("likes")},{flat_metrics.get("comments")},{flat_metrics.get("saved")},{flat_metrics.get("shares")},{flat_metrics.get("total_interactions")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{one_hour_before},{flat_metrics.get("follows")},{meta_resp.get("thumbnail_url")}"
+    return f'{media_id},{flat_metrics.get("views")},{flat_metrics.get("likes")},{flat_metrics.get("comments")},{flat_metrics.get("saved")},{flat_metrics.get("shares")},{flat_metrics.get("total_interactions")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{one_hour_before},{flat_metrics.get("follows")},{meta_resp.get("thumbnail_url")}'
 
 def scccc(user_id,access_token,media_id,typee):
     for i in range(22):
@@ -404,3 +406,7 @@ def xcccc(user_id,access_token,media_id,typee):
     for i in range(10): 
         timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
         sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
+
+
+if __name__ == "__main__":
+    print("hi")

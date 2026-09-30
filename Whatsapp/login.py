@@ -10,6 +10,8 @@ import database.UserDB as dbimp
 import authnew as au
 import Drive.dep as dp
 from flask_cors import CORS
+from dotenv import load_dotenv
+load_dotenv()
 BASE_URL = ""
 app = Flask(__name__)
 frontend = os.environ.get("front_end")

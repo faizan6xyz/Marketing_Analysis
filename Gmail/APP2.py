@@ -11,6 +11,8 @@ from googleapiclient.discovery import build
 import requests
 from flask_cors import CORS
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
@@ -403,5 +405,4 @@ def get_label_messages():
         return safe_error(e)
 
 if __name__ == '__main__':
-    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    app.run(debug=debug_mode, port=int(os.environ.get("PORT", 5000)))
+    app.run(debug=True, port=int(os.environ.get("PORT", 5000)))

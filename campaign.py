@@ -15,6 +15,8 @@ from datetime import datetime, timezone, timedelta
 import os
 from flask_cors import CORS
 import logging
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])

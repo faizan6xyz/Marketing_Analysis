@@ -1,14 +1,13 @@
 import os
 import hmac
 import hashlib
-from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import upload as uploadd
-import authnew as au
-import Drive.dep as dp
 import Instagram.schedule_video as sccc
 from flask import Flask, request, jsonify
 app = Flask(__name__)
+from dotenv import load_dotenv
+load_dotenv()
 VERIFY_TOKEN = os.getenv("IG_VERIFY_TOKEN")
 APP_SECRET = os.getenv("IG_APP_SECRET")
 table = "Instagram"

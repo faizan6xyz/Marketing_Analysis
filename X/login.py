@@ -18,6 +18,8 @@ from flask_limiter.util import get_remote_address
 import authnew as au
 import limit as lmmm
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
@@ -565,3 +567,6 @@ def fetch_x_post_analytics():
         return {"error": "no posts found"}, 404
     results = fetch_tweet_metrics(tweet_ids, access_token)
     return results
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

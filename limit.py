@@ -5,6 +5,8 @@ import time
 import logging
 from datetime import datetime, timedelta, timezone
 import database.UserDB as dbimp
+from dotenv import load_dotenv
+load_dotenv()
 logger = logging.getLogger("rate_limit")
 DB = "limit.db"
 

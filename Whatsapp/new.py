@@ -10,6 +10,8 @@ from collections import defaultdict, deque
 import requests
 from flask import request, jsonify
 import database.UserDB as dbimp
+from dotenv import load_dotenv
+load_dotenv()
 WA_APP_ID = os.getenv("WA_APP_ID")
 WA_REDIRECT_URI = os.getenv("WA_REDIRECT_URI")
 GRAPH_VERSION = "v20.0"

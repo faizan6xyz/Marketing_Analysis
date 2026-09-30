@@ -8,6 +8,8 @@ from email.utils import parseaddr
 import Drive.dep as dpp
 import Instagram.schedule_video as sccc
 from flask import Flask,request, jsonify
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 GMAIL_TOPIC_NAME = 'projects/YOUR_PROJECT_ID/topics/gmail-notifications'
 PUBSUB_SERVICE_ACCOUNT = "your-service-account@project.iam.gserviceaccount.com"

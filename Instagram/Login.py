@@ -15,6 +15,8 @@ import authnew as au
 from moviepy import VideoFileClip
 import Instagram.upload as uploadd
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])

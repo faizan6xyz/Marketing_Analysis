@@ -8,6 +8,8 @@ import json
 import pinterst.login as pin 
 import Drive.dep as dpp
 import youtube.login as you
+from dotenv import load_dotenv
+load_dotenv()
 DB = "schedule.db"
 
 def get_conn():

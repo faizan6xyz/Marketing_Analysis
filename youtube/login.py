@@ -23,6 +23,8 @@ from google_auth_oauthlib.flow import Flow
 import database.UserDB as dbimp
 import authnew as au
 import Drive.dep as dpp
+from dotenv import load_dotenv
+load_dotenv()
 YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/drive.readonly",]
 CLIENT_SECRETS_FILE = "client_secret.json"
 BASE_URL = os.environ.get("BASE_URL")
