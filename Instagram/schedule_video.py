@@ -138,6 +138,7 @@ if __name__ == "__main__":
                 access_token = aaaa.access_tokenvali(username_id)
                 if not access_token :
                     continue
+                comment , message = access_tok.split(",1234,+++x")
                 aaaa.post_photo(now,access_token, username_id,media_id, text3, 0, True)
                 delete_by_id(row_id)
             if typess in ("Reel_later", "Video_later"):
@@ -145,12 +146,14 @@ if __name__ == "__main__":
                 if not access_token :
                     continue
                 height, width, cover_url, media_duration = text2.split(",")
+                comment , message = access_tok.split(",1234,+++x")
                 aaaa.post_video(now,access_token, username_id, height, width, media_id, 0 , text3, text1, cover_url,True, media_duration )
                 delete_by_id(row_id)
             if typess == "Carousel_later":
                 access_token = aaaa.access_tokenvali(username_id)
                 if not access_token :
                     continue
+                comment , message = access_tok.split(",1234,+++x")
                 combi = json.loads(text2)
                 if len(combi) % 2 != 0:
                     continue
@@ -165,25 +168,25 @@ if __name__ == "__main__":
             if typess == "carousal_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
-                comment , message = text1.split(",")
+                comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_carousel(access_token, username_id, media_id, text3, True, now, comment, message, text2)
                 delete_by_id(row_id)
             if typess == "photo_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
-                comment , message = text1.split(",")
+                comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"photo",image_url=media_id )
                 delete_by_id(row_id)
             if typess == "text_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
-                comment , message = text1.split(",")
+                comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"text" )
                 delete_by_id(row_id)
             if typess == "video_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
-                comment , message = text1.split(",")
+                comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"video",video_url=media_id )
                 delete_by_id(row_id)
             if typess == "story" :
@@ -261,10 +264,12 @@ if __name__ == "__main__":
                 pin.post_late(username_id , access_tok , text1, text2, text3, "video" ,media_id)
                 delete_by_id(row_id)
             if typess == "email_later":
-                campp.upload_lategmail(username_id , text1, text2, text3,media_id)
+                text1 , reply , subject = text1.split(",1234,+++x")
+                campp.upload_lategmail(username_id , text1, text2, text3,media_id, reply , subject)
                 delete_by_id(row_id)
             if typess == "message_later":
-                campp.upload_latewhat(username_id , text1, text2, text3, media_id)
+                text1 , reply , subject = text1.split(",1234,+++x")
+                campp.upload_latewhat(username_id , text1, text2, text3, media_id, reply , subject)
                 delete_by_id(row_id)
         time.sleep(1)
 

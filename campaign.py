@@ -49,7 +49,7 @@ def parse_datetime(value: str, require_tz: bool = True):
         return None
     return dt
 
-def upload_latewhat(Account_id , text1, text2, text3, file_id):
+def upload_latewhat(Account_id , text1, text2, text3, file_id,reply = "" , subject = ""):
     target = json.loads(text1[0])
     combin = json.loads(text3[0])
     names = combin[1]
@@ -88,9 +88,10 @@ def upload_latewhat(Account_id , text1, text2, text3, file_id):
         whatt.send_whatsapp_message(PHONE_NUMBER_ID=Account_id, ACCESS_TOKEN=acc, recipient_number=recipient, message_body=personalized_body)
         for typee , path , name in zip(mimetypes,attachment_paths,attachment_labels) :
             whatt.send_whatsapp_media( PHONE_NUMBER_ID=Account_id, ACCESS_TOKEN=acc, recipient_number=recipient, msg_type=typee, path=path,filename=name)
+        sccc.inert_workflow(campaign_name,reply,subject)
         dpp.append_to_file(user_id=Account_id, platform="Whatsapp", filename="campaigns.txt", data_to_append=content)
 
-def upload_lategmail(Account_id , text1, text2, text3, file_id):
+def upload_lategmail(Account_id , text1, text2, text3, file_id,reply = "" , subject = ""):
     target = json.loads(text1[0])
     combin = json.loads(text3[0])
     names = combin[1]
@@ -116,6 +117,7 @@ def upload_lategmail(Account_id , text1, text2, text3, file_id):
             gc.send_message_with_attachments( service=gmail_service, to=recipient, subject=campaign_name or "", body_text=body, attachment_paths=attachment_paths, attachment_labels=attachment_labels, name=recipient_name,)
         else:
             gc.send_message(service=gmail_service, to=recipient, subject=campaign_name or "", body_text=body, name=recipient_name)
+        sccc.inert_workflow(campaign_name,reply,subject)
         dpp.append_to_file(user_id=Account_id, platform="Gmail", filename="campaigns.txt", data_to_append=content)
 
 @app.route('/campaign', methods=['POST'])
@@ -266,7 +268,8 @@ def campaign():
             new_body  = [body , recipient_names]
             bodyy = json.dumps(new_body)
             file_id = json.dumps(dr)
-            sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token=access_token, typeee="email_later", text1=camp, text2=campaign_name, text3=bodyy, media_id=file_id, )
+            camll = f"{camp},1234,+++x{reply},1234,+++x{subject}"
+            sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token=access_token, typeee="email_later", text1=camll, text2=campaign_name, text3=bodyy, media_id=file_id, )
             cleanup_local_files()  
             return jsonify({"account": Account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}), 200
         try:
@@ -326,7 +329,8 @@ def campaign():
             new_body  = [body , recipient_names]
             recipient_names = json.dumps(names)     
             file_id = json.dumps(dr)
-            sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token=access_token,typeee="message_later", text1=camp, text2=recipient_names, text3=bodyy, media_id=file_id,)
+            camll = f"{camp},1234,+++x{reply},1234,+++x{subject}"
+            sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token=access_token,typeee="message_later", text1=camll, text2=recipient_names, text3=bodyy, media_id=file_id,)
             cleanup_local_files()
             return jsonify({"account": Account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}), 200
         rows = dbimp.select_rows(tokench["token"], "Whatsapp", select="Access_token,Account_id,Token_expire", filters={"Phone_no": number, "id": user_id})
