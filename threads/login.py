@@ -131,7 +131,7 @@ def process_threads_text_posts(access_tokens, threads_user_ids, publish_now, tim
     else:
         media_id = None
     if time > neww and time < newww and not publish_now :
-        sccc.insert_post( user_id=threads_user_id, scheduled_time=time, access_token=access_token, typeee=f"{tpyee.lower()}_later1", text1=f"{comment},{message}" , text2=user_id, text3=text,media_id=media_id)
+        sccc.insert_post( user_id=threads_user_id, scheduled_time=time, access_token=access_token, typeee=f"{tpyee.lower()}_later1", text1=f"{comment},1234,+++x{message}" , text2=user_id, text3=text,media_id=media_id)
         return None
     thread_ids = []
     for access_token, threads_user_id in zip(access_tokens, threads_user_ids):
@@ -591,7 +591,7 @@ def post_threads_carousel():
     neww = datetime.now(timezone.utc) + timedelta(hours=24)
     newww = datetime.now(timezone.utc) + timedelta(days=5) 
     if not publish and timee > neww and timee < newww :
-        combi = f"{comment},{message}"
+        combi = f"{comment},1234,+++x{message}"
         sccc.insert_post( user_id=json.dumps(threads_user_ids), schedled_time=timee, access_token="", typeee="carousal_later1", text1=combi , text2=tokench["user_id"], text3=text,media_id=json.dumps(items))
         return jsonify({"success": True, "Added": len(threads_user_ids) }), 200
     if not items:

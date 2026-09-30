@@ -375,7 +375,7 @@ def story():
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
         try:
-            id_post = uploadd.post_story(access_token=access_token,ig_user_id=account_id,media_size=media_size,media_url=media_url,publish=publish_now,is_video=video_type,media_duration=duration,timmmm=timee,)
+            id_post = uploadd.post_story(access_token=access_token,ig_user_id=account_id,media_size=media_size,media_url=media_url,publish=publish_now,is_video=video_type,media_duration=duration,timmmm=timee, )
         except Exception as e:
             results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post story: {e}"})
             continue
@@ -392,8 +392,8 @@ def photo():
     caption = data.get("caption", "")
     timee_raw = data.get("time") or {}
     token = data.get("token")
-    comment = data.get("comment") 
-    message = data.get("message") 
+    comment = data.get("comment")  or ""
+    message = data.get("message") or ""
     usernames = data.get("username")
     if not isinstance(usernames, list):
         usernames = [usernames] if usernames else []
@@ -444,7 +444,7 @@ def photo():
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
         try:
-            id_post = uploadd.post_photo(access_token=access_token,ig_user_id=account_id,image_url=media_url,caption=caption,media_size=media_size,publish=publish_now,timmmm=timee,)
+            id_post = uploadd.post_photo(access_token=access_token,ig_user_id=account_id,image_url=media_url,caption=caption,media_size=media_size,publish=publish_now,timmmm=timee,message=message , comment=comment)
             if publish_now  and comment and message:
                 sccc.inert_workflow(id_post ,message , comment)
         except Exception as e:
@@ -465,8 +465,8 @@ def video():
     duration = data.get("duration")
     timee_raw = data.get("time") or {}
     token = data.get("token")
-    comment = data.get("comment") 
-    message = data.get("message") 
+    comment = data.get("comment") or ""
+    message = data.get("message") or ""
     usernames = data.get("username")
     if not isinstance(usernames, list):
         usernames = [usernames] if usernames else []
@@ -524,7 +524,7 @@ def video():
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
         try:
-            id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,)
+            id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,message=message , comment=comment)
             if publish_now  and comment and message:
                 sccc.inert_workflow(id_post ,message , comment)
         except Exception as e:
@@ -544,8 +544,8 @@ def carousel():
     is_video = data.get("is_video", [])
     timee_raw = data.get("time") or {}
     token = data.get("token")
-    comment = data.get("comment") 
-    message = data.get("message") 
+    comment = data.get("comment") or ""
+    message = data.get("message") or ""
     usernames = data.get("username")
     if not isinstance(usernames, list):
         usernames = [usernames] if usernames else []
@@ -598,7 +598,7 @@ def carousel():
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
         try:
-            id_post = uploadd.post_carousel(access_token=access_token,ig_user_id=account_id,is_video=is_videoo,media_size=media_sizee,media_duration=media_durationn,media_urls=media_urls,publish=publish_now,caption=caption,timmmm=timee, )
+            id_post = uploadd.post_carousel(access_token=access_token,ig_user_id=account_id,is_video=is_videoo,media_size=media_sizee,media_duration=media_durationn,media_urls=media_urls,publish=publish_now,caption=caption,timmmm=timee,message=message , comment=comment )
             if publish_now  and comment and message:
                 sccc.inert_workflow(id_post ,message , comment)
         except Exception as e:

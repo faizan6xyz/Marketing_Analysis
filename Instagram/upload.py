@@ -153,7 +153,7 @@ def wait_for_container(access_token: str, container_id: str, timeout: int = 300,
         elapsed += interval
     raise TimeoutError(f"Container {container_id} did not finish within {timeout}s")
 
-def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, caption: str = "", media_size: int = None, publish: bool = True, ) -> str:
+def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, caption: str = "", media_size: int = None, publish: bool = True,comment = "" , message = "" ) -> str:
     _validate_media_url(image_url)
     neww = datetime.now(timezone.utc) + timedelta(hours=24)
     newww = datetime.now(timezone.utc) + timedelta(days=5)
@@ -163,7 +163,7 @@ def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, captio
     if media_size is not None and media_size > MAX_PHOTO_BYTES:
         raise ValueError(f"Photo exceeds max size of {MAX_PHOTO_BYTES} bytes")
     if timmmm > neww  and timmmm < newww  and not publish:
-        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token="",typeee="Photo_later", text1="", text2="", text3=caption, media_id=image_url, )
+        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token=f"{comment},1234,+++x{message}",typeee="Photo_later", text1="", text2="", text3=caption, media_id=image_url, )
         return "Photo added for scheduling"
     params = { "image_url": image_url,
         "caption": caption, "access_token": access_token, } 
@@ -174,7 +174,7 @@ def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, captio
         return creation_id
     return publish_container('photo', access_token, ig_user_id, creation_id)
 
-def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: int, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, ) -> str:
+def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: int, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, comment = "" , message = "") -> str:
     _validate_media_url(video_url)
     neww = datetime.now(timezone.utc) + timedelta(hours=24)
     newww = datetime.now(timezone.utc) + timedelta(days=5)
@@ -200,7 +200,7 @@ def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: in
         raise ValueError(f"Aspect ratio {ratio:.2f} is outside the allowed range")
     if timmmm > neww  and timmmm < newww  and not publish:
         text111 =  f"{height},{width},{cover_url},{media_duration}"
-        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token="", typeee="Reel_later" if as_reel else "Video_later", text1=as_reel, text2=text111, text3=caption, media_id=video_url, )
+        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token=f"{comment},1234,+++x{message}" , typeee="Reel_later" if as_reel else "Video_later", text1=as_reel, text2=text111, text3=caption, media_id=video_url, )
         return "Video added for scheduling"
     params = { "video_url": video_url, "caption": caption, "media_type": "REELS" if as_reel else "VIDEO", "access_token": access_token, }
     if cover_url is not None:
@@ -213,7 +213,7 @@ def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: in
         return creation_id
     return publish_container("video", access_token, ig_user_id, creation_id)
  
-def post_carousel(timmmm,access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True, ) -> str:
+def post_carousel(timmmm,access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True,comment = "" , message = "" ) -> str:
     if not isinstance(media_duration, list):
         media_duration = json.loads(media_duration[0])
     if not isinstance(media_urls, list):
@@ -241,7 +241,7 @@ def post_carousel(timmmm,access_token: str, ig_user_id: str,   media_size: list[
                 raise ValueError(f"Photo exceeds max size of {MAX_PHOTO_BYTES} bytes")
     if timmmm > neww  and timmmm < newww  and not publish:
         combined = media_size + media_duration
-        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token="", typeee="Carousel_later", text1=json.dumps(is_video), text2=json.dumps(combined), text3=caption, media_id=json.dumps(media_urls),)
+        sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token=f"{comment},1234,+++x{message}" , typeee="Carousel_later", text1=json.dumps(is_video), text2=json.dumps(combined), text3=caption, media_id=json.dumps(media_urls),)
         return "Carousel added for scheduling"
     child_ids = []
     for url, vid in zip(media_urls, is_video):
