@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-import time
+from datetime import datetime, timezone ,timedelta
 import Instagram.upload as aaaa
 import sqlite3
 import X.login as x
@@ -39,6 +38,7 @@ def init_db():
                     text3 TEXT  ) """)
     conn.execute(""" CREATE TABLE IF NOT EXISTS workflow (
                     id TEXT PRIMARY KEY ,
+                    time TEXT ,
                     message TEXT ,
                     comment TEXT ) """)
     conn.commit()
@@ -46,7 +46,8 @@ def init_db():
 
 def inert_workflow(id_ , message , comment ):
     conn = get_conn()
-    conn.execute("INSERT INTO workflow ( id , comment , message) values (?,?,?) " ,( id_,comment,message ))
+    now = (datetime.now(timezone.utc)+timedelta(days=10)).isoformat()
+    conn.execute("INSERT INTO workflow ( id , comment , message, time) values (?,?,?,?) " ,( id_,comment,message, now ),)
     conn.commit()
     conn.close()
 
@@ -62,6 +63,19 @@ def workflow_data_change(id_, message, comment):
         return rows 
     finally:
         conn.close()
+
+def workflow_10_days(time):
+    conn = get_conn()
+    cur = conn.execute("SELECT id FROM workflow WHERE time < ?", (time,))
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def delete_by_10days(row_id):
+    conn = get_conn()
+    conn.execute("DELETE FROM workflow WHERE id = ?", (row_id,))
+    conn.commit()
+    conn.close()
 
 def workflow_data(id_):
     conn = get_conn()
@@ -271,7 +285,10 @@ if __name__ == "__main__":
                 text1 , reply , subject = text1.split(",1234,+++x")
                 campp.upload_latewhat(username_id , text1, text2, text3, media_id, reply , subject)
                 delete_by_id(row_id)
-        time.sleep(1)
+        rows = workflow_10_days(now)
+        for row_id in rows :
+            delete_by_10days(row_id)
+
 
 # need to add the comment and message for the autmation in the sqlite after the schedule post for every single platform
 
