@@ -10,7 +10,7 @@ import tempfile
 from flask_cors import CORS
 import Instagram.schedule_video as sccc
 from flask import Flask, request, redirect, jsonify
-from datetime import datetime, timezone, timedelta , date , UTC
+from datetime import datetime, timezone, timedelta , date 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import hashlib
@@ -110,7 +110,7 @@ def xcccc(user_id,access_token,media_id,typee):
 def get_pinterest_pin_analytics_csv(username_id,pin_id, access_token):
     access_token = refresh_pinterest_token11(access_token,username_id)
     headers = {"Authorization": f"Bearer {access_token}"} 
-    end_date = datetime.now(UTC)
+    end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(hours=24)
     pin_resp = requests.get(f"{BASE_URL}/pins/{pin_id}", headers=headers)
     published_at = ""

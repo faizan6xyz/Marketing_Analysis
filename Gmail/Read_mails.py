@@ -19,11 +19,7 @@ logger = logging.getLogger("gmail_client")
 BASE_URL = os.environ.get("BASE_URL")
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
-if not GMAIL_SCOPES or not GMAIL_SCOPES.strip():
-    raise EnvironmentError("GMAIL_SCOPES environment variable is not set or empty.")
-cleaned = [scope.strip() for scope in GMAIL_SCOPES.split(",") if scope.strip()]
-SCOPES = [s.strip(' []"') for s in cleaned]
+SCOPES =  ["https://www.googleapis.com/auth/gmail.modify"]
 if not SCOPES:
     raise EnvironmentError("GMAIL_SCOPES did not contain any valid scopes.")
 MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
