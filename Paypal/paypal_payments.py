@@ -10,8 +10,6 @@ import authnew as au
 import requests
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography import x509
@@ -36,10 +34,8 @@ WEBHOOK_ID = _require("PAYPAL_WEBHOOK_ID")
 FLASK_SECRET_KEY = _require("FLASK_SECRET_KEY")
 RETURN_URL = os.environ.get("RETURN_URL", "https://example.com/success")
 CANCEL_URL = os.environ.get("CANCEL_URL", "https://example.com/cancel")
-RATE_LIMIT_STORAGE_URI = _require("RATE_LIMIT_STORAGE_URI")
 PAYPAL_ENV = os.environ.get("PAYPAL_ENV", "sandbox")
 PLAN_CATALOG = json.loads(_require("PAYPAL_PLANS"))
-#     {"basic_monthly": {"amount": 49900, "currency": "INR"}, "pro_monthly": {"amount": 99900, "currency": "INR"} }
 BASE_URL = "https://api-m.paypal.com" if PAYPAL_ENV == "live" else "https://api-m.sandbox.paypal.com"
 PAYPAL_TABLE = "Paypal"
 VERIFY_TABLE = "Paypal_verify"
@@ -49,7 +45,6 @@ TRUSTED_CERT_HOSTS = ("api.paypal.com", "api.sandbox.paypal.com")
 ACTIVE_ORDER_STATUSES = ("CREATED", "COMPLETED")
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET_KEY
-limiter = Limiter(get_remote_address, app=app, storage_uri=RATE_LIMIT_STORAGE_URI, default_limits=[])
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
 
@@ -261,7 +256,6 @@ def logincheck(token ,user_id):
     return {"logged_in": bool(found)}
 
 @app.route("/api/demo/seed-cart", methods=["POST"])
-@limiter.limit("10 per minute")
 def seed_cart():
     body = request.get_json(silent=True) or {}
     cart_id = body.get("cart_id")
@@ -280,7 +274,6 @@ def seed_cart():
     return jsonify({"seeded": True, "cart_id": cart_id})
 
 @app.route("/api/payment/create", methods=["POST"])
-@limiter.limit("10 per minute")
 def create_payment():
     body = request.get_json(silent=True) or {}
     cart_id = body.get("cart_id")
@@ -349,7 +342,6 @@ def create_payment():
     return jsonify(result)
 
 @app.route("/api/payment/status/<order_id>", methods=["GET"])
-@limiter.limit("15 per minute")
 def payment_status(order_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -377,7 +369,6 @@ def payment_status(order_id):
     return jsonify({"status": "Payment Done" if status == "COMPLETED" else status})
 
 @app.route("/api/payment/capture/<order_id>", methods=["POST"])
-@limiter.limit("10 per minute")
 def capture_payment(order_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")

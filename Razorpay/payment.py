@@ -9,10 +9,7 @@ import authnew as au
 from flask_cors import CORS
 from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 import requests
-from supabase import create_client, Client
 import database.UserDB as dbimp
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -30,21 +27,15 @@ def _require(key):
         raise RuntimeError(f"Missing required environment variable: {key}")
     return val
 
-SUPABASE_URL = _require("SUPABASE_URL")
-SUPABASE_KEY = _require("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 KEY_ID = _require("RAZORPAY_KEY_ID")
 KEY_SECRET = _require("RAZORPAY_KEY_SECRET")
 WEBHOOK_SECRET = _require("RAZORPAY_WEBHOOK_SECRET")
-RATE_LIMIT_STORAGE_URI = _require("RATE_LIMIT_STORAGE_URI")
 try:
     Plan = json.loads(_require("RAZORPAY_Plan"))
-#     {"basic_monthly": {"amount": 49900, "currency": "INR"}, "pro_monthly": {"amount": 99900, "currency": "INR"} }
 except json.JSONDecodeError as e:
     raise RuntimeError(f"RAZORPAY_Plan env var is not valid JSON: {e}") from e
 app.secret_key = _require("FLASK_SECRET_KEY")
 app.config["MAX_CONTENT_LENGTH"] = 256 * 1024
-limiter = Limiter(key_func=get_remote_address, app=app, default_limits=[], storage_uri=RATE_LIMIT_STORAGE_URI)
 BASE_URL = "https://api.razorpay.com/v1"
 AUTH = (KEY_ID, KEY_SECRET)
 TABLE_NAME = "Razorpay"
@@ -102,7 +93,6 @@ def checkout_page():
     return render_template("checkout.html", plan_id=plan_id, key_id=KEY_ID)
 
 @app.route("/api/payment/create", methods=["POST"])
-@limiter.limit("20 per minute") 
 def create_payment():
     body = request.get_json(silent=True) or {}
     plan_id = body.get("plan_id")
@@ -166,7 +156,6 @@ def create_payment():
     return jsonify(result)
 
 @app.route("/api/payment/verify", methods=["POST"])
-@limiter.limit("30 per minute")
 def verify_payment():
     body = request.get_json(silent=True) or {}
     body = request.get_json(silent=True) or {}
@@ -205,7 +194,6 @@ def verify_payment():
     return jsonify(result)
 
 @app.route("/api/payment/status/<payment_id>", methods=["GET"])
-@limiter.limit("30 per minute")
 def payment_status(payment_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -232,7 +220,6 @@ def payment_status(payment_id):
     return jsonify({"status": status})
 
 @app.route("/api/payment/capture/<payment_id>", methods=["POST"])
-@limiter.limit("10 per minute")
 def capture_payment(payment_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -304,7 +291,6 @@ def _handle_order_paid(event: dict):
 _WEBHOOK_HANDLERS = {"payment.captured": _handle_payment_captured,"payment.failed": _handle_payment_failed,"order.paid": _handle_order_paid,}
 
 @app.route("/api/razorpay/webhook", methods=["POST"])
-@limiter.limit("120 per minute")
 def razorpay_webhook():
     raw_body = request.get_data()
     signature = request.headers.get("X-Razorpay-Signature")
@@ -346,20 +332,6 @@ def razorpay_webhook():
         return jsonify({"error": "processing_failed", "details": str(e)}), 500
     dbimp.update_rows_web(TABLE_NAME_verify, {"Status": "done"}, {"Key": store_key})
     return jsonify({"received": True}), 200
-
-@app.route("/healthz")
-def healthz():
-    try:
-        supabase.table("users").select("id").limit(1).execute()
-        return jsonify({"ok": True})
-    except Exception as e:
-        logger.error("healthz_failed: %s", e)
-        return jsonify({"ok": False, "error": str(e)}), 503
-
-@app.errorhandler(Exception)
-def handle_unexpected_error(e):
-    logger.exception("Unhandled exception")
-    return jsonify({"error": "internal_error"}), 500
 
 if __name__ == "__main__":
     app.run(port=5000, debug=False)
