@@ -26,23 +26,8 @@ def is_valid_iso_format(value: str) -> bool:
 
 def init_db():
     conn = get_conn()
-    conn.execute(""" CREATE TABLE IF NOT EXISTS schedule (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT ,
-                    time TEXT ,
-                    type TEXT ,
-                    container_id TEXT ,
-                    access_token TEXT ,
-                    media_id TEXT ,
-                    hour INTEGER ,
-                    text1 TEXT ,
-                    text2 TEXT ,
-                    text3 TEXT  ) """)
-    conn.execute(""" CREATE TABLE IF NOT EXISTS workflow (
-                    id TEXT PRIMARY KEY ,
-                    time TEXT ,
-                    message TEXT ,
-                    comment TEXT ) """)
+    conn.execute(""" CREATE TABLE IF NOT EXISTS schedule ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT , time TEXT , type TEXT , container_id TEXT , access_token TEXT , media_id TEXT ,hour INTEGER , text1 TEXT , text2 TEXT , text3 TEXT  ) """)
+    conn.execute(""" CREATE TABLE IF NOT EXISTS workflow ( id TEXT PRIMARY KEY , time TEXT , message TEXT , comment TEXT ) """)
     conn.commit()
     conn.close()
 

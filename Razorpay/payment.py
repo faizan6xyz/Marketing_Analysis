@@ -17,6 +17,7 @@ logger = logging.getLogger("payment")
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+# use the faizanclaudeuse1 for the api
 
 def _now():
     return datetime.now(timezone.utc).isoformat()
