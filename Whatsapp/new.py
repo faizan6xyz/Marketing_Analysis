@@ -194,3 +194,5 @@ def refresh_token_web(Account_id, access_token):
     return access_token
 
 
+if __name__ == "__main__":
+    print("hi")
