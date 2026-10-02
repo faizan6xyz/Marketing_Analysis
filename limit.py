@@ -8,7 +8,7 @@ import database.UserDB as dbimp
 from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger("rate_limit")
-DB = "limit.db"
+DB = "schedule.db"
 
 def _require(key):
     val = os.environ.get(key)
@@ -87,5 +87,5 @@ if __name__ == "__main__":
         try:
             delete_by_time(now)
         except Exception:
-            logger.exception("rate_limit cleanup failed")
+            print("error")
         time.sleep(300)

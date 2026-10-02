@@ -32,6 +32,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 EXPOSE 5000/tcp
 STOPSIGNAL SIGTERM
+# need to add permission of the each file
+RUN chmod 777 /app/start.sh
 USER appuser
-RUN chmod 764 /app/start.sh
 CMD ["./start.sh"]
