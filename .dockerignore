@@ -2,3 +2,6 @@ __pycache__
 .git
 .gitignore
 .env
+Analytics/
+.vscode/
+deploy-example/
