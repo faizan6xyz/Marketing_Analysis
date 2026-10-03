@@ -366,3 +366,6 @@ def delete_rows_web(table_name: str, filters: dict[str, Any]) -> list[dict]:
     response = query.execute()
     _after_write("web", table_name, response.data, deleted=True)
     return response.data
+
+if __name__ == "__main__":
+    print("hi")
