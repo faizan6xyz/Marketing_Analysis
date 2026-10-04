@@ -119,27 +119,33 @@ def update_container_schedule(container_id, sctime):
 def delete_by_id(row_id):
     _delete_by("schedule", "id", row_id)
 
+def delete_schedule_rows(ids):
+    if not ids:
+        return 0
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM schedule WHERE id = ANY(%s)", (list(ids),))
+        return cur.rowcount
+
 if __name__ == "__main__":
     while True:
         now = datetime.now(timezone.utc).isoformat()
         due = get_containers_due(now)
+        ids = [row[0] for row in due]
+        delete_schedule_rows(ids)
         for row_id, container_id, access_tok, username_id , typess,media_id,hourss,text1,text2,text3 in due:
             if typess == "container":
                 aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
-                delete_by_id(row_id)
             if typess == "Story_later":
                 access_token = aaaa.access_tokenvali(username_id)
                 if not access_token :
                     continue
                 aaaa.post_story(now,access_token, username_id, 0, media_id, text1, True, text2)
-                delete_by_id(row_id)
             if typess == "Photo_later":
                 access_token = aaaa.access_tokenvali(username_id)
                 if not access_token :
                     continue
                 comment , message = access_tok.split(",1234,+++x")
                 aaaa.post_photo(now,access_token, username_id,media_id, text3, 0, True)
-                delete_by_id(row_id)
             if typess in ("Reel_later", "Video_later"):
                 access_token = aaaa.access_tokenvali(username_id)
                 if not access_token :
@@ -147,7 +153,6 @@ if __name__ == "__main__":
                 cover_url, media_duration = text2.split(",")
                 comment , message = access_tok.split(",1234,+++x")
                 aaaa.post_video(now,access_token, username_id, media_id, 0 , text3, text1, cover_url,True, media_duration )
-                delete_by_id(row_id)
             if typess == "Carousel_later":
                 access_token = aaaa.access_tokenvali(username_id)
                 if not access_token :
@@ -160,116 +165,88 @@ if __name__ == "__main__":
                 media_size = combi[:lengthof]
                 media_duration = combi[lengthof:]
                 aaaa.post_carousel(now,access_token, username_id,  media_size, media_duration, media_id, text1, text3, True)
-                delete_by_id(row_id)
             if typess == "container1":
                 thhh.publish_threads_container_sc(user_id=username_id, access_token=access_tok, creation_id=container_id)
-                delete_by_id(row_id)
             if typess == "carousal_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
                 comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_carousel(access_token, username_id, media_id, text3, True, now, comment, message, text2)
-                delete_by_id(row_id)
             if typess == "photo_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
                 comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"photo",image_url=media_id )
-                delete_by_id(row_id)
             if typess == "text_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
                 comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"text" )
-                delete_by_id(row_id)
             if typess == "video_later1":
                 expire  = datetime.now(timezone.utc)
                 access_token = thhh.refresh_threads_token11(expire,access_token,username_id)
                 comment , message = text1.split(",1234,+++x")
                 thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"video",video_url=media_id )
-                delete_by_id(row_id)
             if typess == "story" :
                 content = aaaa.story_schedule(username_id,hourss,media_id,access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "photo":
                 content = aaaa.get_media_analytics(username_id,media_id,access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "carousel":
                 content = aaaa.get_media_analytics(username_id,media_id,access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "video":
                 content = aaaa.get_media_analytics(username_id,media_id,access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "text1" :
                 content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "photo1" :
                 content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "video1" :
                 content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "carousel1" :
                 content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "shorts": 
                 content = you.shorts_schedule(username_id, media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "tweet":
                 content = x.get_tweet_metrics(username_id ,media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "photo_tweet" :
                 content = x.get_tweet_metrics(username_id ,media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "video_tweet":
                 content = x.get_tweet_metrics(username_id ,media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "tweet_later":
                 x.post_later("tweet_later", username_id,text1 )
-                delete_by_id(row_id)
             if typess == "photo_tweet_later":
                 x.post_later("photo_tweet_later", username_id,text1 )
-                delete_by_id(row_id)
             if typess == "video_tweet_later":
                 x.post_later("video_tweet_later", username_id,text1 )
-                delete_by_id(row_id)
             if typess == "pin_photo": 
                 content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Pinterst", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "pin_video": 
                 content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
                 dpp.append_to_file(user_id=username_id, platform="Pinterst", filename="postanalysis.txt", data_to_append=content)
-                delete_by_id(row_id)
             if typess == "Shorts_later":
                 you.post_later(username_id, media_id, text1, text2, text3) 
-                delete_by_id(row_id)
             if typess == "Pin_photo_later":
                 pin.post_late(username_id , access_tok , text1, text2, text3, "photo" ,media_id)
-                delete_by_id(row_id)
             if typess == "Pin_video_later":
                 pin.post_late(username_id , access_tok , text1, text2, text3, "video" ,media_id)
-                delete_by_id(row_id)
             if typess == "email_later":
                 text1 , reply , subject = text1.split(",1234,+++x")
                 campp.upload_lategmail(username_id , text1, text2, text3,media_id, reply , subject)
-                delete_by_id(row_id)
             if typess == "message_later":
                 text1 , reply , subject = text1.split(",1234,+++x")
                 campp.upload_latewhat(username_id , text1, text2, text3, media_id, reply , subject)
-                delete_by_id(row_id)
         rows = workflow_10_days(now)
         for row_id in rows :
             delete_by_10days(row_id)
