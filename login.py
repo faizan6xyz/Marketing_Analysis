@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from flask import Flask, request, jsonify, make_response , redirect
 from flask_cors import CORS
 import csv
@@ -10,11 +9,6 @@ from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import authnew as au
 load_dotenv()
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise RuntimeError("Set SUPABASE_URL and SUPABASE_KEY in your environment or .env file")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
@@ -75,7 +69,7 @@ def login():
     created_at = datetime.now(timezone.utc) + TOKEN_TTL
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
-        dbimp.update_row("users", {"Token": token}, filters={"user_id": user_id})  # adjust to real dbimp API
+        dbimp.update_rows("users", {"Token": token}, filters={"user_id": user_id})  # adjust to real dbimp API
         rows = dbimp.select_rows(token, "users", select="Token", filters={"user_id": user_id})
     except Exception as e:
         return jsonify({"error": "failed to fetch user record", "detail": str(e)}), 500
@@ -94,8 +88,8 @@ def callback():
     except Exception as e:
         return jsonify({"error": "oauth exchange failed", "detail": str(e)}), 401
     user_id = session.user.id
-    if not dbimp.oauthchck(user_id=user_id):
-        dbimp.create_oauth_user(user_id=user_id, email=session.user.email)  
+    # if not dbimp.oauthchck(user_id=user_id):
+    #     dbimp.create_oauth_user(user_id=user_id, email=session.user.email)  
     created_at = datetime.now(timezone.utc) + TOKEN_TTL
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     dbimp.update_rows("users", {"Token": token}, filters={"user_id": user_id})
