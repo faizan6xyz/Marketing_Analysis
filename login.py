@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, make_response , redirect
+from flask import Flask, request, jsonify, make_response , url_for
 from flask_cors import CORS
 import csv
 import limit as lmmmm
@@ -8,11 +8,14 @@ import Instagram.schedule_video as sccc
 from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import authnew as au
+from authlib.integrations.flask_client import OAuth
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 TOKEN_TTL = timedelta(hours=2)
+oauth = OAuth(app)
+oauth.register( name="google", client_id=os.environ.get("GOOGLE_CLIENT_ID"), client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"), server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",client_kwargs={"scope": "openid email profile"}, )
 
 def all_values(rows, key):
     if not rows:
@@ -22,15 +25,6 @@ def all_values(rows, key):
 def set_auth_cookie(resp, token):
     resp.set_cookie( "authToken", token, httponly=True, secure=True, samesite="None", max_age=int(TOKEN_TTL.total_seconds()), path="/",    )
     return resp
-
-def start_oauth1(provider):
-    try:
-        res = supabase.auth.sign_in_with_oauth({ "provider": provider, "options": {"redirect_to": "http://localhost:5000/auth/callback"} })
-    except Exception as e:
-        return "oauth init failed", 500
-    if not res.url:
-        return "failed to get oauth url" , 500
-    return res.url , 200
 
 @app.route("/refresh", methods=["POST"])
 def logi():
@@ -48,14 +42,40 @@ def logi():
     resp = make_response(jsonify({"Token": new_token}), 200)
     return set_auth_cookie(resp, new_token)
 
+@app.route("/oauth/google")
+def login_google():
+    redirect_uri = url_for("google_callback", _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+@app.route("/auth/google/callback")
+def google_callback():
+    token = oauth.google.authorize_access_token()  
+    info = token["userinfo"]                       
+    user = { "google_id": info["sub"], "email": info.get("email"), "name": info.get("name"), "picture": info.get("picture"), }
+    if not dbimp.user_exist_check(user.get("email"), user.get("google_id")) : # using the google id to store this as password
+        try:
+            user_id = dbimp.add_new_user(user.get("email"), user.get("google_id"))
+        except Exception as e :
+            return jsonify({"status":False,"reason":"failed to store the user"}),202
+    created_at = datetime.now(timezone.utc) + TOKEN_TTL 
+    token = au.jsonspoof(user_id=user_id, timestamp=created_at)
+    try:
+        insert = dbimp.insert_rows(token, "users", { "user_id": user_id, "email": user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })
+    except Exception as e:
+        insert = None
+        insert_error = str(e)
+    if not insert:
+        resp_body = {"Statusdb": False, "detail": "Could not save details"}
+        status = 202
+    else:
+        resp_body = {"Statusdb": True, "next": "/details"}
+        status = 200
+    resp = make_response(jsonify(resp_body), status)
+    return set_auth_cookie(resp, token)
+
 @app.route("/login", methods=["POST"])
 def login():
     body = request.get_json(silent=True) or {}
-    oauthh = (body.get("oauth") or "").strip().lower()
-    if oauthh in ("google", "facebook"):
-        url , code = start_oauth1(oauthh)
-        if code == 200 :
-            return redirect(url)
     mail = body.get("email")
     passw = body.get("password")
     if not mail or not passw:
@@ -78,46 +98,21 @@ def login():
     resp = make_response(jsonify({"user_id": user_id, "Token": rows[0]["Token"]}), 200)
     return set_auth_cookie(resp, token)
 
-@app.route("/auth/callback", methods=["GET"])  
-def callback():
-    code = request.args.get("code")
-    if not code:
-        return jsonify({"error": "missing code"}), 400
-    try:
-        session = supabase.auth.exchange_code_for_session({"auth_code": code})
-    except Exception as e:
-        return jsonify({"error": "oauth exchange failed", "detail": str(e)}), 401
-    user_id = session.user.id
-    # if not dbimp.oauthchck(user_id=user_id):
-    #     dbimp.create_oauth_user(user_id=user_id, email=session.user.email)  
-    created_at = datetime.now(timezone.utc) + TOKEN_TTL
-    token = au.jsonspoof(user_id=user_id, timestamp=created_at)
-    dbimp.update_rows("users", {"Token": token}, filters={"user_id": user_id})
-    resp = make_response(redirect(f"{frontend}/dashboard"))  
-    return set_auth_cookie(resp, token)
-
 @app.route("/signup", methods=["POST"])
 def signup():
     body = request.get_json(silent=True) or {}
-    oauthh = (body.get("oauth") or "").strip().lower()
-    if oauthh in ("google", "facebook"):
-        url , code = start_oauth1(oauthh)
-        if code == 200 :
-            return redirect(url)
     mail = body.get("email")
     passw = body.get("password")
     if not mail or not passw:
         return jsonify({"error": "email and password are required"}), 400
     try:
-        res = supabase.auth.sign_up({"email": mail, "password": passw})
+        user_id = dbimp.add_new_user(email=mail,password=passw)
     except Exception as e:
         return jsonify({"error": "signup failed", "detail": str(e)}), 400
-    if res.user is None:
-        return jsonify({"message": "signup started, check email to confirm"}), 202
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
-    token = au.jsonspoof(user_id=res.user.id, timestamp=created_at)
+    token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
-        insert = dbimp.insert_rows(token, "users", { "user_id": res.user.id, "email": mail, "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })
+        insert = dbimp.insert_rows(token, "users", { "user_id": user_id, "email": mail, "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })
     except Exception as e:
         insert = None
         insert_error = str(e)
