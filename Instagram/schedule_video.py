@@ -1,6 +1,7 @@
 import Instagram.upload as aaaa
 import X.login as x
 import threads.login as thhh
+import time
 import campaign as campp
 import json
 import pinterst.login as pin 
@@ -27,6 +28,8 @@ def get_conn():
         raise
     finally:
         _pool.putconn(conn)
+
+# added the taken column in the schedule db , 0 for free and 1 for taken . if the pod crahes the while taken the ohter function will look those values which are taken and there time was 30 min ago and then it will execute them
 
 def close_pool():
     _pool.closeall()
@@ -107,7 +110,13 @@ def insert__story1(user_id, scheduled_time, access_token, media_id, typee):    #
 
 def get_containers_due(now):
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s", (now,))
+        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s", (now,0))
+        return cur.fetchall()
+    
+def get_failed_one(now):
+    tim = datetime.fromisoformat(now) - timedelta(minutes=30)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s ", (tim,1))
         return cur.fetchall()
 
 def update_container_schedule(container_id, sctime):
@@ -119,11 +128,11 @@ def update_container_schedule(container_id, sctime):
 def delete_by_id(row_id):
     _delete_by("schedule", "id", row_id)
 
-def delete_schedule_rows(ids):
+def set_taken_to(ids):
     if not ids:
         return 0
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM schedule WHERE id = ANY(%s)", (list(ids),))
+        cur.execute("UPDATE schedule SET taken = 1 WHERE id = ANY(%s)", (list(ids),))
         return cur.rowcount
 
 if __name__ == "__main__":
@@ -131,7 +140,9 @@ if __name__ == "__main__":
         now = datetime.now(timezone.utc).isoformat()
         due = get_containers_due(now)
         ids = [row[0] for row in due]
-        delete_schedule_rows(ids)
+        set_taken_to(ids)
+        fail = get_failed_one(now)
+        due.extend(fail)
         for row_id, container_id, access_tok, username_id , typess,media_id,hourss,text1,text2,text3 in due:
             if typess == "container":
                 aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
@@ -247,9 +258,11 @@ if __name__ == "__main__":
             if typess == "message_later":
                 text1 , reply , subject = text1.split(",1234,+++x")
                 campp.upload_latewhat(username_id , text1, text2, text3, media_id, reply , subject)
+            delete_by_id(row_id)
         rows = workflow_10_days(now)
         for row_id in rows :
             delete_by_10days(row_id)
+        time.sleep(5)
 
 
 # need to add the comment and message for the autmation in the sqlite after the schedule post for every single platform
