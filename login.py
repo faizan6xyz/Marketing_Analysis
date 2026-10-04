@@ -67,7 +67,7 @@ def login():
     if not mail or not passw:
         return jsonify({"error": "email and password are required"}), 400
     try:
-        user_id = dbimp.User_exist_check(email=mail, password=passw)
+        user_id = dbimp.user_exist_check(email=mail, password=passw)
     except Exception as e:
         return jsonify({"error": "invalid credentials", "detail": str(e)}), 401
     if not user_id:

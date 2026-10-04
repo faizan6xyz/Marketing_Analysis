@@ -5,3 +5,4 @@ __pycache__
 Analytics/
 .vscode/
 deploy-example/
+database/manual.txt

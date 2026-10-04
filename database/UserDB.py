@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import psycopg2
 from psycopg2 import sql
+import uuid
 from psycopg2.extras import execute_values, RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 import authnew as au
@@ -49,9 +50,10 @@ def _cursor():
     finally:
         pool.putconn(conn)
 
-def add_new_user(email: str, password: str, user_id: str) -> bool:
+def add_new_user(email: str, password: str) -> bool:
     if not email or not password:
         return False
+    user_id = str(uuid.uuid4()) 
     try:
         with _cursor() as cur:
             cur.execute( "INSERT INTO userdetails (email, password, user_id) VALUES (%s, %s, %s)",(email, _hash_password(password), user_id), )
@@ -59,7 +61,7 @@ def add_new_user(email: str, password: str, user_id: str) -> bool:
         return False
     except psycopg2.Error as e:
         return False
-    return True
+    return user_id
 
 def user_exist_check(email: str, password: str):
     if not email or not password:
@@ -239,12 +241,3 @@ def select_rows_web(table_name: str, filters: Optional[dict[str, Any]] = None,se
 
 if __name__ == "__main__":
     print("hi")
-
-
-
-'''
-import uuid
-
-new_id = uuid.uuid4()         
-new_id_str = str(uuid.uuid4()) 
-'''
