@@ -3,14 +3,38 @@ from contextlib import contextmanager
 from typing import Any
 from typing import Any, Optional
 from dotenv import load_dotenv
+import hashlib
+import hmac
+import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import execute_values, RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 import authnew as au
+import secrets
 load_dotenv()
+SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
 pool = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"),) # 1 minimum connection and the 10 as maximum connection
 ALLOWED_TABLES = { "drive", "gmail", "instagram", "paypal", "paypal_verify", "pinterest", "razorpay", "razorpay_verify", "threads", "whatsapp", "x", "youtube", "users",}
 _SIMPLE_OPS = { "eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=","like": "LIKE", "ilike": "ILIKE", "contains": "@>",}
+
+def _prehash(password: str) -> bytes:
+    return hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).digest()
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    dk = hashlib.scrypt(_prehash(password), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return f"scrypt${salt.hex()}${dk.hex()}"
+
+def _verify_password(password: str, stored: str) -> bool:
+    if stored.startswith("scrypt$"):
+        try:
+            _, salt_hex, dk_hex = stored.split("$")
+            dk = hashlib.scrypt(_prehash(password), salt=bytes.fromhex(salt_hex), n=2**14, r=8, p=1, dklen=32)
+        except ValueError:
+            return False
+        return hmac.compare_digest(dk.hex(), dk_hex)
+    legacy = hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(legacy, stored)
 
 @contextmanager
 def _cursor():
@@ -24,6 +48,42 @@ def _cursor():
         raise
     finally:
         pool.putconn(conn)
+
+def add_new_user(email: str, password: str, user_id: str) -> bool:
+    if not email or not password:
+        return False
+    try:
+        with _cursor() as cur:
+            cur.execute( "INSERT INTO userdetails (email, password, user_id) VALUES (%s, %s, %s)",(email, _hash_password(password), user_id), )
+    except psycopg2.errors.UniqueViolation:
+        return False
+    except psycopg2.Error as e:
+        return False
+    return True
+
+def user_exist_check(email: str, password: str):
+    if not email or not password:
+        return False
+    try:
+        with _cursor() as cur:
+            cur.execute("SELECT password, user_id FROM userdetails WHERE email = %s", (email,),)
+            row = cur.fetchone()
+    except psycopg2.Error as e:
+        return False
+    if not row:
+        return False
+    stored_hash, user_id = row
+    if not stored_hash or not user_id:
+        return False
+    if not _verify_password(password, stored_hash):
+        return False
+    if not stored_hash.startswith("scrypt$"):
+        try:
+            with _cursor() as cur:
+                cur.execute( "UPDATE userdetails SET password = %s WHERE email = %s",(_hash_password(password), email),)
+        except psycopg2.Error as e:
+            return e
+    return str(user_id)
 
 def _check(table_name: str, token = None) -> str:
     if token :
@@ -179,3 +239,12 @@ def select_rows_web(table_name: str, filters: Optional[dict[str, Any]] = None,se
 
 if __name__ == "__main__":
     print("hi")
+
+
+
+'''
+import uuid
+
+new_id = uuid.uuid4()         
+new_id_str = str(uuid.uuid4()) 
+'''
