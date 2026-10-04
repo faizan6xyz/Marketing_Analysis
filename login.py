@@ -44,7 +44,7 @@ def logi():
 
 @app.route("/oauth/google")
 def login_google():
-    redirect_uri = url_for("google_callback", _external=True)
+    redirect_uri = url_for("google_callback", _external=True) # redirets to "auth/google/callback"
     return oauth.google.authorize_redirect(redirect_uri)
 
 @app.route("/auth/google/callback")

@@ -29,8 +29,6 @@ def get_conn():
     finally:
         _pool.putconn(conn)
 
-# added the taken column in the schedule db , 0 for free and 1 for taken . if the pod crahes the while taken the ohter function will look those values which are taken and there time was 30 min ago and then it will execute them
-
 def close_pool():
     _pool.closeall()
 
