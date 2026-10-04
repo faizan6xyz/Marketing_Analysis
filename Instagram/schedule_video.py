@@ -146,9 +146,9 @@ if __name__ == "__main__":
                 access_token = aaaa.access_tokenvali(username_id)
                 if not access_token :
                     continue
-                height, width, cover_url, media_duration = text2.split(",")
+                cover_url, media_duration = text2.split(",")
                 comment , message = access_tok.split(",1234,+++x")
-                aaaa.post_video(now,access_token, username_id, height, width, media_id, 0 , text3, text1, cover_url,True, media_duration )
+                aaaa.post_video(now,access_token, username_id, media_id, 0 , text3, text1, cover_url,True, media_duration )
                 delete_by_id(row_id)
             if typess == "Carousel_later":
                 access_token = aaaa.access_tokenvali(username_id)

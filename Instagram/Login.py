@@ -462,8 +462,6 @@ def video():
     media_size = data.get("media_size")
     publish = data.get("publish")
     caption = data.get("caption", "")
-    height = data.get("height")
-    width = data.get("width")
     duration = data.get("duration")
     timee_raw = data.get("time") or {}
     token = data.get("token")
@@ -487,15 +485,11 @@ def video():
     if not data or data[0]["error"] :
         return jsonify({"error":error}) , code
     media_url = data[0]["webViewLink"]
-    width = _coerce_int(width)
-    height = _coerce_int(height)
-    if None in (media_size, duration, width, height):
-        return jsonify({"success": False, "message": "Unable to post video. due to media size / duration / width / height is not int"}), 400
+    if None in (media_size, duration):
+        return jsonify({"success": False, "message": "Unable to post video. due to media size / duration / is not int"}), 400
     try:
         _validate_int(media_size)
         _validate_int(duration)
-        _validate_int(width)
-        _validate_int(height)
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
     publish_now = str(publish).strip().lower() == "true"
@@ -526,7 +520,7 @@ def video():
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
             continue
         try:
-            id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,as_reel=as_reeel,media_duration=duration,width=width,height=height,timmmm=timee,message=message , comment=comment)
+            id_post = uploadd.post_video(access_token=access_token,ig_user_id=account_id,video_url=media_url,media_size=media_size,caption=caption,publish=publish_now,as_reel=as_reeel,media_duration=duration,timmmm=timee,message=message , comment=comment)
             if publish_now  and comment and message:
                 sccc.inert_workflow(id_post ,message , comment)
         except Exception as e:

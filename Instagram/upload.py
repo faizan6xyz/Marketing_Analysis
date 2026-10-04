@@ -21,8 +21,6 @@ MAX_CAPTION_CHARS = 2170
 MAX_HASHTAGS = 5
 MAX_PHOTO_BYTES = 8 * 1024 * 1024        # 8 MB
 MAX_VIDEO_BYTES = 1024 * 1024 * 1024     # 1 GB
-MIN_ASPECT_RATIO = 4 / 5    # tallest allowed (portrait)
-MAX_ASPECT_RATIO = 1.91     # widest allowed (landscape)
 REQUEST_TIMEOUT = 30                 # seconds, for every HTTP call
 MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 2               # seconds; doubles each retry
@@ -176,7 +174,7 @@ def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, captio
         return creation_id
     return publish_container('photo', access_token, ig_user_id, creation_id)
 
-def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: int, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, comment = "" , message = "") -> str:
+def post_video(timmmm,access_token: str, ig_user_id: str, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, comment = "" , message = "") -> str:
     _validate_media_url(video_url)
     neww = datetime.now(timezone.utc) + timedelta(hours=24)
     newww = datetime.now(timezone.utc) + timedelta(days=5)
@@ -197,11 +195,8 @@ def post_video(timmmm,access_token: str, ig_user_id: str, height: int, width: in
     else:
         if media_duration > MAX_VIDEO_SECONDS:
             raise ValueError(f"Video exceeds max duration of {MAX_VIDEO_SECONDS}s")
-    ratio = width / height
-    if not (MIN_ASPECT_RATIO - 0.01 <= ratio <= MAX_ASPECT_RATIO + 0.01):
-        raise ValueError(f"Aspect ratio {ratio:.2f} is outside the allowed range")
     if timmmm > neww  and timmmm < newww  and not publish:
-        text111 =  f"{height},{width},{cover_url},{media_duration}"
+        text111 =  f"{cover_url},{media_duration}"
         sccc.insert_post( user_id=ig_user_id, scheduled_time=timmmm, access_token=f"{comment},1234,+++x{message}" , typeee="Reel_later" if as_reel else "Video_later", text1=as_reel, text2=text111, text3=caption, media_id=video_url, )
         return "Video added for scheduling"
     params = { "video_url": video_url, "caption": caption, "media_type": "REELS" if as_reel else "VIDEO", "access_token": access_token, }
