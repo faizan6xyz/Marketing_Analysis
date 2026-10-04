@@ -1,6 +1,4 @@
-from datetime import datetime, timezone ,timedelta
 import Instagram.upload as aaaa
-import sqlite3
 import X.login as x
 import threads.login as thhh
 import campaign as campp
@@ -10,10 +8,28 @@ import Drive.dep as dpp
 import youtube.login as you
 from dotenv import load_dotenv
 load_dotenv()
-DB = "schedule.db"
+import os
+from contextlib import contextmanager
+from datetime import datetime, timezone, timedelta
+from psycopg2 import sql
+from psycopg2.extras import execute_values
+from psycopg2.pool import ThreadedConnectionPool
+_pool = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"),)
 
+@contextmanager
 def get_conn():
-    return sqlite3.connect(DB)
+    conn = _pool.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _pool.putconn(conn)
+
+def close_pool():
+    _pool.closeall()
 
 def is_valid_iso_format(value: str) -> bool:
     if not isinstance(value, str):
@@ -24,100 +40,89 @@ def is_valid_iso_format(value: str) -> bool:
     except ValueError:
         return False
 
-def init_db():
-    conn = get_conn()
-    conn.execute(""" CREATE TABLE IF NOT EXISTS schedule ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT , time TEXT , type TEXT , container_id TEXT , access_token TEXT , media_id TEXT ,hour INTEGER , text1 TEXT , text2 TEXT , text3 TEXT  ) """)
-    conn.execute(""" CREATE TABLE IF NOT EXISTS workflow ( id TEXT PRIMARY KEY , time TEXT , message TEXT , comment TEXT ) """)
-    conn.commit()
-    conn.close()
+def _delete_by(table: str, column: str, value):
+    query = sql.SQL("DELETE FROM {} WHERE {} = %s").format(sql.Identifier(table), sql.Identifier(column))
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(query, (value,))
 
-def inert_workflow(id_ , message , comment ):
-    conn = get_conn()
-    now = (datetime.now(timezone.utc)+timedelta(days=10)).isoformat()
-    conn.execute("INSERT INTO workflow ( id , comment , message, time) values (?,?,?,?) " ,( id_,comment,message, now ),)
-    conn.commit()
-    conn.close()
+def init_db():
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(""" CREATE TABLE IF NOT EXISTS schedule ( id SERIAL PRIMARY KEY, user_id TEXT , time TEXT , type TEXT , container_id TEXT , access_token TEXT , media_id TEXT , hour INTEGER , text1 TEXT , text2 TEXT , text3 TEXT ) """)
+        cur.execute(""" CREATE TABLE IF NOT EXISTS workflow ( id TEXT PRIMARY KEY , time TEXT , message TEXT , comment TEXT ) """)
+
+def inert_workflow(id_, message, comment):
+    now = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO workflow ( id , comment , message, time) values (%s,%s,%s,%s) ", (id_, comment, message, now))
 
 def workflow_data_change(id_, message, comment):
-    conn = get_conn()
-    try:
-        rows = conn.execute( "SELECT message, comment FROM workflow WHERE id = ?", (id_,)).fetchall()
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT message, comment FROM workflow WHERE id = %s", (id_,))
+        rows = cur.fetchall()
         if rows:
-            conn.execute( "UPDATE workflow SET message = ?, comment = ? WHERE id = ?", (message, comment, id_),)
+            cur.execute("UPDATE workflow SET message = %s, comment = %s WHERE id = %s", (message, comment, id_))
         else:
-            conn.execute( "INSERT INTO workflow (id, message, comment) VALUES (?, ?, ?)",(id_, message, comment),)
-        conn.commit()
-        return rows 
-    finally:
-        conn.close()
+            cur.execute("INSERT INTO workflow (id, message, comment) VALUES (%s, %s, %s)", (id_, message, comment))
+        return rows
 
 def workflow_10_days(time):
-    conn = get_conn()
-    cur = conn.execute("SELECT id FROM workflow WHERE time < ?", (time,))
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id FROM workflow WHERE time < %s", (time,))
+        return cur.fetchall()
 
 def delete_by_10days(row_id):
-    conn = get_conn()
-    conn.execute("DELETE FROM workflow WHERE id = ?", (row_id,))
-    conn.commit()
-    conn.close()
+    _delete_by("workflow", "id", row_id)
 
 def workflow_data(id_):
-    conn = get_conn()
-    cur = conn.execute("SELECT  message , comment FROM workflow WHERE id = ? ",(id_))   # for the whatsapp theres no comment but for the gmail comment is the subject 
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT message , comment FROM workflow WHERE id = %s ", (id_,))   # for the whatsapp theres no comment but for the gmail comment is the subject
+        return cur.fetchall()
 
-def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument 
-    conn = get_conn()
-    if is_valid_iso_format(scheduled_time):
-        conn.execute("INSERT INTO schedule (user_id, container_id, time, type , access_token) VALUES (?, ?, ?, ?, ?)",(user_id, container_id, scheduled_time,"container",access_token))
-        conn.commit()
-        conn.close()
+def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument
+    if not is_valid_iso_format(scheduled_time):
+        return
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, container_id, time, type , access_token) VALUES (%s, %s, %s, %s, %s)", (user_id, container_id, scheduled_time, "container", access_token))
 
-def insert_post(user_id, scheduled_time, access_token, typeee, text1 , text2 , text3 , media_id):    # time should be give in the isoformat iniitally as argument 
-    conn = get_conn()
-    if is_valid_iso_format(scheduled_time):
-        conn.execute("INSERT INTO schedule (user_id, time, access_token , type , text1 , text2 , text3 ,media_id) VALUES (?, ?, ?, ?, ?, ? , ? , ?)",(user_id, scheduled_time,access_token,typeee,text1,text2,text3,media_id))
-        conn.commit()
-        conn.close()
 
-def insert__story(user_id,  scheduled_time, access_token,media_id,hour,typee):    # time should be give in the isoformat iniitally as argument 
-    conn = get_conn()
-    if is_valid_iso_format(scheduled_time):
-        conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour) VALUES (?, ?, ?,?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id,hour))
-        conn.commit()
-        conn.close()
+def insert_post(user_id, scheduled_time, access_token, typeee, text1, text2, text3, media_id):    # time should be give in the isoformat iniitally as argument
+    if not is_valid_iso_format(scheduled_time):
+        return
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, time, access_token , type , text1 , text2 , text3 ,media_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typeee, text1, text2, text3, media_id))
 
-def insert__story1(user_id,  scheduled_time, access_token,media_id,typee):    # time should be give in the isoformat iniitally as argument 
-    conn = get_conn()
-    if is_valid_iso_format(scheduled_time):    
-        conn.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (?, ?, ?, ?,?,?,?)",(user_id,  scheduled_time, access_token,typee,media_id))
-        conn.commit()
-        conn.close()
+def insert_posts_bulk(posts):
+    rows = [p for p in posts if is_valid_iso_format(p[1])]
+    if not rows:
+        return
+    with get_conn() as conn, conn.cursor() as cur:
+        execute_values( cur,"INSERT INTO schedule (user_id, time, access_token, type, text1, text2, text3, media_id) VALUES %s",rows,)
+
+def insert__story(user_id, scheduled_time, access_token, media_id, hour, typee):    # time should be give in the isoformat iniitally as argument
+    if not is_valid_iso_format(scheduled_time):
+        return
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour) VALUES (%s, %s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typee, media_id, hour))
+
+def insert__story1(user_id, scheduled_time, access_token, media_id, typee):    # time should be give in the isoformat iniitally as argument
+    if not is_valid_iso_format(scheduled_time):
+        return
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (%s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typee, media_id))
 
 def get_containers_due(now):
-    conn = get_conn()
-    cur = conn.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < ?", (now,))
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s", (now,))
+        return cur.fetchall()
 
 def update_container_schedule(container_id, sctime):
-    conn = get_conn()
-    if is_valid_iso_format(sctime):
-        conn.execute("UPDATE schedule SET time = ? WHERE container_id = ?", (sctime, container_id))
-        conn.commit()
-        conn.close()
+    if not is_valid_iso_format(sctime):
+        return
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE schedule SET time = %s WHERE container_id = %s", (sctime, container_id))
 
 def delete_by_id(row_id):
-    conn = get_conn()
-    conn.execute("DELETE FROM schedule WHERE id = ?", (row_id,))
-    conn.commit()
-    conn.close()
+    _delete_by("schedule", "id", row_id)
 
 init_db()
 
