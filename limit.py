@@ -1,6 +1,6 @@
-import sqlite3
 import os
 import json
+from contextlib import contextmanager
 import time
 import logging
 from datetime import datetime, timedelta, timezone
@@ -8,7 +8,9 @@ import database.UserDB as dbimp
 from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger("rate_limit")
-DB = "schedule.db"
+from psycopg2 import sql
+from psycopg2.pool import ThreadedConnectionPool
+_pool = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"),)
 
 def _require(key):
     val = os.environ.get(key)
@@ -18,47 +20,39 @@ def _require(key):
 
 LIMIT_OF_PLAN = json.loads(_require("limit_of_plan"))
 
+@contextmanager
 def get_conn():
-    conn = sqlite3.connect(DB, timeout=10)
-    conn.execute("PRAGMA journal_mode=WAL")   # better concurrent read/write
-    conn.execute("PRAGMA busy_timeout=10000")  # wait instead of erroring on lock contention
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    conn = get_conn()
+    conn = _pool.getconn()
     try:
-        conn.execute(""" CREATE TABLE IF NOT EXISTS rate_limit ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, Start_time TEXT NOT NULL, End_time TEXT NOT NULL, request_count INTEGER NOT NULL DEFAULT 0 ) """)
-        conn.execute(""" CREATE INDEX IF NOT EXISTS idx_rate_limit_lookup ON rate_limit (user_id, Start_time, End_time)  """)
+        yield conn
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
-        conn.close()
+        _pool.putconn(conn)
+
+def close_pool():
+    _pool.closeall()
 
 def get_or_create_window(user_id, now_ts):
-    conn = get_conn()
-    try:
-        cur = conn.execute( """SELECT request_count, id FROM rate_limit WHERE Start_time < ? AND End_time > ? AND user_id = ? """,(now_ts, now_ts, user_id), )
+    with get_conn() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (user_id,))
+        cur.execute( sql.SQL( "SELECT {count}, {id} FROM {t} " "WHERE {start} < %s AND {end} > %s AND {user} = %s").format(sql.Identifier("request_count"), sql.Identifier("id"), sql.Identifier("rate_limit"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("user_id")), (now_ts, now_ts, user_id), )
         row = cur.fetchone()
         if row:
             return row["request_count"], row["id"]
-        start = datetime.now(timezone.utc).isoformat()
-        end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-        cur = conn.execute( "INSERT INTO rate_limit (user_id, Start_time, End_time, request_count, ) VALUES (?,?,?,?,?)", (user_id, start, end, 0),)
-        conn.commit()
-        return 0, cur.lastrowid
-    finally:
-        conn.close()
+        start = datetime.now(timezone.utc)
+        end = start + timedelta(days=30)
+        cur.execute( sql.SQL( "INSERT INTO {t} ({user}, {start}, {end}, {count}) " "VALUES (%s, %s, %s, %s) RETURNING {id}" ).format(sql.Identifier("rate_limit"), sql.Identifier("user_id"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("request_count"), sql.Identifier("id")), (user_id, start, end, 0), )
+        return 0, cur.fetchone()["id"]
 
 def try_increment(row_id, amount, limit):
-    conn = get_conn()
-    try:
-        cur = conn.execute( "UPDATE rate_limit SET request_count = request_count + ? " "WHERE id = ? AND request_count + ? <= ?", (amount, row_id, amount, limit),)
-        conn.commit()
+    with get_conn() as cur:
+        cur.execute( sql.SQL( "UPDATE {t} SET {count} = {count} + %s " "WHERE {id} = %s AND {count} + %s <= %s" ).format(sql.Identifier("rate_limit"), sql.Identifier("request_count"), sql.Identifier("id")), (amount, row_id, amount, limit),)
         return cur.rowcount > 0
-    finally:
-        conn.close()
 
-def checkk(token, user_id, now_ts, requestss: int) :
+def checkk(token, user_id, now_ts, requestss: int):
     rows = dbimp.select_rows(token, "users", select="Paid,Plan", filters={"user_id": user_id})
     if not rows:
         return False
@@ -67,21 +61,15 @@ def checkk(token, user_id, now_ts, requestss: int) :
     plan = rows[0]["Plan"]
     limit = LIMIT_OF_PLAN.get(plan)
     if limit is None:
-        logger.warning("No rate limit configured for plan %r", plan)
         return False
     _, row_id = get_or_create_window(user_id, now_ts)
     return try_increment(row_id, requestss, int(limit))
 
 def delete_by_time(timee):
-    conn = get_conn()
-    try:
-        conn.execute("DELETE FROM rate_limit WHERE End_time < ?", (timee,))
-        conn.commit()
-    finally:
-        conn.close()
+    with get_conn() as cur:
+        cur.execute( sql.SQL("DELETE FROM {t} WHERE {end} < %s").format(sql.Identifier("rate_limit"), sql.Identifier("end_time")),(timee,), )
 
 if __name__ == "__main__":
-    init_db()
     while True:
         now = datetime.now(timezone.utc).isoformat()
         try:

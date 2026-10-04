@@ -45,11 +45,6 @@ def _delete_by(table: str, column: str, value):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(query, (value,))
 
-def init_db():
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(""" CREATE TABLE IF NOT EXISTS schedule ( id SERIAL PRIMARY KEY, user_id TEXT , time TEXT , type TEXT , container_id TEXT , access_token TEXT , media_id TEXT , hour INTEGER , text1 TEXT , text2 TEXT , text3 TEXT ) """)
-        cur.execute(""" CREATE TABLE IF NOT EXISTS workflow ( id TEXT PRIMARY KEY , time TEXT , message TEXT , comment TEXT ) """)
-
 def inert_workflow(id_, message, comment):
     now = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
     with get_conn() as conn, conn.cursor() as cur:
@@ -123,8 +118,6 @@ def update_container_schedule(container_id, sctime):
 
 def delete_by_id(row_id):
     _delete_by("schedule", "id", row_id)
-
-init_db()
 
 if __name__ == "__main__":
     while True:
