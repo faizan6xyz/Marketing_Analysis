@@ -13,3 +13,5 @@ itsdangerous>=2.1.0
 cryptography>=42.0.0
 isodate>=0.6.1
 moviepy>=2.0.0
+Authlib>=1.3.0
+psycopg2-binary>=2.9.9

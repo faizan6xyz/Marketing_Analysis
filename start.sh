@@ -1,4 +1,4 @@
-#!bin/shl
+#!/bin/shl
 python3.10 -m login &
 python3.10 -m limit &
 python3.10 -m campaign &
@@ -12,7 +12,7 @@ python3.10 -m pinterst.login &
 python3.10 -m Paypal.paypal_payments &
 python3.10 -m Instagram.Login &
 python3.10 -m Instagram.webhook &
-python3.10 -m Instagram.schedule_video &
 python3.10 -m Gmail.APP2 &
-python3.10 -m Gmail.webhook &
 python3.10 -m Drive.dep &
+python3.10 -m Gmail.webhook &
+python3.10 -m Instagram.schedule_video 

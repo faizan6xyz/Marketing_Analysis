@@ -1,32 +1,34 @@
 name: myapp
-verison : 1.0
+
 services:
   web1:
-    image: apptest1  
-    user: appuser          
+    image: apptest1
+    user: appuser
+
     build:
-      context: .     # tells the Image where is the dockerfile
+      context: .
       dockerfile: dockerfile
-      # args:
-      #   APP_ENV: production
+
     container_name: apptestcon1
+
     ports:
-      - "8080:80"                  
-    # environment:
-    #   - DB_HOST=db
-    #   - DEBUG=false
+      - "8080:80"
+
     env_file:
       - .env
+
     volumes:
-      - ./html:/usr/share/nginx/html  
-      - app_data:/data                
+      - ./html:/usr/share/nginx/html
+      - app_data:/data
+
     depends_on:
       db:
         condition: service_healthy
-    # networks:
-    #   - backend
+
     restart: unless-stopped
+
     command: ["/start.sh"]
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
@@ -34,24 +36,18 @@ services:
       retries: 2
 
   db:
-    image: postgres:16
+    image: docker.io/library/postgres:16
     environment:
       POSTGRES_USER: leojr
       POSTGRES_PASSWORD: urmotherisbitchlikeurfatherex
       POSTGRES_DB: userdb
     volumes:
       - db_data:/var/lib/postgresql/data
-    # networks:
-    #   - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U leojr"]
+      test: ["CMD-SHELL", "pg_isready -U leojr -d userdb"]
       interval: 10s
       retries: 5
 
 volumes:
   app_data:
   db_data:
-
-# networks:
-#   backend:
-#     driver: bridge
