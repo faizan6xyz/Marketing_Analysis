@@ -1,34 +1,23 @@
 name: myapp
-
 services:
-  web1:
+  backend:
     image: apptest1
     user: appuser
-
     build:
       context: .
       dockerfile: dockerfile
-
     container_name: apptestcon1
-
     ports:
       - "8080:80"
-
     env_file:
       - .env
-
     volumes:
-      - ./html:/usr/share/nginx/html
       - app_data:/data
-
     depends_on:
       db:
         condition: service_healthy
-
     restart: unless-stopped
-
     command: ["/start.sh"]
-
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
@@ -36,17 +25,20 @@ services:
       retries: 2
 
   db:
-    image: docker.io/library/postgres:16
+    image: postgres:16   
+    container_name: postgres_db
     environment:
       POSTGRES_USER: leojr
-      POSTGRES_PASSWORD: urmotherisbitchlikeurfatherex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: userdb
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U leojr -d userdb"]
       interval: 10s
+      timeout: 5s
       retries: 5
+    restart: unless-stopped
 
 volumes:
   app_data:

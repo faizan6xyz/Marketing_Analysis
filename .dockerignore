@@ -6,3 +6,5 @@ Analytics/
 .vscode/
 deploy-example/
 database/manual.txt
+dockershit.txt
+Compose.yml
