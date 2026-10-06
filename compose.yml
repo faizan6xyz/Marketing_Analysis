@@ -4,10 +4,10 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon1
-    cpus: "0.5"
-    mem_limit: 400m
+    cpus: "0.3"
+    mem_limit: 350m
     ports:
-      - "8080:80"
+      - "5000-5014:5000-5014"
     env_file:
       - .env
     volumes:
@@ -27,10 +27,10 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon2
-    cpus: "0.5"
-    mem_limit: 400m
+    cpus: "0.3"
+    mem_limit: 350m
     ports:
-      - "8081:80"
+      - "5100-5114:5000-5014"
     env_file:
       - .env
     volumes:
@@ -50,10 +50,10 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon3
-    cpus: "0.5"
-    mem_limit: 400m
+    cpus: "0.3"
+    mem_limit: 350m
     ports:
-      - "8082:80"
+      - "5200-5214:5000-5014"
     env_file:
       - .env
     volumes:
@@ -73,10 +73,10 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon4
-    cpus: "0.5"
-    mem_limit: 400m
+    cpus: "0.3"
+    mem_limit: 350m
     ports:
-      - "8083:80"
+      - "5300-5314:5000-5014"
     env_file:
       - .env
     volumes:
