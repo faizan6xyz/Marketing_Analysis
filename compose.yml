@@ -68,12 +68,30 @@ services:
       interval: 30s
       timeout: 5s
       retries: 2
-
   db:
     image: docker.io/library/postgres:16
     container_name: postgres_db
     cpus: "0.5"
     mem_limit: 1g
+    memswap_limit: 1g        # no swap, so memory stays hard-capped
+    shm_size: 256mb          # default 64MB can crash parallel queries
+    command: >
+      postgres 
+      -c shared_buffers=256MB
+      -c effective_cache_size=512MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=30
+      -c max_parallel_workers_per_gather=0
+      -c autovacuum_max_workers=2
+      -c autovacuum_work_mem=64MB
+      -c wal_compression=zstd
+      -c default_toast_compression=lz4
+      -c max_wal_size=512MB
+      -c min_wal_size=80MB
+      -c temp_file_limit=1GB
+      -c statement_timeout=60s
+      -c idle_in_transaction_session_timeout=30s
     environment:
       POSTGRES_USER: leojr
       POSTGRES_PASSWORD: "urmotherisbitchlikeurfatherex"
