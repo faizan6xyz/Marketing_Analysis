@@ -68,6 +68,30 @@ services:
       interval: 30s
       timeout: 5s
       retries: 2
+
+  backend4:
+    image: apptest1
+    user: appuser
+    container_name: apptestcon4
+    cpus: "0.5"
+    mem_limit: 400m
+    ports:
+      - "8083:80"
+    env_file:
+      - .env
+    volumes:
+      - app_data4:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["/start.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+
   db:
     image: docker.io/library/postgres:16
     container_name: postgres_db
@@ -106,8 +130,58 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Hot standby: clones db on first start, then streams changes from it (read-only).
+  db2:
+    image: docker.io/library/postgres:16
+    container_name: postgres_db2
+    user: postgres
+    cpus: "0.5"
+    mem_limit: 1g
+    memswap_limit: 1g
+    shm_size: 256mb
+    environment:
+      PGPASSWORD: "urmotherisbitchlikeurfatherex"   # used by pg_basebackup
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
+          echo "Empty data dir, cloning from db..."
+          pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db2_slot -P
+          chmod 700 /var/lib/postgresql/data
+        fi
+        exec postgres \
+          -c hot_standby=on \
+          -c shared_buffers=256MB \
+          -c effective_cache_size=512MB \
+          -c work_mem=4MB \
+          -c maintenance_work_mem=64MB \
+          -c max_connections=30 \
+          -c max_parallel_workers_per_gather=0 \
+          -c autovacuum_max_workers=2 \
+          -c autovacuum_work_mem=64MB \
+          -c wal_compression=zstd \
+          -c default_toast_compression=lz4 \
+          -c max_wal_size=512MB \
+          -c min_wal_size=80MB \
+          -c temp_file_limit=1GB \
+          -c statement_timeout=60s \
+          -c idle_in_transaction_session_timeout=30s
+    volumes:
+      - db2_data:/var/lib/postgresql/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leojr -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   app_data1:
   app_data2:
   app_data3:
+  app_data4:
   db_data:
+  db2_data:
