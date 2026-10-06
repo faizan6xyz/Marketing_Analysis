@@ -137,10 +137,11 @@ services:
       -c temp_file_limit=1GB
       -c statement_timeout=60s
       -c idle_in_transaction_session_timeout=30s
+
       -c wal_level=replica
       -c max_wal_senders=5
       -c max_replication_slots=5
-      -c max_slot_wal_keep_size=2GB
+      -c max_slot_wal_keep_size=1GB
     environment:
       POSTGRES_USER: leojr
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -177,6 +178,7 @@ services:
         exec postgres \
           -c hot_standby=on \
           -c hot_standby_feedback=on \
+
           -c shared_buffers=256MB \
           -c effective_cache_size=512MB \
           -c work_mem=4MB \
@@ -202,6 +204,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  dbwatch:
+    image: docker.io/library/postgres:16
+    container_name: db_watch
+    entrypoint: ["/bin/bash", "/dbwatch.sh"]
+    cpus: "0.1"
+    mem_limit: 100m
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      CHECK_INTERVAL: "10"
+      FAIL_THRESHOLD: "3"
+      AUTO_PROMOTE: "false"
+      AUTO_FENCE: "false"
+    volumes:
+      - ./dbwatch.sh:/dbwatch.sh:ro
     restart: unless-stopped
 
 # Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
