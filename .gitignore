@@ -12,3 +12,4 @@ database/manual.txt
 creds.json
 dockershit.txt
 Compose.yml
+schema.sql
