@@ -32,7 +32,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 EXPOSE 5000/tcp
 STOPSIGNAL SIGTERM
-RUN chown -R root:project_m /app
-RUN chmod 774 /app/start.sh
+RUN chown -R root:project_m /app     
+RUN chmod -R g+rX /app 
+RUN chmod +x /app/start.sh
 USER appuser
-ENTRYPOINT ["./start.sh"]
+cmd ["./start.sh"]

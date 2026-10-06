@@ -1,4 +1,4 @@
-#!/bin/shl
+#!/bin/sh
 python3.10 -m login &
 python3.10 -m limit &
 python3.10 -m campaign &
