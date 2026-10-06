@@ -1,11 +1,11 @@
 name: myapp
-
 services:
-
   backend1:
     image: apptest1
     user: appuser
     container_name: apptestcon1
+    cpus: "1.0"
+    mem_limit: 400m
     ports:
       - "8080:80"
     env_file:
@@ -27,6 +27,8 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon2
+    cpus: "1.0"
+    mem_limit: 400m
     ports:
       - "8081:80"
     env_file:
@@ -48,6 +50,8 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon3
+    cpus: "1.0"
+    mem_limit: 400m
     ports:
       - "8082:80"
     env_file:
@@ -68,6 +72,8 @@ services:
   db:
     image: docker.io/library/postgres:16
     container_name: postgres_db
+    cpus: "1.0"
+    mem_limit: 1g
     environment:
       POSTGRES_USER: leojr
       POSTGRES_PASSWORD: "urmotherisbitchlikeurfatherex"
