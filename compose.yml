@@ -192,6 +192,8 @@ services:
       - backend4
     restart: unless-stopped
 
+# Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
+
 volumes:
   app_data1:
   app_data2:
