@@ -4,7 +4,7 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon1
-    cpus: "1.0"
+    cpus: "0.5"
     mem_limit: 400m
     ports:
       - "8080:80"
@@ -27,7 +27,7 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon2
-    cpus: "1.0"
+    cpus: "0.5"
     mem_limit: 400m
     ports:
       - "8081:80"
@@ -50,7 +50,7 @@ services:
     image: apptest1
     user: appuser
     container_name: apptestcon3
-    cpus: "1.0"
+    cpus: "0.5"
     mem_limit: 400m
     ports:
       - "8082:80"
@@ -72,7 +72,7 @@ services:
   db:
     image: docker.io/library/postgres:16
     container_name: postgres_db
-    cpus: "1.0"
+    cpus: "0.5"
     mem_limit: 1g
     environment:
       POSTGRES_USER: leojr
@@ -80,6 +80,7 @@ services:
       POSTGRES_DB: userdb
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U leojr -d userdb"]
       interval: 10s
