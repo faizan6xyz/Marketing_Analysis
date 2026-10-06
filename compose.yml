@@ -1,18 +1,59 @@
 name: myapp
+
 services:
-  backend:
+
+  backend1:
     image: apptest1
     user: appuser
-    build:
-      context: .
-      dockerfile: dockerfile
     container_name: apptestcon1
     ports:
       - "8080:80"
     env_file:
       - .env
     volumes:
-      - app_data:/data
+      - app_data1:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["/start.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+
+  backend2:
+    image: apptest1
+    user: appuser
+    container_name: apptestcon2
+    ports:
+      - "8081:80"
+    env_file:
+      - .env
+    volumes:
+      - app_data2:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["/start.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+
+  backend3:
+    image: apptest1
+    user: appuser
+    container_name: apptestcon3
+    ports:
+      - "8082:80"
+    env_file:
+      - .env
+    volumes:
+      - app_data3:/data
     depends_on:
       db:
         condition: service_healthy
@@ -41,5 +82,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  app_data:
+  app_data1:
+  app_data2:
+  app_data3:
   db_data:
