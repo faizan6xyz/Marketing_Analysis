@@ -10,11 +10,16 @@ services:
       - "5000-5014:5000-5014"
     env_file:
       - .env
+    environment:
+      DB_WRITE_HOST: db
+      DB_READ_HOST: db2
     volumes:
       - app_data1:/data
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_started
+      db2:
+        condition: service_started
     restart: unless-stopped
     command: ["/start.sh"]
     healthcheck:
@@ -33,11 +38,16 @@ services:
       - "5100-5114:5000-5014"
     env_file:
       - .env
+    environment:
+      DB_WRITE_HOST: db
+      DB_READ_HOST: db2
     volumes:
       - app_data2:/data
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_started
+      db2:
+        condition: service_started
     restart: unless-stopped
     command: ["/start.sh"]
     healthcheck:
@@ -56,11 +66,16 @@ services:
       - "5200-5214:5000-5014"
     env_file:
       - .env
+    environment:
+      DB_WRITE_HOST: db
+      DB_READ_HOST: db2
     volumes:
       - app_data3:/data
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_started
+      db2:
+        condition: service_started
     restart: unless-stopped
     command: ["/start.sh"]
     healthcheck:
@@ -79,11 +94,16 @@ services:
       - "5300-5314:5000-5014"
     env_file:
       - .env
+    environment:
+      DB_WRITE_HOST: db
+      DB_READ_HOST: db2
     volumes:
       - app_data4:/data
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_started
+      db2:
+        condition: service_started
     restart: unless-stopped
     command: ["/start.sh"]
     healthcheck:
@@ -92,6 +112,7 @@ services:
       timeout: 5s
       retries: 2
 
+# db service is running the postgresql service with configration of the db that all backend needs  , and all backend use the configrations to get the container used for read write . in simple all backend containers are the people who are told to go to the shop which has borad "postresql" with little panda on it  , and the shop is the db container 
   db:
     image: docker.io/library/postgres:16
     container_name: postgres_db
@@ -116,13 +137,17 @@ services:
       -c temp_file_limit=1GB
       -c statement_timeout=60s
       -c idle_in_transaction_session_timeout=30s
+      -c wal_level=replica
+      -c max_wal_senders=5
+      -c max_replication_slots=5
+      -c max_slot_wal_keep_size=2GB
     environment:
       POSTGRES_USER: leojr
-      POSTGRES_PASSWORD: "urmotherisbitchlikeurfatherex"
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: userdb
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U leojr -d userdb"]
       interval: 10s
@@ -140,7 +165,7 @@ services:
     memswap_limit: 1g
     shm_size: 256mb
     environment:
-      PGPASSWORD: "urmotherisbitchlikeurfatherex"   # used by pg_basebackup
+      PGPASSWORD: ${DB_PASSWORD}   
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
@@ -151,6 +176,7 @@ services:
         fi
         exec postgres \
           -c hot_standby=on \
+          -c hot_standby_feedback=on \
           -c shared_buffers=256MB \
           -c effective_cache_size=512MB \
           -c work_mem=4MB \
@@ -178,6 +204,8 @@ services:
       retries: 5
     restart: unless-stopped
 
+# Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
+
   nginx:
     image: docker.io/library/nginx:alpine
     container_name: nginx_lb
@@ -190,9 +218,7 @@ services:
       - backend2
       - backend3
       - backend4
-    restart: unless-stopped
-
-# Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
+    restart: unless-stopped 
 
 volumes:
   app_data1:
@@ -201,3 +227,4 @@ volumes:
   app_data4:
   db_data:
   db2_data:
+  pending_sql:
