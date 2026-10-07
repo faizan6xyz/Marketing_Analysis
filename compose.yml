@@ -138,6 +138,7 @@ services:
       -c statement_timeout=60s
       -c idle_in_transaction_session_timeout=30s
 
+      -c hba_file=/etc/postgresql/pg_hba.conf
       -c wal_level=replica
       -c max_wal_senders=5
       -c max_replication_slots=5
@@ -149,6 +150,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U leojr -d userdb"]
       interval: 10s
@@ -172,7 +174,8 @@ services:
       - |
         if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
           echo "Empty data dir, cloning from db..."
-          pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db2_slot -P
+          pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db2_slot -P \
+            || { echo "clone failed"; rm -rf /var/lib/postgresql/data/*; exit 1; }
           chmod 700 /var/lib/postgresql/data
         fi
         exec postgres \
