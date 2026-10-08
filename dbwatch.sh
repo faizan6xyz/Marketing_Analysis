@@ -4,6 +4,7 @@ export PGPASSWORD="${DB_PASSWORD:?DB_PASSWORD is not set}"
 export PGCONNECT_TIMEOUT=3
 DB1_HOST="db"
 DB2_HOST="db2"
+PRIMARY_DB=""
 DB_USER="${DB_USER:-leojr}"
 DB_NAME="${DB_NAME:-userdb}"
 INTERVAL="${CHECK_INTERVAL:-3}"
@@ -82,6 +83,35 @@ promote_db2() {
    log "CRIT: db2 did not become PRIMARY"
     return 1
 }
+
+promote_db() {
+    local result
+    local i
+    log "PROMOTE: requesting db1 promotion..."
+    result=$(psql \
+        -h "$DB1_HOST" \
+        -U "$DB_USER" \
+        -d "$DB_NAME" \
+        -Atc "SELECT pg_promote();" \
+        2>&1)
+    if [ "$result" != "t" ]; then
+        log "CRIT: pg_promote() on db1 did not succeed"
+        log "DETAIL: $result"
+        return 1
+    fi
+    log "PROMOTE: pg_promote() accepted for db1"
+    for i in {1..10}; do
+        sleep 1
+        if [ "$(role "$DB1_HOST")" = "primary" ]; then
+            log "PROMOTE: db1 is now PRIMARY"
+            return 0
+        fi
+        log "PROMOTE: waiting for db1... ($i/10)"
+    done
+    log "CRIT: db1 did not become PRIMARY"
+    return 1
+}
+
 fence_db() {
     log "FENCE: setting db to read-only (default_transaction_read_only=on)"
    q "$DB1_HOST" "ALTER SYSTEM SET default_transaction_read_only = on;" >/dev/null
@@ -99,8 +129,16 @@ log "auto fence    = ${AUTO_FENCE}"
 log "auto failback = ${AUTO_FAILBACK}"
 log "============================================================"
 while true; do
-   R1=$(role "$DB1_HOST")
-    R2=$(role "$DB2_HOST")
+    # R1=$(role "$DB1_HOST")
+    # R2=$(role "$DB2_HOST")
+    # if [ "$R1" = "primary" ]; then
+    #     PRIMARY_DB="$DB1_HOST"
+    # elif [ "$R2" = "primary" ]; then
+    #     PRIMARY_DB="$DB2_HOST"
+    # else
+    #     PRIMARY_DB=""
+    # fi
+    # log "Current PRIMARY: ${PRIMARY_DB:-NONE}" 
    if [ "$R1" = "primary" ] && [ "$R2" = "primary" ]; then
        log "CRIT: SPLIT-BRAIN - db AND db2 are both PRIMARY"
         log "CRIT: DO NOT write to both databases."
@@ -128,7 +166,7 @@ while true; do
                         log "WARN: AUTO_PROMOTE=false, db2 remains STANDBY"
                    elif db2_still_streaming_from_db; then
                         log "WARN: db2 is still streaming from db - db looks ALIVE"
-                        log "WARN: refusing to promote (would cause split-brain)"
+                          log "WARN: refusing to promote (would cause split-brain)"
                    else
                         log "FAILOVER: db failed, db2 stopped receiving WAL"
                         log "FAILOVER: promoting db2..."
@@ -182,3 +220,6 @@ while true; do
    fi
    sleep "$INTERVAL"
 done
+
+
+# need to add if both of them are not primary make one primary and one standby (standby make the data copied and same accross two servers) , primary would always be there (after getting promoted or existing previously) but the standby is not permanent (if the one goes down the standby gets promoted and the standby spot will be filled by container restart)
