@@ -112,16 +112,15 @@ services:
       timeout: 5s
       retries: 2
 
-# db service is running the postgresql service with configration of the db that all backend needs  , and all backend use the configrations to get the container used for read write . in simple all backend containers are the people who are told to go to the shop which has borad "postresql" with little panda on it  , and the shop is the db container 
   db:
     image: docker.io/library/postgres:16
     container_name: postgres_db
     cpus: "0.5"
     mem_limit: 1g
-    memswap_limit: 1g        # no swap, so memory stays hard-capped
-    shm_size: 256mb          # default 64MB can crash parallel queries
+    memswap_limit: 1g
+    shm_size: 256mb
     command: >
-      postgres 
+      postgres
       -c shared_buffers=256MB
       -c effective_cache_size=512MB
       -c work_mem=4MB
@@ -137,12 +136,13 @@ services:
       -c temp_file_limit=1GB
       -c statement_timeout=60s
       -c idle_in_transaction_session_timeout=30s
-
       -c hba_file=/etc/postgresql/pg_hba.conf
       -c wal_level=replica
       -c max_wal_senders=5
       -c max_replication_slots=5
       -c max_slot_wal_keep_size=1GB
+      -c wal_log_hints=on
+      -c hot_standby=on
     environment:
       POSTGRES_USER: leojr
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -157,8 +157,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-
-  # Hot standby: clones db on first start, then streams changes from it (read-only).
+ 
   db2:
     image: docker.io/library/postgres:16
     container_name: postgres_db2
@@ -168,20 +167,23 @@ services:
     memswap_limit: 1g
     shm_size: 256mb
     environment:
-      PGPASSWORD: ${DB_PASSWORD}   
+      PGPASSWORD: ${DB_PASSWORD}
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
+        sleep 8
         if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
           echo "Empty data dir, cloning from db..."
           pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db2_slot -P \
-            || { echo "clone failed"; rm -rf /var/lib/postgresql/data/*; exit 1; }
+            || {
+              echo "clone failed"
+              rm -rf /var/lib/postgresql/data/*
+              psql -h db -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db2_slot')" || true
+              exit 1
+            }
           chmod 700 /var/lib/postgresql/data
         fi
         exec postgres \
-          -c hot_standby=on \
-          -c hot_standby_feedback=on \
-
           -c shared_buffers=256MB \
           -c effective_cache_size=512MB \
           -c work_mem=4MB \
@@ -196,9 +198,18 @@ services:
           -c min_wal_size=80MB \
           -c temp_file_limit=1GB \
           -c statement_timeout=60s \
-          -c idle_in_transaction_session_timeout=30s
+          -c idle_in_transaction_session_timeout=30s \
+          -c hba_file=/etc/postgresql/pg_hba.conf \
+          -c wal_level=replica \
+          -c max_wal_senders=5 \
+          -c max_replication_slots=5 \
+          -c max_slot_wal_keep_size=1GB \
+          -c wal_log_hints=on \
+          -c hot_standby=on \
+          -c hot_standby_feedback=on
     volumes:
       - db2_data:/var/lib/postgresql/data
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     depends_on:
       db:
         condition: service_healthy
@@ -208,7 +219,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-
+ 
   dbwatch:
     image: docker.io/library/postgres:16
     container_name: db_watch
@@ -221,8 +232,12 @@ services:
       FAIL_THRESHOLD: "3"
       AUTO_PROMOTE: "false"
       AUTO_FENCE: "false"
+      AUTO_DEMOTE: "false"
     volumes:
       - ./dbwatch.sh:/dbwatch.sh:ro
+    depends_on:
+      - db
+      - db2
     restart: unless-stopped
 
 # Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
