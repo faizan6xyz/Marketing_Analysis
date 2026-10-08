@@ -111,7 +111,65 @@ promote_db() {
     log "CRIT: db1 did not become PRIMARY"
     return 1
 }
-
+demote_db2_to_standby() {
+    local i
+    log "DEMOTE: preparing db2 to become STANDBY of db..."
+ #    # 1. Stop writes on DB2
+ #    log "DEMOTE: making db2 read-only..."
+    if ! q "$DB2_HOST" \
+        "ALTER SYSTEM SET default_transaction_read_only = on;" >/dev/null; then
+        log "CRIT: failed to make db2 read-only"
+        return 1
+    fi
+    q "$DB2_HOST" "SELECT pg_reload_conf();" >/dev/null
+    # Verify
+    if [ "$(q "$DB2_HOST" "SHOW default_transaction_read_only;")" != "on" ]; then
+        log "CRIT: db2 is still writable"
+        return 1
+    fi
+    log "DEMOTE: db2 is now read-only"
+ #    # 2. Stop PostgreSQL on DB2
+ #    log "DEMOTE: stopping PostgreSQL on db2..."
+    if ! podman exec "$DB2_CONTAINER" \
+        pg_ctl -D /var/lib/postgresql/data stop -m fast; then
+        log "CRIT: failed to stop db2"
+        return 1
+    fi
+ #    # 3. Rewind DB2 so it can follow DB1
+ #    log "DEMOTE: rewinding db2 to follow db..."
+    if ! podman exec "$DB2_CONTAINER" \
+        pg_rewind \
+        --target-pgdata=/var/lib/postgresql/data \
+        --source-server="host=$DB1_HOST user=$DB_USER dbname=$DB_NAME"; then
+        log "WARN: pg_rewind failed"
+        log "DEMOTE: db2 may need a full pg_basebackup"
+        return 1
+    fi
+ #    # 4. Configure DB2 as standby
+ #    log "DEMOTE: configuring db2 as standby..."
+    podman exec "$DB2_CONTAINER" bash -c \
+        "touch /var/lib/postgresql/data/standby.signal"
+    podman exec "$DB2_CONTAINER" bash -c \
+        "echo \"primary_conninfo = 'host=$DB1_HOST user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME'\" >> /var/lib/postgresql/data/postgresql.auto.conf"
+ #    # 5. Start DB2
+ #    log "DEMOTE: starting db2 as standby..."
+    if ! podman exec "$DB2_CONTAINER" \
+        pg_ctl -D /var/lib/postgresql/data start; then
+        log "CRIT: failed to start db2"
+        return 1
+    fi
+    # 6. Wait for DB2 to become standby
+    for i in {1..20}; do
+        sleep 1
+        if [ "$(role "$DB2_HOST")" = "standby" ]; then
+            log "DEMOTE: db2 is now STANDBY"
+            return 0
+        fi
+        log "DEMOTE: waiting for db2... ($i/20)"
+    done
+    log "CRIT: db2 did not become STANDBY"
+    return 1
+}
 fence_db() {
     log "FENCE: setting db to read-only (default_transaction_read_only=on)"
    q "$DB1_HOST" "ALTER SYSTEM SET default_transaction_read_only = on;" >/dev/null
