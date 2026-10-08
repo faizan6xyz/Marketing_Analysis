@@ -5,8 +5,11 @@ export PGCONNECT_TIMEOUT=3
 DB1_HOST="db"
 DB2_HOST="db2"
 PRIMARY_DB=""
+PG_IMAGE="docker.io/library/postgres:16"
 DB_USER="${DB_USER:-leojr}"
 DB_NAME="${DB_NAME:-userdb}"
+DB2_VOLUME="myapp_db2_data"
+PGHBA_FILE="./pg_hba.conf"
 INTERVAL="${CHECK_INTERVAL:-3}"
 FAIL_THRESHOLD="${FAIL_THRESHOLD:-5}"
 AUTO_PROMOTE="${AUTO_PROMOTE:-false}"
@@ -83,7 +86,6 @@ promote_db2() {
    log "CRIT: db2 did not become PRIMARY"
     return 1
 }
-
 promote_db() {
     local result
     local i
@@ -111,69 +113,96 @@ promote_db() {
     log "CRIT: db1 did not become PRIMARY"
     return 1
 }
+fence_db() {
+    log "FENCE: setting db to read-only (default_transaction_read_only=on)"
+   q "$DB1_HOST" "ALTER SYSTEM SET default_transaction_read_only = on;" >/dev/null
+    q "$DB1_HOST" "SELECT pg_reload_conf();" >/dev/null
+}
 demote_db2_to_standby() {
     local i
-    log "DEMOTE: preparing db2 to become STANDBY of db..."
- #    # 1. Stop writes on DB2
- #    log "DEMOTE: making db2 read-only..."
-    if ! q "$DB2_HOST" \
-        "ALTER SYSTEM SET default_transaction_read_only = on;" >/dev/null; then
-        log "CRIT: failed to make db2 read-only"
+    log "DEMOTE: preparing db2 to become STANDBY of db1..."
+    if [ "$(role "$DB1_HOST")" != "primary" ]; then
+        log "CRIT: db1 is not primary, refusing to demote db2"
         return 1
     fi
-    q "$DB2_HOST" "SELECT pg_reload_conf();" >/dev/null
-    # Verify
-    if [ "$(q "$DB2_HOST" "SHOW default_transaction_read_only;")" != "on" ]; then
-        log "CRIT: db2 is still writable"
-        return 1
-    fi
-    log "DEMOTE: db2 is now read-only"
- #    # 2. Stop PostgreSQL on DB2
- #    log "DEMOTE: stopping PostgreSQL on db2..."
-    if ! podman exec "$DB2_CONTAINER" \
-        pg_ctl -D /var/lib/postgresql/data stop -m fast; then
+    # 1. Stop db2 (postgres is PID 1, so the container exits;
+    log "DEMOTE: stopping db2..."
+    if ! podman stop -t 60 "$DB2_HOST"; then
         log "CRIT: failed to stop db2"
         return 1
     fi
- #    # 3. Rewind DB2 so it can follow DB1
- #    log "DEMOTE: rewinding db2 to follow db..."
-    if ! podman exec "$DB2_CONTAINER" \
-        pg_rewind \
-        --target-pgdata=/var/lib/postgresql/data \
-        --source-server="host=$DB1_HOST user=$DB_USER dbname=$DB_NAME"; then
-        log "WARN: pg_rewind failed"
-        log "DEMOTE: db2 may need a full pg_basebackup"
+    # 2. Rewind + write standby.signal and primary_conninfo
+    log "DEMOTE: rewinding db2 to follow db1..."
+    if ! podman run --rm --user postgres \
+            -v "$DB2_VOLUME":/var/lib/postgresql/data \
+            "$PG_IMAGE" \
+            pg_rewind \
+              --target-pgdata=/var/lib/postgresql/data \
+              --source-server="host=$DB1_HOST port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" \
+              --write-recovery-conf --progress; then
+        log "WARN: pg_rewind failed, db2 may need a full pg_basebackup"
         return 1
     fi
- #    # 4. Configure DB2 as standby
- #    log "DEMOTE: configuring db2 as standby..."
-    podman exec "$DB2_CONTAINER" bash -c \
-        "touch /var/lib/postgresql/data/standby.signal"
-    podman exec "$DB2_CONTAINER" bash -c \
-        "echo \"primary_conninfo = 'host=$DB1_HOST user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME'\" >> /var/lib/postgresql/data/postgresql.auto.conf"
- #    # 5. Start DB2
- #    log "DEMOTE: starting db2 as standby..."
-    if ! podman exec "$DB2_CONTAINER" \
-        pg_ctl -D /var/lib/postgresql/data start; then
+    # 3. Start db2 (standby.signal makes it come up as standby)
+    log "DEMOTE: starting db2 as standby..."
+    if ! podman start "$DB2_HOST"; then
         log "CRIT: failed to start db2"
         return 1
     fi
-    # 6. Wait for DB2 to become standby
-    for i in {1..20}; do
+    # 4. Wait for standby role
+    for i in {1..30}; do
         sleep 1
         if [ "$(role "$DB2_HOST")" = "standby" ]; then
             log "DEMOTE: db2 is now STANDBY"
             return 0
         fi
-        log "DEMOTE: waiting for db2... ($i/20)"
+        log "DEMOTE: waiting for db2... ($i/30)"
     done
     log "CRIT: db2 did not become STANDBY"
     return 1
 }
-fence_db() {
-    log "FENCE: setting db to read-only (default_transaction_read_only=on)"
-   q "$DB1_HOST" "ALTER SYSTEM SET default_transaction_read_only = on;" >/dev/null
-    q "$DB1_HOST" "SELECT pg_reload_conf();" >/dev/null
+demote_db_to_standby() {
+    local i
+    log "DEMOTE: preparing db to become STANDBY of db2..."
+    if [ "$(role "$DB2_HOST")" != "primary" ]; then
+        log "CRIT: db2 is not primary, refusing to demote db"
+        return 1
+    fi
+    # 1. Stop db (postgres is PID 1, so the container exits;
+    log "DEMOTE: stopping db..."
+    if ! podman stop -t 60 "$DB2_HOST"; then
+        log "CRIT: failed to stop db"
+        return 1
+    fi
+    # 2. Rewind + write standby.signal and primary_conninfo
+    log "DEMOTE: rewinding db to follow db1..."
+    if ! podman run --rm --user postgres \
+            -v "$DB_VOLUME":/var/lib/postgresql/data \
+            "$PG_IMAGE" \
+            pg_rewind \
+              --target-pgdata=/var/lib/postgresql/data \
+              --source-server="host=$DB2_HOST port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" \
+              --write-recovery-conf --progress; then
+        log "WARN: pg_rewind failed, db may need a full pg_basebackup"
+        return 1
+    fi
+    # 3. Start db (standby.signal makes it come up as standby)
+    log "DEMOTE: starting db as standby..."
+    if ! podman start "$DB1_HOST"; then
+        log "CRIT: failed to start db"
+        return 1
+    fi
+    # 4. Wait for standby role
+    for i in {1..30}; do
+        sleep 1
+        if [ "$(role "$DB1_HOST")" = "standby" ]; then
+            log "DEMOTE: db is now STANDBY"
+            return 0
+        fi
+        log "DEMOTE: waiting for db... ($i/30)"
+    done
+    log "CRIT: db did not become STANDBY"
+    return 1
 }
 FAILS=0
 log "============================================================"
@@ -187,23 +216,24 @@ log "auto fence    = ${AUTO_FENCE}"
 log "auto failback = ${AUTO_FAILBACK}"
 log "============================================================"
 while true; do
-    # R1=$(role "$DB1_HOST")
-    # R2=$(role "$DB2_HOST")
-    # if [ "$R1" = "primary" ]; then
-    #     PRIMARY_DB="$DB1_HOST"
-    # elif [ "$R2" = "primary" ]; then
-    #     PRIMARY_DB="$DB2_HOST"
-    # else
-    #     PRIMARY_DB=""
-    # fi
-    # log "Current PRIMARY: ${PRIMARY_DB:-NONE}" 
+    R1=$(role "$DB1_HOST")
+    R2=$(role "$DB2_HOST")
    if [ "$R1" = "primary" ] && [ "$R2" = "primary" ]; then
        log "CRIT: SPLIT-BRAIN - db AND db2 are both PRIMARY"
         log "CRIT: DO NOT write to both databases."
+        if [ "$PRIMARY_DB" = "db" ]; then
+            # podman stop "$DB2_HOST" 
+            demote_db2_to_standby
+            log "CRIT : fucked the $DB2_HOST cause cause the db is the primary  "
+        elif [ "$PRIMARY_DB" = "db2" ]; then
+            # podman stop "$DB1_HOST"
+            demote_db_to_standby
+            log "CRIT : fucked the $DB1_HOST cause cause the db is the primary  "
        if [ "$AUTO_FENCE" = "true" ]; then
             fence_db
         fi
    elif [ "$R1" = "primary" ]; then
+        PRIMARY_DB="$DB1_HOST"
        FAILS=0
        ROW=$(repl_info "$DB1_HOST")
         STANDBYS=${ROW%%|*}
@@ -255,6 +285,7 @@ while true; do
                 ;;
         esac
    elif [ "$R1" = "standby" ] && [ "$R2" = "primary" ]; then
+        PRIMARY_DB="$DB1_HOST"
        FAILS=0
        ROW=$(repl_info "$DB2_HOST")
         STANDBYS=${ROW%%|*}
