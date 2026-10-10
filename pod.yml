@@ -1,0 +1,214 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pg-secret
+type: Opaque
+data:
+  password: Y2hhbmdlbWU=
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+data:
+  default.conf: |
+    upstream backend {
+      least_conn;
+      server app:8001 max_fails=3 fail_timeout=10s;
+      server app:8002 max_fails=3 fail_timeout=10s;
+      server app:8003 max_fails=3 fail_timeout=10s;
+      server app:8004 max_fails=3 fail_timeout=10s;
+    }
+
+    server {
+      listen 80;
+
+      location / {
+        proxy_pass http://backend;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_next_upstream error timeout http_502 http_503;
+      }
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db1pod
+  labels:
+    tier: database
+    role: primary
+spec:
+  containers:
+    - name: db1
+      image: docker.io/library/postgres:16
+      env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
+      ports:
+        - containerPort: 5432
+      volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql/data
+  volumes:
+    - name: pgdata
+      persistentVolumeClaim:
+        claimName: pgdata1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db2pod
+  labels:
+    tier: database
+    role: standby
+spec:
+  containers:
+    - name: db2
+      image: docker.io/library/postgres:16
+      env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
+      ports:
+        - containerPort: 5432
+      volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql/data
+  volumes:
+    - name: pgdata
+      persistentVolumeClaim:
+        claimName: pgdata2
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+  labels:
+    tier: backend
+spec:
+  containers:
+    - name: api1
+      image: localhost/myapp:latest
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: PORT
+          value: "8001"
+        - name: DB_HOST
+          value: db1pod
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: postgres
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
+      ports:
+        - containerPort: 8001
+    - name: api2
+      image: localhost/myapp:latest
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: PORT
+          value: "8002"
+        - name: DB_HOST
+          value: db1pod
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: postgres
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
+      ports:
+        - containerPort: 8002
+    - name: api3
+      image: localhost/myapp:latest
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: PORT
+          value: "8003"
+        - name: DB_HOST
+          value: db1pod
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: postgres
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
+      ports:
+        - containerPort: 8003
+    - name: api4
+      image: localhost/myapp:latest
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: PORT
+          value: "8004"
+        - name: DB_HOST
+          value: db1pod
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: postgres
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
+      ports:
+        - containerPort: 8004
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: edge
+  labels:
+    tier: proxy
+spec:
+  containers:
+    - name: nginx
+      image: docker.io/library/nginx:stable
+      ports:
+        - containerPort: 80
+          hostPort: 80
+        - containerPort: 443
+          hostPort: 443
+      volumeMounts:
+        - name: conf
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+  volumes:
+    - name: conf
+      configMap:
+        name: nginx-conf
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# podman network create appnet
+# podman kube play --network appnet pod.yml
+# podman kube play --down pod.yml
