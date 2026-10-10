@@ -1,116 +1,116 @@
 name: myapp
 services:
-  backend1:
-    image: apptest1
-    user: appuser
-    container_name: apptestcon1
-    cpus: "0.5"
-    mem_limit: 400m
-    ports:
-      - "5000-5014:5000-5014"
-    env_file:
-      - .env
-    environment:
-      DB_WRITE_HOST: db
-      DB_READ_HOST: db2
-    volumes:
-      - app_data1:/data
-    depends_on:
-      db:
-        condition: service_started
-      db2:
-        condition: service_started
-    restart: unless-stopped
-    command: ["/start.sh"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 2
+  # backend1:
+  #   image: apptest1
+  #   user: appuser
+  #   container_name: apptestcon1
+  #   cpus: "0.5"
+  #   mem_limit: 400m
+  #   ports:
+  #     - "5000-5014:5000-5014"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DB_WRITE_HOST: db
+  #     DB_READ_HOST: db2
+  #   volumes:
+  #     - app_data1:/data
+  #   depends_on:
+  #     db:
+  #       condition: service_started
+  #     db2:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   command: ["/start.sh"]
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 2
 
-  backend2:
-    image: apptest1
-    user: appuser
-    container_name: apptestcon2
-    cpus: "0.5"
-    mem_limit: 400m
-    ports:
-      - "5100-5114:5000-5014"
-    env_file:
-      - .env
-    environment:
-      DB_WRITE_HOST: db
-      DB_READ_HOST: db2
-    volumes:
-      - app_data2:/data
-    depends_on:
-      db:
-        condition: service_started
-      db2:
-        condition: service_started
-    restart: unless-stopped
-    command: ["/start.sh"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 2
+  # backend2:
+  #   image: apptest1
+  #   user: appuser
+  #   container_name: apptestcon2
+  #   cpus: "0.5"
+  #   mem_limit: 400m
+  #   ports:
+  #     - "5100-5114:5000-5014"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DB_WRITE_HOST: db
+  #     DB_READ_HOST: db2
+  #   volumes:
+  #     - app_data2:/data
+  #   depends_on:
+  #     db:
+  #       condition: service_started
+  #     db2:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   command: ["/start.sh"]
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 2
 
-  backend3:
-    image: apptest1
-    user: appuser
-    container_name: apptestcon3
-    cpus: "0.5"
-    mem_limit: 400m
-    ports:
-      - "5200-5214:5000-5014"
-    env_file:
-      - .env
-    environment:
-      DB_WRITE_HOST: db
-      DB_READ_HOST: db2
-    volumes:
-      - app_data3:/data
-    depends_on:
-      db:
-        condition: service_started
-      db2:
-        condition: service_started
-    restart: unless-stopped
-    command: ["/start.sh"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 2
+  # backend3:
+  #   image: apptest1
+  #   user: appuser
+  #   container_name: apptestcon3
+  #   cpus: "0.5"
+  #   mem_limit: 400m
+  #   ports:
+  #     - "5200-5214:5000-5014"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DB_WRITE_HOST: db
+  #     DB_READ_HOST: db2
+  #   volumes:
+  #     - app_data3:/data
+  #   depends_on:
+  #     db:
+  #       condition: service_started
+  #     db2:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   command: ["/start.sh"]
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 2
 
-  backend4:
-    image: apptest1
-    user: appuser
-    container_name: apptestcon4
-    cpus: "0.5"
-    mem_limit: 400m
-    ports:
-      - "5300-5314:5000-5014"
-    env_file:
-      - .env
-    environment:
-      DB_WRITE_HOST: db
-      DB_READ_HOST: db2
-    volumes:
-      - app_data4:/data
-    depends_on:
-      db:
-        condition: service_started
-      db2:
-        condition: service_started
-    restart: unless-stopped
-    command: ["/start.sh"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 2
+  # backend4:
+  #   image: apptest1
+  #   user: appuser
+  #   container_name: apptestcon4
+  #   cpus: "0.5"
+  #   mem_limit: 400m
+  #   ports:
+  #     - "5300-5314:5000-5014"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DB_WRITE_HOST: db
+  #     DB_READ_HOST: db2
+  #   volumes:
+  #     - app_data4:/data
+  #   depends_on:
+  #     db:
+  #       condition: service_started
+  #     db2:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   command: ["/start.sh"]
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 2
 
   db:
     image: docker.io/library/postgres:16
@@ -242,19 +242,19 @@ services:
 
 # Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
 
-  nginx:
-    image: docker.io/library/nginx:alpine
-    container_name: nginx_lb
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - backend1
-      - backend2
-      - backend3
-      - backend4
-    restart: unless-stopped 
+  # nginx:
+  #   image: docker.io/library/nginx:alpine
+  #   container_name: nginx_lb
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - backend1
+  #     - backend2
+  #     - backend3
+  #     - backend4
+  #   restart: unless-stopped 
 
 volumes:
   app_data1:
