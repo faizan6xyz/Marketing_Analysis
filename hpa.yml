@@ -1,0 +1,45 @@
+apiVersion: autoscaling/v2     
+kind: HorizontalPodAutoscaler 
+metadata:
+  name: backend-hpa
+  namespace: default
+  labels:
+    app: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization    # Utilization (% of request) | AverageValue (absolute)
+          averageUtilization: 70   # add pods when average CPU use > 70% of the request
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: AverageValue
+          averageValue: 200Mi
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0     # act immediately (default)
+      selectPolicy: Max      # Max | Min | Disabled; use the most aggressive policy
+      policies:
+        - type: Percent      # allow growing by 100% of current pods...
+          value: 100
+          periodSeconds: 60  # ...every 60 seconds
+        - type: Pods         # or by 2 pods...
+          value: 2
+          periodSeconds: 60  # ...every 60 seconds (whichever policy allows more wins, because of Max)
+    scaleDown: 
+      stabilizationWindowSeconds: 300   # wait 5 min of lower load before shrinking (avoids flapping)
+      selectPolicy: Min      # use the most conservative policy
+      policies:
+        - type: Pods# remove at most 1 pod...
+          value: 1
+          periodSeconds: 60
