@@ -12,6 +12,10 @@ spec:
       labels:
         app: backend
     spec:
+      securityContext:
+        runAsNonRoot: true # prevents the process from running as root.
+        runAsUser: 1000  # the process runs as user ID 1000
+        fsGroup: 1000   # provides group-based access to supported mounted volumes.
       containers:
         - name: backend-container
           image: apptest1
