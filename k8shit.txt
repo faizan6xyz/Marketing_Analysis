@@ -20,3 +20,9 @@ Required
         hpa.yaml: autoscaling based on CPU or memory.
         namespace.yaml: to isolate your app from other workloads.
         cronjob.yaml: for scheduled tasks.
+
+
+
+Start the kubernetes local (minikube):
+    minikube config set rootless true
+    minikube start --driver=podman
