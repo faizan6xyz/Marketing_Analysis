@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: backend
 spec:
-  replicas: 10
+  # replicas: 10    cause the is managing the deployement and autoscaling
   selector:
     matchLabels:
       app: backend
