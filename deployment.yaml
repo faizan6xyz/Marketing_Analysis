@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   name: backend
 spec:
-  # replicas: 10    cause the is managing the deployement and autoscaling
   selector:
     matchLabels:
       app: backend
@@ -20,6 +19,11 @@ spec:
         - name: backend-container
           image: apptest1
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:  # for the sensitive data stored and be shraed 
+                name: envshit
+            - configMapRef: # for the insensitive data stored and be shraed 
+                name: configshit
           ports:
             - containerPort: 5000
           readinessProbe:
