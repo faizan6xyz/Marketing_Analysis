@@ -10,7 +10,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: backend                    # must match the Deployment name
-  minReplicas: 3                     # never scale below 3 pods
+  minReplicas: 4                     # never scale below 3 pods
   maxReplicas: 10                    # never scale above 10 pods
   metrics:                           # highest desired replica count across metrics wins
     - type: Resource

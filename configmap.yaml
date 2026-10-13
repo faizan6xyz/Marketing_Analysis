@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configshit
+  namespace: your-namespace
+  annotations: # annotatiosn are just the data used for the humans to read
+    description: "this is for the non sensitive data stored and shared accros the pods"
+    owner: "faizan"
+    last-rotated: "2026-10-13"
+data: # add all the config here so every pod can access it from here
+  # APP_ENV: "production"
+  # DEBUG: "false"
+  # PORT: "8080"
+  # LOG_LEVEL: "info"

@@ -8,7 +8,7 @@ spec:
       app: backend
   template:
     metadata:
-      labels:
+      labels: # this app:backend label is used to group the pods with same label in the servie 
         app: backend
     spec:
       securityContext:
