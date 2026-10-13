@@ -41,7 +41,7 @@ services:
       -c effective_cache_size=512MB
       -c work_mem=4MB
       -c maintenance_work_mem=64MB
-      -c max_connections=30
+      -c max_connections=50
       -c max_parallel_workers_per_gather=0
       -c autovacuum_max_workers=2
       -c autovacuum_work_mem=64MB
@@ -104,7 +104,7 @@ services:
           -c effective_cache_size=512MB \
           -c work_mem=4MB \
           -c maintenance_work_mem=64MB \
-          -c max_connections=30 \
+          -c max_connections=50 \
           -c max_parallel_workers_per_gather=0 \
           -c autovacuum_max_workers=2 \
           -c autovacuum_work_mem=64MB \
