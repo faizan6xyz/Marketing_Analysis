@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from psycopg2 import sql
 from psycopg2.extras import execute_values
 from psycopg2.pool import ThreadedConnectionPool
-_pool = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"),)
+_pool = ThreadedConnectionPool( 1, 2, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"),)
 
 @contextmanager
 def get_conn():
