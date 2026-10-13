@@ -2,14 +2,10 @@
 __pycache__/
 .env
 text.py
-*.db
-requestcheck.py
 diferentport.txt
 complaint.csv
-route.py
-deploy-example/
 database/manual.txt
 creds.json
 dockershit.txt
-Compose.yml
 schema.sql
+k8shit.txt
