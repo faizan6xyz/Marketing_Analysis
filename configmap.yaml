@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata:
   name: configshit
   namespace: your-namespace
-  annotations: # annotatiosn are just the data used for the humans to read
+  annotations: 
     description: "this is for the non sensitive data stored and shared accros the pods"
     owner: "faizan"
     last-rotated: "2026-10-13"

@@ -18,10 +18,10 @@ spec:
       # ingress-nginx: for requests to app.example.com, use the certificate stored in the Secret app-tls. nginx picks the certificate based on the hostname the client asks for (SNI).
       # cert-manager: request a certificate for these domain names from Let’s Encrypt and save it into app-tls. The names in hosts become the names on the certificate. (you dont have to deal with thw tls shit)
   tls:
-    - hosts: [website_url] 
+    - hosts: [Cluster_route_url] 
       secretName: app-tls
   rules:
-    - host: app.example.com
+    - host: Cluster_route_url
       http:
         paths:
           - path: /
