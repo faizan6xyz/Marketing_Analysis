@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx_ingress
+  annotations:
+    nginx.ingress.kubernetes.io/service-upstream: "false" # nginx sends traffic straight to pod IPs and picks the pod itself ("true" would hand pod selection to the Service); default is "false".
+    nginx.ingress.kubernetes.io/load-balance: "ewma" # Algorithm for picking a pod: round_robin (default) or ewma (prefers pods with lower recent latency and load).
+    nginx.ingress.kubernetes.io/affinity: "cookie" # Enables sticky sessions: nginx sets a cookie so the same client keeps hitting the same pod.
+    nginx.ingress.kubernetes.io/session-cookie-name: "route" # Name of the sticky-session cookie (default is INGRESSCOOKIE).
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "3600" # Cookie lifetime in seconds (1 hour); after it expires the client may land on a different pod.
+    nginx.ingress.kubernetes.io/proxy-next-upstream: "error timeout http_502 http_503" # Conditions that make nginx retry the request on another pod: connection error, timeout, 502 or 503 responses.
+    nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "3" # Maximum total attempts, including the first one (here 1 try + up to 2 retries).
+    cert-manager.io/cluster-issuer: letsencrypt-prod # Tells cert-manager to request a TLS certificate from the letsencrypt-prod issuer and store it in the Secret named in spec.tls.
+    nginx.ingress.kubernetes.io/limit-rps: "20" # Rate limit of 20 requests per second per client IP, applied per ingress-nginx pod (not across all replicas).
+spec:
+  ingressClassName: nginx
+  # hosts is the list of domain names that the TLS certificate should cover. It tells two things which domains are served over HTTPS:    
+      # ingress-nginx: for requests to app.example.com, use the certificate stored in the Secret app-tls. nginx picks the certificate based on the hostname the client asks for (SNI).
+      # cert-manager: request a certificate for these domain names from Let’s Encrypt and save it into app-tls. The names in hosts become the names on the certificate. (you dont have to deal with thw tls shit)
+  tls:
+    - hosts: [website_url] 
+      secretName: app-tls
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend  # this passes the request from the ingress controller to the service which then handles the laod balancing 
+                port:
+                  number: 80
