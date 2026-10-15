@@ -1,33 +1,53 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: nginx_ingress
-  annotations:
-    nginx.ingress.kubernetes.io/service-upstream: "false" # nginx sends traffic straight to pod IPs and picks the pod itself ("true" would hand pod selection to the Service); default is "false".
-    nginx.ingress.kubernetes.io/load-balance: "ewma" # Algorithm for picking a pod: round_robin (default) or ewma (prefers pods with lower recent latency and load).
-    nginx.ingress.kubernetes.io/affinity: "cookie" # Enables sticky sessions: nginx sets a cookie so the same client keeps hitting the same pod.
-    nginx.ingress.kubernetes.io/session-cookie-name: "route" # Name of the sticky-session cookie (default is INGRESSCOOKIE).
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "3600" # Cookie lifetime in seconds (1 hour); after it expires the client may land on a different pod.
-    nginx.ingress.kubernetes.io/proxy-next-upstream: "error timeout http_502 http_503" # Conditions that make nginx retry the request on another pod: connection error, timeout, 502 or 503 responses.
-    nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "3" # Maximum total attempts, including the first one (here 1 try + up to 2 retries).
-    cert-manager.io/cluster-issuer: letsencrypt-prod # Tells cert-manager to request a TLS certificate from the letsencrypt-prod issuer and store it in the Secret named in spec.tls.
-    nginx.ingress.kubernetes.io/limit-rps: "20" # Rate limit of 20 requests per second per client IP, applied per ingress-nginx pod (not across all replicas).
+  name: nginx-ingress
+  annotations:    # Use cert-manager to issue and renew the TLS certificate from Let's Encrypt
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Route straight to pod IPs (L7) instead of going through the kube-proxy service VIP
+    nginx.ingress.kubernetes.io/service-upstream: "false"
+    # Send each request to the pod with the lowest exponentially weighted moving average latency
+    nginx.ingress.kubernetes.io/load-balance: "ewma"
+    # Sticky sessions (remove these 5 lines if your backend is stateless)
+    # Pin each client to one pod using a cookie-based affinity
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    # Name the affinity cookie "route"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    # Expire the affinity cookie after 3600 seconds (1 hour)
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+    # Only send the affinity cookie over HTTPS
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+    # Send the cookie on same-site requests and top-level navigations only
+    nginx.ingress.kubernetes.io/session-cookie-samesite: "Lax"
+    # Retries on another pod (idempotent requests only, by default)
+    # Retry the request on the next pod when the upstream errors, times out, or returns 502/503
+    nginx.ingress.kubernetes.io/proxy-next-upstream: "error timeout http_502 http_503"
+    # Try at most 3 upstream pods before giving up
+    nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "3"
+    # Rate limit per client IP, per ingress-nginx pod
+    # Allow at most 20 requests per second from each client IP
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    # Uploads and slow requests
+    # Accept request bodies (uploads) up to 100 MB
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    # Wait up to 300 seconds for the backend to send a response
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # Wait up to 300 seconds when sending the request to the backend
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
 spec:
   ingressClassName: nginx
-  # hosts is the list of domain names that the TLS certificate should cover. It tells two things which domains are served over HTTPS:    
-      # ingress-nginx: for requests to app.example.com, use the certificate stored in the Secret app-tls. nginx picks the certificate based on the hostname the client asks for (SNI).
-      # cert-manager: request a certificate for these domain names from Let’s Encrypt and save it into app-tls. The names in hosts become the names on the certificate. (you dont have to deal with thw tls shit)
   tls:
-    - hosts: [Cluster_route_url] 
+    - hosts:
+        - api.yourdomain.com
       secretName: app-tls
   rules:
-    - host: Cluster_route_url
+    - host: api.yourdomain.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: backend  # this passes the request from the ingress controller to the service which then handles the laod balancing 
+                name: backend
                 port:
                   number: 80
