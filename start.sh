@@ -14,6 +14,7 @@ gunicorn -w 2 -b 0.0.0.0:5011 Instagram.webhook:app &
 gunicorn -w 2 -b 0.0.0.0:5012 Gmail.APP2:app &
 gunicorn -w 2 -b 0.0.0.0:5013 Drive.dep:app &
 gunicorn -w 2 -b 0.0.0.0:5014 Gmail.webhook:app &
+gunicorn -w 2 -b 0.0.0.0:5015 Whatsapp:webhook &
 wait
 python3.10 -m limit &
 python3.10 -m Instagram.schedule_video 
