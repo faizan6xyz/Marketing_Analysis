@@ -2,7 +2,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: nginx-ingress
-  annotations:    # Use cert-manager to issue and renew the TLS certificate from Let's Encrypt
+  annotations:
+    # Use cert-manager to issue and renew the TLS certificate from Let's Encrypt
     cert-manager.io/cluster-issuer: letsencrypt-prod
     # Route straight to pod IPs (L7) instead of going through the kube-proxy service VIP
     nginx.ingress.kubernetes.io/service-upstream: "false"
@@ -26,14 +27,14 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "3"
     # Rate limit per client IP, per ingress-nginx pod
     # Allow at most 20 requests per second from each client IP
-    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-rps: "5"
     # Uploads and slow requests
     # Accept request bodies (uploads) up to 100 MB
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    # Wait up to 300 seconds for the backend to send a response
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-    # Wait up to 300 seconds when sending the request to the backend
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-body-size: "200m"
+    # Wait up to 500 seconds for the backend to send a response
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "500"
+    # Wait up to 100 seconds when sending the request to the backend
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "100"
 spec:
   ingressClassName: nginx
   tls:
@@ -50,4 +51,4 @@ spec:
               service:
                 name: backend
                 port:
-                  number: 80
+                  number: 5000

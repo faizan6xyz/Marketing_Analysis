@@ -174,9 +174,6 @@ services:
 
 volumes:
   app_data1:
-  app_data2:
-  app_data3:
-  app_data4:
   db_data:
   db2_data:
   pending_sql:
