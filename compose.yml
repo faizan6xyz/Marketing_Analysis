@@ -3,6 +3,7 @@ name: myapp
 networks:
   dbnet:
     external: true # tells that the network already exists so no confilicts 
+    dns_enabled: true # Podman runs a small DNS server for it (aardvark-dns). Its address is the network gateway (10.89.0.1).
 
 services:
   backend1:
