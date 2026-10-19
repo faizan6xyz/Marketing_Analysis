@@ -2,11 +2,11 @@ name: myapp
 
 networks:
   dbnet:
-    driver: middleman
+    external: true # tells that the network already exists so no confilicts 
 
 services:
   backend1:
-    image: ghcr.io/faizan6xyz/apptest1
+    image: shi
     user: appuser
     container_name: apptestcon1
     cpus: "0.5"
@@ -15,6 +15,7 @@ services:
       - "5000-5015:5000-5015"
     env_file:
       - .env
+    networks: [dbnet]
     environment:
       DB_WRITE_HOST: db
       DB_READ_HOST: db2
@@ -40,6 +41,9 @@ services:
     mem_limit: 1g
     memswap_limit: 1g
     shm_size: 256mb
+    networks: [dbnet]
+    env_file:
+      - .env
     command: >
       postgres
       -c shared_buffers=256MB
@@ -83,10 +87,13 @@ services:
     image: docker.io/library/postgres:16
     container_name: postgres_db2
     user: postgres
+    env_file:
+      - .env
     cpus: "0.5"
     mem_limit: 1g
     memswap_limit: 1g
     shm_size: 256mb
+    networks: [dbnet]
     environment:
       PGPASSWORD: ${DB_PASSWORD}
     entrypoint: ["/bin/bash", "-c"]
