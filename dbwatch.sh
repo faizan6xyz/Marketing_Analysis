@@ -77,6 +77,7 @@ set_sync() {
     fi
     q "$host" "SELECT pg_reload_conf();" >/dev/null
 }
+# need to change the HOST in every single container when db or db2 is promoted , using the shared env (secrets in the k8s or podman )  
 promote_node() {
     local host="$1"
     local result i
