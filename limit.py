@@ -7,10 +7,11 @@ from datetime import datetime, timedelta, timezone
 import database.UserDB as dbimp
 from dotenv import load_dotenv
 load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("rate_limit")
 from psycopg2 import sql
 from psycopg2.pool import ThreadedConnectionPool
-_pool = ThreadedConnectionPool( 1, 2, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"),)
+_pool = ThreadedConnectionPool( 1, int(os.environ.get("DB_POOL_MAX", 10)), host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,)
 
 def _require(key):
     val = os.environ.get(key)
@@ -30,23 +31,20 @@ def get_conn():
         conn.rollback()
         raise
     finally:
-        _pool.putconn(conn)
-
-def close_pool():
-    _pool.closeall()
+        _pool.putconn(conn, close=bool(conn.closed))
 
 def get_or_create_window(user_id, now_ts):
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (user_id,))
+            cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (str(user_id),))
             cur.execute( sql.SQL( "SELECT {count}, {id} FROM {t} " "WHERE {start} < %s AND {end} > %s AND {user} = %s").format(sql.Identifier("request_count"), sql.Identifier("id"), sql.Identifier("rate_limit"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("user_id")), (now_ts, now_ts, user_id), )
             row = cur.fetchone()
             if row:
-                return row["request_count"], row["id"]
+                return row[0], row[1]
             start = datetime.now(timezone.utc)
             end = start + timedelta(days=30)
             cur.execute( sql.SQL( "INSERT INTO {t} ({user}, {start}, {end}, {count}) " "VALUES (%s, %s, %s, %s) RETURNING {id}" ).format(sql.Identifier("rate_limit"), sql.Identifier("user_id"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("request_count"), sql.Identifier("id")), (user_id, start, end, 0), )
-            return 0, cur.fetchone()["id"]
+            return 0, cur.fetchone()[0]
 
 def try_increment(row_id, amount, limit):
     with get_conn() as conn:
@@ -55,6 +53,8 @@ def try_increment(row_id, amount, limit):
             return cur.rowcount > 0
 
 def checkk(token, user_id, now_ts, requestss: int):
+    if requestss < 0:
+        return False
     rows = dbimp.select_rows(token, "users", select="Paid,Plan", filters={"user_id": user_id})
     if not rows:
         return False
@@ -78,5 +78,5 @@ if __name__ == "__main__":
         try:
             delete_by_time(now)
         except Exception:
-            print("error")
+            logger.exception("rate_limit cleanup failed")
         time.sleep(300)
