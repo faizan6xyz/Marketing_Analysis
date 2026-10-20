@@ -77,7 +77,20 @@ set_sync() {
     fi
     q "$host" "SELECT pg_reload_conf();" >/dev/null
 }
-# need to change the HOST in every single container when db or db2 is promoted , using the shared env (secrets in the k8s or podman )  or use the service for talking 
+set_label() {
+    local host="$1" want="$2" cur
+    cur=$(q "$host" "SHOW ha.primary;")
+    if [ "$want" = "on" ]; then
+        [ "$cur" = "true" ] && return 0
+        log "LABEL: setting primary=true on $host"
+        q "$host" "ALTER SYSTEM SET ha.primary = 'true';" >/dev/null
+    else
+        [ -z "$cur" ] && return 0
+        log "LABEL: removing primary label from $host"
+        q "$host" "ALTER SYSTEM RESET ha.primary;" >/dev/null
+    fi
+    q "$host" "SELECT pg_reload_conf();" >/dev/null
+}
 promote_node() {
     local host="$1"
     local result i
@@ -155,6 +168,7 @@ demote_to_standby() {
             return 1
         fi
     done
+    set_label "$l_host" off
     for i in {1..15}; do
         if is_streaming "$l_host"; then
             log "DEMOTE: $l_host is streaming from $w_host"
@@ -186,6 +200,7 @@ handle_split_brain() {
             ;;
     esac
     log "CRIT: keeping $w_host as PRIMARY, demoting $l_host (its unreplicated writes will be lost)"
+    set_label "$w_host" on
     if [ "$AUTO_FENCE" = "true" ]; then
         fence_node "$l_host"
     fi
@@ -217,6 +232,8 @@ while true; do
     elif [ "$R1" = "primary" ]; then
         PRIMARY_DB="$DB1_HOST"
         FAILS=0
+        set_label "$DB1_HOST" on
+        [ "$R2" != "down" ] && set_label "$DB2_HOST" off
         ROW=$(repl_info "$DB1_HOST")
         STANDBYS=${ROW%%|*}
         LAG=${ROW##*|}
@@ -245,9 +262,8 @@ while true; do
 
                         if promote_node "$DB2_HOST"; then
                             PRIMARY_DB="$DB2_HOST"
-                            # db2 inherited synchronous_standby_names from db;
-                            # with no standby, writes would block until it is cleared.
                             set_sync "$DB2_HOST" off
+                            set_label "$DB2_HOST" on
                             log "================================================"
                             log "FAILOVER COMPLETE"
                             log "db2 = PRIMARY"
@@ -264,6 +280,7 @@ while true; do
             primary)
                 PRIMARY_DB="$DB2_HOST"
                 set_sync "$DB2_HOST" off
+                set_label "$DB2_HOST" on
                 log "OK: db2 is already PRIMARY (serving traffic)"
                 log "INFO: db is currently unavailable"
                 FAILS=0
@@ -278,6 +295,8 @@ while true; do
     elif [ "$R1" = "standby" ] && [ "$R2" = "primary" ]; then
         PRIMARY_DB="$DB2_HOST"
         FAILS=0
+        set_label "$DB2_HOST" on
+        set_label "$DB1_HOST" off
         ROW=$(repl_info "$DB2_HOST")
         STANDBYS=${ROW%%|*}
         LAG=${ROW##*|}
