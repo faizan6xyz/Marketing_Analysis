@@ -264,12 +264,10 @@ while true; do
                             PRIMARY_DB="$DB2_HOST"
                             set_sync "$DB2_HOST" off
                             set_label "$DB2_HOST" on
-                            log "================================================"
                             log "FAILOVER COMPLETE"
                             log "db2 = PRIMARY"
                             log "db  = FAILED"
                             log "Repoint apps to db2."
-                            log "================================================"
                             FAILS=0
                         else
                             log "CRIT: FAILOVER FAILED"
