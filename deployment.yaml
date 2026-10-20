@@ -1,45 +1,45 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-spec:
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels: # this app:backend label is used to group the pods with same label in the servie 
-        app: backend
-    spec:
-      securityContext:
-        runAsNonRoot: true # prevents the process from running as root.
-        runAsUser: 1000  # the process runs as user ID 1000
-        fsGroup: 1000   # provides group-based access to supported mounted volumes.
-      containers:
-        - name: backend-container
-          image: apptest1
-          imagePullPolicy: IfNotPresent
-          envFrom:     # every key from each becomes an environment variable.
-            - secretRef:  # for the sensitive data stored and be shraed 
-                name: envshit
-            - configMapRef: # for the insensitive data stored and be shraed 
-                name: configshit
-          ports:
-            - containerPort: 5000
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 5
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 15
-          resources:
-            requests:
-              cpu: 100m
-              memory: 400Mi
-            limits:
-              cpu: 250m
-              memory: 600Mi
+apiVersion: apps/v1                # API group/version for Deployment objects
+kind: Deployment                   # manages a set of identical pods and rolling updates
+metadata:                          # identifying info for this object
+  name: backend                    # name of the Deployment in the namespace
+spec:                              # desired state of the Deployment
+  selector:                        # how the Deployment finds the pods it owns
+    matchLabels:                   # pods must carry all these labels
+      app: backend                 # owns pods labeled app=backend
+  template:                        # blueprint used to create each pod
+    metadata:                      # metadata applied to every pod created
+      labels:                      # labels put on the pods
+        app: backend               # must match selector; a Service also uses it to find these pods
+    spec:                          # pod specification
+      securityContext:             # pod-level security settings
+        runAsNonRoot: true         # refuses to start if the container would run as root
+        runAsUser: 1000            # run the container process as UID 1000
+        fsGroup: 1000              # group ID given ownership of mounted volumes so the process can access them
+      containers:                  # list of containers in the pod
+        - name: backend-container  # container name, used in logs and kubectl exec
+          image: apptest1          # image to run (use a full registry path for remote images)
+          imagePullPolicy: IfNotPresent # only pull the image if it isn't already on the node
+          envFrom:                 # bulk-load env vars from other objects
+            - secretRef:           # load env vars from a Secret
+                name: envshit      # Secret name; every key becomes an env var (sensitive data)
+            - configMapRef:        # load env vars from a ConfigMap
+                name: configshit   # ConfigMap name; every key becomes an env var (non-sensitive data)
+          ports:                   # ports the container listens on (informational)
+            - containerPort: 5000  # app port; doesn't open anything by itself, just documents it
+          readinessProbe:          # decides if the pod should receive traffic
+            httpGet:               # probe by making an HTTP GET request
+              path: /health        # endpoint checked
+              port: 8000           # port checked
+            initialDelaySeconds: 5 # wait 5s after start before the first check
+          livenessProbe:           # decides if the container should be restarted
+            httpGet:               # probe by making an HTTP GET request
+              path: /health        # endpoint checked
+              port: 8000           # port checked
+            initialDelaySeconds: 15  # wait 15s after start so the app can boot before checks begin
+          resources:               # CPU/memory settings
+            requests:              # guaranteed minimum, used for scheduling
+              cpu: 100m            # 0.1 CPU core reserved
+              memory: 400Mi        # 400 MiB reserved
+            limits:                # hard maximum
+              cpu: 250m            # throttled above 0.25 core
+              memory: 600Mi        # container is OOM-killed above 600 MiB

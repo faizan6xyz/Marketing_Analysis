@@ -2,6 +2,7 @@ name: myapp
 
 networks:
   dbnet:
+    # drive: bridge   # tellls to create one
     external: true # tells that the network already exists so no confilicts 
     dns_enabled: true # Podman runs a small DNS server for it (aardvark-dns). Its address is the network gateway (10.89.0.1).
 
@@ -154,7 +155,7 @@ services:
     container_name: db_watch
     entrypoint: ["/bin/bash", "/dbwatch.sh"]
     cpus: "0.1"
-    mem_limit: 100m
+    mem_limit: 50m
     environment:
       DB_PASSWORD: ${DB_PASSWORD}
       CHECK_INTERVAL: "10"

@@ -49,12 +49,7 @@ role() {
 }
 repl_info() {
     local row
-    row=$(q "$1" "
-        SELECT
-            count(*),
-            COALESCE(max(pg_wal_lsn_diff(sent_lsn, replay_lsn)), 0)::bigint
-        FROM pg_stat_replication;
-    ")
+    row=$(q "$1" "SELECT count(*), COALESCE(max(pg_wal_lsn_diff(sent_lsn, replay_lsn)), 0)::bigint  FROM pg_stat_replication;")
     echo "${row:-0|0}"
 }
 is_streaming() {
