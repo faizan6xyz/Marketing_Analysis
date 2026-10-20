@@ -90,8 +90,7 @@ promote_node() {
     local host="$1"
     local result i
     log "PROMOTE: requesting promotion of $host..."
-    result=$(psql -X -h "$host" -U "$DB_USER" -d "$DB_NAME" \
-        -Atc "SELECT pg_promote();" 2>&1)
+    result=$(psql -X -h "$host" -U "$DB_USER" -d "$DB_NAME" -Atc "SELECT pg_promote();" 2>&1)
     if [ "$result" != "t" ]; then
         log "CRIT: pg_promote() on $host did not succeed"
         log "DETAIL: $result"
@@ -134,16 +133,8 @@ demote_to_standby() {
         net_args=(--network "$PODMAN_NETWORK")
     fi
     log "DEMOTE: rewinding $l_host to follow $w_host..."
-    if ! podman run --rm --user postgres \
-            ${net_args[@]+"${net_args[@]}"} \
-            -v "$l_volume":/var/lib/postgresql/data \
-            "$PG_IMAGE" \
-            pg_rewind \
-              --target-pgdata=/var/lib/postgresql/data \
-              --source-server="host=$w_host port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" \
-              --write-recovery-conf --progress; then
-        log "CRIT: pg_rewind failed, $l_container is left STOPPED"
-        log "CRIT: rebuild it by hand, e.g. wipe volume $l_volume and run pg_basebackup -R from $w_host"
+    if ! podman run --rm --user postgres ${net_args[@]+"${net_args[@]}"} -v "$l_volume":/var/lib/postgresql/data "$PG_IMAGE" pg_rewind --target-pgdata=/var/lib/postgresql/data --source-server="host=$w_host port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" --write-recovery-conf --progress; then
+        log "CRIT: pg_rewind failed, $l_container is left STOPPED , CRIT: rebuild it by hand, e.g. wipe volume $l_volume and run pg_basebackup -R from $w_host"
         return 1
     fi
     log "DEMOTE: starting $l_container as standby..."
@@ -171,14 +162,12 @@ demote_to_standby() {
         fi
         sleep 1
     done
-    log "CRIT: $l_host is STANDBY but not streaming from $w_host"
-    log "CRIT: check primary_conninfo, pg_hba.conf and the REPLICATION privilege of $DB_USER"
+    log "CRIT: $l_host is STANDBY but not streaming from $w_host , CRIT: check primary_conninfo, pg_hba.conf and the REPLICATION privilege of $DB_USER"
     return 1
 }
 handle_split_brain() {
     local w_host l_host l_container l_volume
-    log "CRIT: SPLIT-BRAIN - $DB1_HOST AND $DB2_HOST are both PRIMARY"
-    log "CRIT: DO NOT write to both databases."
+    log "CRIT: SPLIT-BRAIN - $DB1_HOST AND $DB2_HOST are both PRIMARY , CRIT: DO NOT write to both databases."
     case "$PRIMARY_DB" in
         "$DB1_HOST")
             w_host="$DB1_HOST"
@@ -189,8 +178,7 @@ handle_split_brain() {
             l_host="$DB1_HOST"; l_container="$DB1_CONTAINER"; l_volume="$DB1_VOLUME"
             ;;
         *)
-            log "CRIT: last known primary is unknown - refusing to guess which node to demote"
-            log "CRIT: restart with PRIMARY_DB=$DB1_HOST or PRIMARY_DB=$DB2_HOST, or demote manually"
+            log "CRIT: last known primary is unknown - refusing to guess which node to demote , CRIT: restart with PRIMARY_DB=$DB1_HOST or PRIMARY_DB=$DB2_HOST, or demote manually"
             return 1
             ;;
     esac
@@ -206,19 +194,7 @@ handle_split_brain() {
     demote_to_standby "$l_container" "$l_host" "$l_volume" "$w_host"
 }
 FAILS=0
-log "============================================================"
-log "PostgreSQL HA controller started"
-log "db  = $DB1_HOST (container $DB1_CONTAINER, volume $DB1_VOLUME)"
-log "db2 = $DB2_HOST (container $DB2_CONTAINER, volume $DB2_VOLUME)"
-log "known primary = ${PRIMARY_DB:-<unknown>}"
-log "interval      = ${INTERVAL}s"
-log "threshold     = ${FAIL_THRESHOLD}"
-log "auto promote  = ${AUTO_PROMOTE}"
-log "auto fence    = ${AUTO_FENCE}"
-log "auto demote   = ${AUTO_DEMOTE}"
-log "auto failback = ${AUTO_FAILBACK}"
-log "sync repl     = ${SYNC_REPL} (standby names: ${SYNC_NAMES})"
-log "============================================================"
+log "PostgreSQL HA controller started  ,  db  = $DB1_HOST (container $DB1_CONTAINER, volume $DB1_VOLUME)  ,  db2 = $DB2_HOST (container $DB2_CONTAINER, volume $DB2_VOLUME)  ,  known primary = ${PRIMARY_DB:-<unknown>}  ,  interval      = ${INTERVAL}s  ,  threshold     = ${FAIL_THRESHOLD}  ,  auto promote  = ${AUTO_PROMOTE}  ,  auto fence    = ${AUTO_FENCE}  ,  auto demote   = ${AUTO_DEMOTE}  ,  auto failback = ${AUTO_FAILBACK}  ,  sync repl     = ${SYNC_REPL} (standby names: ${SYNC_NAMES})"
 while true; do
     R1=$(role "$DB1_HOST")
     R2=$(role "$DB2_HOST")
@@ -249,20 +225,14 @@ while true; do
                     if [ "$AUTO_PROMOTE" != "true" ]; then
                         log "WARN: AUTO_PROMOTE=false, db2 remains STANDBY"
                     elif is_streaming "$DB2_HOST"; then
-                        log "WARN: db2 is still streaming from db - db looks ALIVE"
-                        log "WARN: refusing to promote (would cause split-brain)"
+                        log "WARN: db2 is still streaming from db - db looks ALIVE , WARN: refusing to promote (would cause split-brain)"
                     else
-                        log "FAILOVER: db failed, db2 stopped receiving WAL"
-                        log "FAILOVER: promoting db2..."
-
+                        log "FAILOVER: db failed, db2 stopped receiving WAL , FAILOVER: promoting db2..."
                         if promote_node "$DB2_HOST"; then
                             PRIMARY_DB="$DB2_HOST"
                             set_sync "$DB2_HOST" off
                             set_label "$DB2_HOST" on
-                            log "FAILOVER COMPLETE"
-                            log "db2 = PRIMARY"
-                            log "db  = FAILED"
-                            log "Repoint apps to db2."
+                            log "FAILOVER COMPLETE , db2 = PRIMARY , db  = FAILED , Repoint apps to db2."
                             FAILS=0
                         else
                             log "CRIT: FAILOVER FAILED"
@@ -274,8 +244,7 @@ while true; do
                 PRIMARY_DB="$DB2_HOST"
                 set_sync "$DB2_HOST" off
                 set_label "$DB2_HOST" on
-                log "OK: db2 is already PRIMARY (serving traffic)"
-                log "INFO: db is currently unavailable"
+                log "OK: db2 is already PRIMARY (serving traffic) , INFO: db is currently unavailable"
                 FAILS=0
                 ;;
             down)
@@ -299,10 +268,7 @@ while true; do
             set_sync "$DB2_HOST" off
         fi
         log "INFO: db2 is PRIMARY, db is STANDBY (streaming=${STANDBYS:-0}, lag=${LAG:-?} bytes)"
-        if [ "$AUTO_FAILBACK" = "true" ] \
-            && [ "${STANDBYS:-0}" -ge 1 ] \
-            && [ "${LAG:-1}" -eq 0 ] \
-            && [ -n "$FAILBACK_CMD" ]; then
+        if [ "$AUTO_FAILBACK" = "true" ] && [ "${STANDBYS:-0}" -ge 1 ] && [ "${LAG:-1}" -eq 0 ] && [ -n "$FAILBACK_CMD" ]; then
             log "FAILBACK: db is caught up, running FAILBACK_CMD"
             if $FAILBACK_CMD; then
                 log "FAILBACK: done. db should be PRIMARY, rebuild db2 as standby."
