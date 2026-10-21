@@ -14,7 +14,8 @@ import authnew as au
 import secrets
 load_dotenv()
 SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
-pool = ThreadedConnectionPool( 1, 8, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
+pool_write = ThreadedConnectionPool( 1, 5, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
+pool_read = ThreadedConnectionPool( 1, 5, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
 ALLOWED_TABLES = { "drive", "gmail", "instagram", "paypal", "paypal_verify", "pinterest", "razorpay", "razorpay_verify", "threads", "whatsapp", "x", "youtube", "users",}
 _SIMPLE_OPS = { "eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=","like": "LIKE", "ilike": "ILIKE", "contains": "@>",}
 
@@ -38,8 +39,8 @@ def _verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(legacy, stored)
 
 @contextmanager
-def _cursor():
-    conn = pool.getconn()
+def _cursor_write():
+    conn = pool_write.getconn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             yield cur
@@ -48,14 +49,27 @@ def _cursor():
         conn.rollback()
         raise
     finally:
-        pool.putconn(conn)
+        pool_write.putconn(conn)
+
+@contextmanager
+def _cursor_read():
+    conn = pool_read.getconn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool_read.putconn(conn)
 
 def add_new_user(email: str, password: str) -> bool:
     if not email or not password:
         return False
     user_id = str(uuid.uuid4()) 
     try:
-        with _cursor() as cur:
+        with _cursor_write() as cur:
             cur.execute( "INSERT INTO userdetails (email, password, user_id) VALUES (%s, %s, %s)",(email, _hash_password(password), user_id), )
     except psycopg2.errors.UniqueViolation:
         return False
@@ -63,11 +77,12 @@ def add_new_user(email: str, password: str) -> bool:
         return False
     return user_id
 
+# require the pool of the read 
 def user_exist_check(email: str, password: str):
     if not email or not password:
         return False
     try:
-        with _cursor() as cur:
+        with _cursor_read() as cur:
             cur.execute("SELECT password, user_id FROM userdetails WHERE email = %s", (email,),)
             row = cur.fetchone()
     except psycopg2.Error as e:
@@ -81,7 +96,7 @@ def user_exist_check(email: str, password: str):
         return False
     if not stored_hash.startswith("scrypt$"):
         try:
-            with _cursor() as cur:
+            with _cursor_read() as cur:
                 cur.execute( "UPDATE userdetails SET password = %s WHERE email = %s",(_hash_password(password), email),)
         except psycopg2.Error as e:
             return e
@@ -131,7 +146,7 @@ def insert_rows(token, table_name: str, data: dict | list[dict]) -> list[dict]:
         raise ValueError("All rows must have the same keys")
     query = sql.SQL("INSERT INTO {} ({}) VALUES %s RETURNING *").format( sql.Identifier(table_name),sql.SQL(", ").join(map(sql.Identifier, cols)), )
     values = [tuple(r[c] for c in cols) for r in rows]
-    with _cursor() as cur:
+    with _cursor_write() as cur:
         execute_values(cur, query, values, fetch=True)
         return [dict(r) for r in cur.fetchall()]
 
@@ -142,7 +157,7 @@ def update_rows(token, table_name: str, updates: dict, filters: dict) -> list[di
     where, where_params = _apply_filters(filters)
     set_clause = sql.SQL(", ").join( sql.SQL("{} = %s").format(sql.Identifier(c)) for c in updates )
     query = sql.SQL("UPDATE {} SET {} WHERE {} RETURNING *").format( sql.Identifier(table_name), set_clause, where )
-    with _cursor() as cur:
+    with _cursor_write() as cur:
         cur.execute(query, [*updates.values(), *where_params])
         return [dict(r) for r in cur.fetchall()]
 
@@ -150,10 +165,11 @@ def delete_rows(token, table_name: str, filters: dict[str, Any]) -> list[dict]:
     table_name = _check(table_name,token)
     where, where_params = _apply_filters(filters)  
     query = sql.SQL("DELETE FROM {} WHERE {} RETURNING *").format( sql.Identifier(table_name), where )
-    with _cursor() as cur:
+    with _cursor_write() as cur:
         cur.execute(query, where_params)
         return [dict(r) for r in cur.fetchall()]
 
+# require the pool of the read 
 def select_rows( token, table_name: str, filters: Optional[dict[str, Any]] = None,select: str = "*", order_by: Optional[str] = None, ascending: bool = True, limit: Optional[int] = None,) -> list[dict]: 
     table_name = _check(table_name,token)
     if select.strip() == "*":
@@ -176,7 +192,7 @@ def select_rows( token, table_name: str, filters: Optional[dict[str, Any]] = Non
             raise ValueError("limit must be a non-negative integer")
         query += sql.SQL(" LIMIT %s")
         params.append(limit)
-    with _cursor() as cur:
+    with _cursor_read() as cur:
         cur.execute(query, params)
         return [dict(r) for r in cur.fetchall()]
     
@@ -190,7 +206,7 @@ def insert_rows_web(table_name: str, data: dict | list[dict]) -> list[dict]:
         raise ValueError("All rows must have the same keys")
     query = sql.SQL("INSERT INTO {} ({}) VALUES %s RETURNING *").format( sql.Identifier(table_name),sql.SQL(", ").join(map(sql.Identifier, cols)), )
     values = [tuple(r[c] for c in cols) for r in rows]
-    with _cursor() as cur:
+    with _cursor_write() as cur:
         execute_values(cur, query, values, fetch=True)
         return [dict(r) for r in cur.fetchall()]
 
@@ -201,7 +217,7 @@ def update_rows_web(table_name: str, updates: dict, filters: dict) -> list[dict]
     where, where_params = _apply_filters(filters)
     set_clause = sql.SQL(", ").join( sql.SQL("{} = %s").format(sql.Identifier(c)) for c in updates )
     query = sql.SQL("UPDATE {} SET {} WHERE {} RETURNING *").format( sql.Identifier(table_name), set_clause, where )
-    with _cursor() as cur:
+    with _cursor_write() as cur:
         cur.execute(query, [*updates.values(), *where_params])
         return [dict(r) for r in cur.fetchall()]
 
@@ -209,10 +225,11 @@ def delete_rows_web(table_name: str, filters: dict[str, Any]) -> list[dict]: # i
     table_name = _check(table_name)
     where, where_params = _apply_filters(filters)  
     query = sql.SQL("DELETE FROM {} WHERE {} RETURNING *").format( sql.Identifier(table_name), where )
-    with _cursor() as cur:
+    with _cursor_write() as cur:
         cur.execute(query, where_params)
         return [dict(r) for r in cur.fetchall()]
 
+# require the pool of the read 
 def select_rows_web(table_name: str, filters: Optional[dict[str, Any]] = None,select: str = "*", order_by: Optional[str] = None, ascending: bool = True, limit: Optional[int] = None,) -> list[dict]: 
     table_name = _check(table_name)
     if select.strip() == "*":
@@ -235,7 +252,7 @@ def select_rows_web(table_name: str, filters: Optional[dict[str, Any]] = None,se
             raise ValueError("limit must be a non-negative integer")
         query += sql.SQL(" LIMIT %s")
         params.append(limit)
-    with _cursor() as cur:
+    with _cursor_read() as cur:
         cur.execute(query, params)
         return [dict(r) for r in cur.fetchall()]
 

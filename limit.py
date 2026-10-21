@@ -10,7 +10,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("rate_limit")
 from psycopg2 import sql
-from database.UserDB import pool
+from database.UserDB import pool_read , pool_write 
 
 def _require(key):
     val = os.environ.get(key)
@@ -21,8 +21,8 @@ def _require(key):
 LIMIT_OF_PLAN = json.loads(_require("limit_of_plan"))
 
 @contextmanager
-def get_conn():
-    conn = pool.getconn()
+def get_conn_write():
+    conn = pool_write.getconn()
     try:
         yield conn
         conn.commit()
@@ -30,10 +30,23 @@ def get_conn():
         conn.rollback()
         raise
     finally:
-        pool.putconn(conn, close=bool(conn.closed))
+        pool_write.putconn(conn)
 
+@contextmanager
+def get_conn_read():
+    conn = pool_read.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool_read.putconn(conn)
+
+# require the pool of the read 
 def get_or_create_window(user_id, now_ts):
-    with get_conn() as conn:
+    with get_conn_read() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (str(user_id),))
             cur.execute( sql.SQL( "SELECT {count}, {id} FROM {t} " "WHERE {start} < %s AND {end} > %s AND {user} = %s").format(sql.Identifier("request_count"), sql.Identifier("id"), sql.Identifier("rate_limit"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("user_id")), (now_ts, now_ts, user_id), )
@@ -46,7 +59,7 @@ def get_or_create_window(user_id, now_ts):
             return 0, cur.fetchone()[0]
 
 def try_increment(row_id, amount, limit):
-    with get_conn() as conn:
+    with get_conn_write() as conn:
         with conn.cursor() as cur:
             cur.execute( sql.SQL( "UPDATE {t} SET {count} = {count} + %s " "WHERE {id} = %s AND {count} + %s <= %s" ).format(sql.Identifier("rate_limit"), sql.Identifier("request_count"), sql.Identifier("id")), (amount, row_id, amount, limit),)
             return cur.rowcount > 0
@@ -67,7 +80,7 @@ def checkk(token, user_id, now_ts, requestss: int):
     return try_increment(row_id, requestss, int(limit))
 
 def delete_by_time(timee):
-    with get_conn() as conn:
+    with get_conn_write() as conn:
         with conn.cursor() as cur:
             cur.execute( sql.SQL("DELETE FROM {t} WHERE {end} < %s").format(sql.Identifier("rate_limit"), sql.Identifier("end_time")),(timee,), )
 
