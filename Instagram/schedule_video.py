@@ -10,7 +10,6 @@ import Drive.dep as dpp
 import youtube.login as you
 from dotenv import load_dotenv
 load_dotenv()
-import os
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from psycopg2 import sql
@@ -51,92 +50,96 @@ def is_valid_iso_format(value: str) -> bool:
     except ValueError:
         return False
 
-def _delete_by(cur,table, column, value):
+def _delete_by(table, column, value):
     query = sql.SQL("DELETE FROM {} WHERE {} = %s").format(sql.Identifier(table), sql.Identifier(column))
-    cur.execute(query, (value,))
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute(query, (value,))
 
-def inert_workflow(cur,id_, message, comment):
+def inert_workflow(id_, message, comment):
     now = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
-    cur.execute("INSERT INTO workflow ( id , comment , message, time) values (%s,%s,%s,%s) ", (id_, comment, message, now))
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO workflow ( id , comment , message, time) values (%s,%s,%s,%s) ", (id_, comment, message, now))
 
-# require the pool of the read 
 def workflow_data_change(id_, message, comment):
     with get_conn_read() as conn,conn.cursor() as cur:
-            cur.execute("SELECT message, comment FROM workflow WHERE id = %s", (id_,))
-    rows = cur.fetchall()
-    if rows:
-        cur.execute("UPDATE workflow SET message = %s, comment = %s WHERE id = %s", (message, comment, id_))
-    else:
-        cur.execute("INSERT INTO workflow (id, message, comment) VALUES (%s, %s, %s)", (id_, message, comment))
-    return rows
+        cur.execute("SELECT message, comment FROM workflow WHERE id = %s", (id_,))
+        rows = cur.fetchall()
+        if rows:
+            cur.execute("UPDATE workflow SET message = %s, comment = %s WHERE id = %s", (message, comment, id_))
+        else:
+            cur.execute("INSERT INTO workflow (id, message, comment) VALUES (%s, %s, %s)", (id_, message, comment))
+        return rows
 
-# require the pool of the read 
 def workflow_10_days(time):
     with get_conn_read() as conn,conn.cursor() as cur:
-            cur.execute("SELECT id FROM workflow WHERE time < %s", (time,))
-    return cur.fetchall()
+        cur.execute("SELECT id FROM workflow WHERE time < %s", (time,))
+        return cur.fetchall()
 
-def delete_by_10days(cur,row_id):
-    _delete_by(cur,"workflow", "id", row_id)
+def delete_by_10days(row_id):        
+    _delete_by("workflow", "id", row_id)
 
-# require the pool of the read 
 def workflow_data(id_):
     with get_conn_read() as conn,conn.cursor() as cur:
-            cur.execute("SELECT message , comment FROM workflow WHERE id = %s ", (id_,))   # for the whatsapp theres no comment but for the gmail comment is the subject
-    return cur.fetchall()
+        cur.execute("SELECT message , comment FROM workflow WHERE id = %s ", (id_,))   # for the whatsapp theres no comment but for the gmail comment is the subject
+        return cur.fetchall()
 
-def insert_time(cur,user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument
+def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument
     if not is_valid_iso_format(scheduled_time):
         return
-    cur.execute("INSERT INTO schedule (user_id, container_id, time, type , access_token) VALUES (%s, %s, %s, %s, %s)", (user_id, container_id, scheduled_time, "container", access_token))
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, container_id, time, type , access_token) VALUES (%s, %s, %s, %s, %s)", (user_id, container_id, scheduled_time, "container", access_token))
 
-def insert_post(cur,user_id, scheduled_time, access_token, typeee, text1, text2, text3, media_id):    # time should be give in the isoformat iniitally as argument
+def insert_post(user_id, scheduled_time, access_token, typeee, text1, text2, text3, media_id):    # time should be give in the isoformat iniitally as argument
     if not is_valid_iso_format(scheduled_time):
         return
-    cur.execute("INSERT INTO schedule (user_id, time, access_token , type , text1 , text2 , text3 ,media_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typeee, text1, text2, text3, media_id))
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, time, access_token , type , text1 , text2 , text3 ,media_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typeee, text1, text2, text3, media_id))
 
-def insert_posts_bulk(cur,posts):
+def insert_posts_bulk(posts):
     rows = [p for p in posts if is_valid_iso_format(p[1])]
     if not rows:
         return
-    execute_values( cur,"INSERT INTO schedule (user_id, time, access_token, type, text1, text2, text3, media_id) VALUES %s",rows,)
+    with get_conn_write() as conn, conn.cursor() as cur:
+        execute_values(cur , "INSERT INTO schedule (user_id, time, access_token, type, text1, text2, text3, media_id) VALUES %s",rows,)
 
-def insert__story(cur,user_id, scheduled_time, access_token, media_id, hour, typee):    # time should be give in the isoformat iniitally as argument
+def insert__story(user_id, scheduled_time, access_token, media_id, hour, typee):    # time should be give in the isoformat iniitally as argument
     if not is_valid_iso_format(scheduled_time):
         return
-    cur.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour) VALUES (%s, %s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typee, media_id, hour))
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id,hour) VALUES (%s, %s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typee, media_id, hour))
 
-def insert__story1(cur,user_id, scheduled_time, access_token, media_id, typee):    # time should be give in the isoformat iniitally as argument
+def insert__story1(user_id, scheduled_time, access_token, media_id, typee):    # time should be give in the isoformat iniitally as argument
     if not is_valid_iso_format(scheduled_time):
         return
-    cur.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (%s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typee, media_id))
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (%s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typee, media_id))
 
-# require the pool of the read 
-def get_containers_due(cur,now):
+def get_containers_due(now):
     with get_conn_read() as conn,conn.cursor() as cur:
             cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s", (now,0))
     return cur.fetchall()
 
-# require the pool of the read 
-def get_failed_one(cur,now):
+def get_failed_one(now):
     tim = datetime.fromisoformat(now) - timedelta(minutes=30)
     with get_conn_read() as conn,conn.cursor() as cur:
             cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s ", (tim,1))
     return cur.fetchall()
 
-def update_container_schedule(cur,container_id, sctime):
+def update_container_schedule(container_id, sctime):
     if not is_valid_iso_format(sctime):
         return
-    cur.execute("UPDATE schedule SET time = %s WHERE container_id = %s", (sctime, container_id))
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE schedule SET time = %s WHERE container_id = %s", (sctime, container_id))
 
-def delete_by_id(cur,row_id):
-    _delete_by(cur,"schedule", "id", row_id)
+def delete_by_id(row_id):
+    _delete_by("schedule", "id", row_id)
 
-def set_taken_to(cur,ids):
+def set_taken_to(ids):
     if not ids:
         return 0
-    cur.execute("UPDATE schedule SET taken = 1 WHERE id = ANY(%s)", (list(ids),))
-    return cur.rowcount
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE schedule SET taken = 1 WHERE id = ANY(%s)", (list(ids),))
+        return cur.rowcount
 
 if __name__ == "__main__":
     while True:
@@ -146,8 +149,7 @@ if __name__ == "__main__":
             fail = get_failed_one(now)
             seen = {row[0] for row in due}
             due.extend(row for row in fail if row[0] not in seen)    # no row can be processed twice
-            with get_conn_write() as conn, conn.cursor() as cur:
-                set_taken_to(cur,[row[0] for row in due])
+            set_taken_to([row[0] for row in due])
         except Exception:
             logging.exception("could not claim due rows")
             time.sleep(5)
@@ -240,15 +242,13 @@ if __name__ == "__main__":
                 else:
                     logging.warning("row %s has unknown type %r, left in table", row_id, typess)
                     continue
-                with get_conn_write() as conn, conn.cursor() as cur:
-                    delete_by_id(cur,row_id)
+                delete_by_id(row_id)
             except Exception:
                 logging.exception("row %s (%s) failed, will be retried after 30 min", row_id, typess)
         try:
-            with get_conn_write() as conn, conn.cursor() as cur:
-                rows = workflow_10_days(now)
-                for (row_id,) in rows :
-                    delete_by_10days(cur,row_id)
+            rows = workflow_10_days(now)
+            for (row_id,) in rows :
+                delete_by_10days(row_id)
         except Exception:
             logging.exception("workflow cleanup failed")
         time.sleep(5)
