@@ -26,6 +26,9 @@ AUTO_FAILBACK="${AUTO_FAILBACK:-false}"
 FAILBACK_CMD="${FAILBACK_CMD:-}"
 SYNC_REPL="${SYNC_REPL:-true}"
 SYNC_NAMES="${SYNC_NAMES:-*}"   # '*' = any connected standby
+
+# need to give the write_serive to db or db2 for primary_db and other one with the db3 will be in the read_service
+
 exec 9>/tmp/ha-controller.lock
 if ! flock -n 9; then
     echo "$(date '+%F %T') CRIT: another ha-controller instance is already running"

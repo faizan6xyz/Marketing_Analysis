@@ -2,8 +2,8 @@ name: myapp
 
 networks:
   dbnet:
-    # driver: bridge   # tellls to create one
-    external: true # tells that the network already exists so no confilicts 
+    driver: bridge   # tellls to create one
+    # external: true # tells that the network already exists so no confilicts 
     dns_enabled: true # Podman runs a small DNS server for it (aardvark-dns). Its address is the network gateway (10.89.0.1).
 
 services:
@@ -24,7 +24,7 @@ services:
       -c effective_cache_size=512MB
       -c work_mem=4MB
       -c maintenance_work_mem=64MB
-      -c max_connections=50
+      -c max_connections=80
       -c max_parallel_workers_per_gather=0
       -c autovacuum_max_workers=2
       -c autovacuum_work_mem=64MB
@@ -91,7 +91,73 @@ services:
           -c effective_cache_size=512MB \
           -c work_mem=4MB \
           -c maintenance_work_mem=64MB \
-          -c max_connections=50 \
+          -c max_connections=80 \
+          -c max_parallel_workers_per_gather=0 \
+          -c autovacuum_max_workers=2 \
+          -c autovacuum_work_mem=64MB \
+          -c wal_compression=zstd \
+          -c default_toast_compression=lz4 \
+          -c max_wal_size=512MB \
+          -c min_wal_size=80MB \
+          -c temp_file_limit=1GB \
+          -c statement_timeout=60s \
+          -c idle_in_transaction_session_timeout=30s \
+          -c hba_file=/etc/postgresql/pg_hba.conf \
+          -c wal_level=replica \
+          -c max_wal_senders=5 \
+          -c max_replication_slots=5 \
+          -c max_slot_wal_keep_size=1GB \
+          -c wal_log_hints=on \
+          -c hot_standby=on \
+          -c hot_standby_feedback=on
+    volumes:
+      - db2_data:/var/lib/postgresql/data
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leojr -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  
+  db3:
+    image: docker.io/library/postgres:16
+    container_name: db3
+    user: postgres
+    env_file:
+      - .env
+    cpus: "0.1"
+    mem_limit: 1g
+    memswap_limit: 1g
+    shm_size: 256mb
+    networks:
+      - dbnet
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        sleep 8
+        if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
+          echo "Empty data dir, cloning from db..."
+          pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db2_slot -P \
+            || {
+              echo "clone failed"
+              rm -rf /var/lib/postgresql/data/*
+              psql -h db -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db2_slot')" || true
+              exit 1
+            }
+          chmod 700 /var/lib/postgresql/data
+        fi
+        exec postgres \
+          -c shared_buffers=256MB \
+          -c effective_cache_size=512MB \
+          -c work_mem=4MB \
+          -c maintenance_work_mem=64MB \
+          -c max_connections=80 \
           -c max_parallel_workers_per_gather=0 \
           -c autovacuum_max_workers=2 \
           -c autovacuum_work_mem=64MB \
@@ -141,6 +207,7 @@ services:
     depends_on:
       - db
       - db2
+      - db3
     restart: unless-stopped
 
   backend:
