@@ -2,48 +2,20 @@ name: myapp
 
 networks:
   dbnet:
-    # drive: bridge   # tellls to create one
+    # driver: bridge   # tellls to create one
     external: true # tells that the network already exists so no confilicts 
     dns_enabled: true # Podman runs a small DNS server for it (aardvark-dns). Its address is the network gateway (10.89.0.1).
 
 services:
-  backend1:
-    image: shi
-    user: appuser
-    container_name: backend
-    cpus: "0.5"
-    mem_limit: 400m
-    ports:
-      - "5000-5015:5000-5015"
-    env_file:
-      - .env
-    networks: [dbnet]
-    environment:
-      DB_WRITE_HOST: db
-      DB_READ_HOST: db2
-    volumes:
-      - app_data1:/data
-    depends_on:
-      db:
-        condition: service_started
-      db2:
-        condition: service_started
-    restart: unless-stopped
-    command: ["/start.sh"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 2
-
   db:
     image: docker.io/library/postgres:16
     container_name: db
-    cpus: "0.5"
+    cpus: "0.1"
     mem_limit: 1g
     memswap_limit: 1g
     shm_size: 256mb
-    networks: [dbnet]
+    networks:
+      - dbnet
     env_file:
       - .env
     command: >
@@ -91,11 +63,12 @@ services:
     user: postgres
     env_file:
       - .env
-    cpus: "0.5"
+    cpus: "0.1"
     mem_limit: 1g
     memswap_limit: 1g
     shm_size: 256mb
-    networks: [dbnet]
+    networks:
+      - dbnet
     environment:
       PGPASSWORD: ${DB_PASSWORD}
     entrypoint: ["/bin/bash", "-c"]
@@ -169,6 +142,33 @@ services:
       - db
       - db2
     restart: unless-stopped
+
+  backend:
+    image: shi
+    user: appuser
+    container_name: backend
+    cpus: "0.2"
+    mem_limit: 500m
+    ports:  
+      - "5000-5015:5000-5015"
+    env_file:
+      - .env
+    networks:
+      - dbnet
+    volumes:
+      - app_data1:/data
+    depends_on:
+      db:
+        condition: service_started
+      db2:
+        condition: service_started
+    restart: unless-stopped
+    command: ["./start.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
 
 # Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
 
