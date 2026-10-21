@@ -10,8 +10,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("rate_limit")
 from psycopg2 import sql
-from psycopg2.pool import ThreadedConnectionPool
-_pool = ThreadedConnectionPool( 1, int(os.environ.get("DB_POOL_MAX", 10)), host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,)
+from database.UserDB import pool
 
 def _require(key):
     val = os.environ.get(key)
@@ -23,7 +22,7 @@ LIMIT_OF_PLAN = json.loads(_require("limit_of_plan"))
 
 @contextmanager
 def get_conn():
-    conn = _pool.getconn()
+    conn = pool.getconn()
     try:
         yield conn
         conn.commit()
@@ -31,7 +30,7 @@ def get_conn():
         conn.rollback()
         raise
     finally:
-        _pool.putconn(conn, close=bool(conn.closed))
+        pool.putconn(conn, close=bool(conn.closed))
 
 def get_or_create_window(user_id, now_ts):
     with get_conn() as conn:

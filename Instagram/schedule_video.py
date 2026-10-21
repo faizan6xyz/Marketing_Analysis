@@ -15,13 +15,12 @@ from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from psycopg2 import sql
 from psycopg2.extras import execute_values
-from psycopg2.pool import ThreadedConnectionPool
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-_pool = ThreadedConnectionPool( 1, 2, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,)
+from database.UserDB import pool
 
 @contextmanager
 def get_conn():
-    conn = _pool.getconn()
+    conn = pool.getconn()
     try:
         yield conn
         conn.commit()
@@ -29,7 +28,7 @@ def get_conn():
         conn.rollback()
         raise
     finally:
-        _pool.putconn(conn)
+        pool.putconn(conn)
 
 def is_valid_iso_format(value: str) -> bool:
     if not isinstance(value, str):

@@ -14,13 +14,13 @@ import authnew as au
 import secrets
 load_dotenv()
 SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
-pool = ThreadedConnectionPool( 1, 5, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
+pool = ThreadedConnectionPool( 1, 8, host=os.environ.get("DB_HOST", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
 ALLOWED_TABLES = { "drive", "gmail", "instagram", "paypal", "paypal_verify", "pinterest", "razorpay", "razorpay_verify", "threads", "whatsapp", "x", "youtube", "users",}
 _SIMPLE_OPS = { "eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=","like": "LIKE", "ilike": "ILIKE", "contains": "@>",}
 
 def _prehash(password: str) -> bytes:
     return hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).digest()
-
+    
 def _hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     dk = hashlib.scrypt(_prehash(password), salt=salt, n=2**14, r=8, p=1, dklen=32)
