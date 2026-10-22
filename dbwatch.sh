@@ -54,6 +54,12 @@ role() {
         *) echo "unknown" ;;
     esac
 }
+standby_name() {
+    local name
+    name=$(q "$1" "SELECT application_name FROM pg_stat_replication WHERE state = 'streaming' ORDER BY application_name LIMIT 1;")
+    [ -n "$name" ] || return 1
+    echo "$name"
+}
 repl_info() {
     local row
     row=$(q "$1" "SELECT count(*), COALESCE(max(pg_wal_lsn_diff(sent_lsn, replay_lsn)), 0)::bigint  FROM pg_stat_replication;")
@@ -205,6 +211,7 @@ log "PostgreSQL HA controller started  ,  db  = $DB1_HOST (container $DB1_CONTAI
 while true; do
     R1=$(role "$DB1_HOST")
     R2=$(role "$DB2_HOST")
+    R3=$(role "$DB3_HOST")
     if [ "$R1" = "primary" ] && [ "$R2" = "primary" ]; then
         handle_split_brain
     elif [ "$R1" = "primary" ]; then
@@ -217,10 +224,29 @@ while true; do
         LAG=${ROW##*|}
         if [ "${STANDBYS:-0}" -eq 0 ]; then
             set_sync "$DB1_HOST" off
-            log "WARN: db is PRIMARY but db2 is NOT replicating (db2=$R2)"
+            log "WARN: db is PRIMARY but db2 is NOT replicating (db2=$R2), db3 is NOT replicating (db3=$R3)"
+        elif [ "${STANDBYS:-0}" -eq 1 ]; then
+            NAME=$(standby_name "$DB1_HOST") || NAME=""
+            case "$NAME" in
+                db2)
+                    SYNC_NAMES="FIRST 1 (db2)"
+                    set_sync "$DB1_HOST" on
+                    log "WARN: db is PRIMARY, db2 streaming (sync), lag=${LAG} bytes, but db3 is NOT replicating (db3=$R3)"
+                    ;;
+                db3)
+                    SYNC_NAMES="FIRST 1 (db3)"
+                    set_sync "$DB1_HOST" on
+                    log "WARN: db is PRIMARY, db2 is NOT replicating (db2=$R2), db3 streaming (sync), lag=${LAG} bytes"
+                    ;;
+                *)
+                    set_sync "$DB1_HOST" off
+                    log "WARN: db is PRIMARY, 1 standby streaming but name is '${NAME}' (expected db2 or db3); sync disabled"
+                    ;;
+            esac
         else
+            SYNC_NAMES="FIRST 1 (db2, db3)"
             set_sync "$DB1_HOST" on
-            log "OK: db PRIMARY, db2 streaming (sync), lag=${LAG} bytes"
+            log "OK: db PRIMARY, db2 + db3 streaming, db2 is sync and db3 is the fallback, max lag=${LAG} bytes"
         fi
     elif [ "$R1" = "down" ]; then
         FAILS=$((FAILS + 1))
@@ -274,7 +300,7 @@ while true; do
         else
             set_sync "$DB2_HOST" off
         fi
-        log "INFO: db2 is PRIMARY, db is STANDBY (streaming=${STANDBYS:-0}, lag=${LAG:-?} bytes)"
+        log "INFO: db2 is PRIMARY, db is STANDBY (streaming=${STANDBYS:-0}, lag=${LAG:-?} bytes) , db3 (streaming=${STANDBYS:-0}, lag=${LAG:-?} bytes)"
         if [ "$AUTO_FAILBACK" = "true" ] && [ "${STANDBYS:-0}" -ge 1 ] && [ "${LAG:-1}" -eq 0 ] && [ -n "$FAILBACK_CMD" ]; then
             log "FAILBACK: db is caught up, running FAILBACK_CMD"
             if $FAILBACK_CMD; then
