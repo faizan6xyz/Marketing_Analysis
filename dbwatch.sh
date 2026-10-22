@@ -19,16 +19,13 @@ PRIMARY_DB="${PRIMARY_DB:-}"
 STANDBY_DB="${STANDBY_DB:-}"
 INTERVAL="${CHECK_INTERVAL:-3}"
 FAIL_THRESHOLD="${FAIL_THRESHOLD:-5}"
-AUTO_PROMOTE="${AUTO_PROMOTE:-false}"
+AUTO_PROMOTE="${AUTO_PROMOTE:-true}"
 AUTO_FENCE="${AUTO_FENCE:-true}"
 AUTO_DEMOTE="${AUTO_DEMOTE:-true}"
-AUTO_FAILBACK="${AUTO_FAILBACK:-false}"
+AUTO_FAILBACK="${AUTO_FAILBACK:-true}"
 FAILBACK_CMD="${FAILBACK_CMD:-}"
 SYNC_REPL="${SYNC_REPL:-true}"
 SYNC_NAMES="${SYNC_NAMES:-*}"   # '*' = any connected standby
-
-# need to give the write_serive to db or db2 for primary_db and other one with the db3 will be in the read_service
-
 exec 9>/tmp/ha-controller.lock
 if ! flock -n 9; then
     echo "$(date '+%F %T') CRIT: another ha-controller instance is already running"
@@ -295,13 +292,16 @@ while true; do
         ROW=$(repl_info "$DB2_HOST")
         STANDBYS=${ROW%%|*}
         LAG=${ROW##*|}
-        if [ "${STANDBYS:-0}" -ge 1 ]; then
+        NAMES=$(q "$DB2_HOST" "SELECT COALESCE(string_agg(application_name, ', ' ORDER BY application_name), '') FROM pg_stat_replication WHERE state = 'streaming';")
+        if [ "${STANDBYS:-0}" -ge 1 ] && [ -n "$NAMES" ]; then
+            SYNC_NAMES="FIRST 1 ($NAMES)"
             set_sync "$DB2_HOST" on
         else
             set_sync "$DB2_HOST" off
         fi
-        log "INFO: db2 is PRIMARY, db is STANDBY (streaming=${STANDBYS:-0}, lag=${LAG:-?} bytes) , db3 (streaming=${STANDBYS:-0}, lag=${LAG:-?} bytes)"
-        if [ "$AUTO_FAILBACK" = "true" ] && [ "${STANDBYS:-0}" -ge 1 ] && [ "${LAG:-1}" -eq 0 ] && [ -n "$FAILBACK_CMD" ]; then
+        DB_LAG=$(q "$DB2_HOST" "SELECT COALESCE(max(pg_wal_lsn_diff(sent_lsn, replay_lsn)), -1)::bigint FROM pg_stat_replication WHERE application_name = 'db' AND state = 'streaming';")
+        log "INFO: db2 is PRIMARY, standbys streaming=${STANDBYS:-0} (${NAMES:-none}), max lag=${LAG:-?} bytes, db lag=${DB_LAG:-?} bytes"
+        if [ "$AUTO_FAILBACK" = "true" ] && [ "${DB_LAG:--1}" -eq 0 ] && [ -n "$FAILBACK_CMD" ]; then
             log "FAILBACK: db is caught up, running FAILBACK_CMD"
             if $FAILBACK_CMD; then
                 log "FAILBACK: done. db should be PRIMARY, rebuild db2 as standby."
@@ -309,10 +309,4 @@ while true; do
                 log "CRIT: FAILBACK_CMD failed - db2 remains PRIMARY"
             fi
         fi
-    elif [ "$R1" = "unknown" ]; then
-        log "WARN: db is reachable but its role is unknown (check credentials/connections)"
-    else
-        log "WARN: unexpected state db=$R1 db2=$R2 - needs investigation"
-    fi
-    sleep "$INTERVAL"
 done

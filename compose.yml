@@ -2,8 +2,8 @@ name: myapp
 
 networks:
   dbnet:
-    driver: bridge   # tellls to create one
-    # external: true # tells that the network already exists so no confilicts 
+    # driver: bridge   # tellls to create one
+    external: true # tells that the network already exists so no confilicts 
     dns_enabled: true # Podman runs a small DNS server for it (aardvark-dns). Its address is the network gateway (10.89.0.1).
 
 services:
@@ -143,11 +143,11 @@ services:
         sleep 8
         if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
           echo "Empty data dir, cloning from db..."
-          pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db2_slot -P \
+          pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db3_slot -P \
             || {
               echo "clone failed"
               rm -rf /var/lib/postgresql/data/*
-              psql -h db -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db2_slot')" || true
+              psql -h db -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db3_slot')" || true
               exit 1
             }
           chmod 700 /var/lib/postgresql/data
@@ -177,7 +177,7 @@ services:
           -c hot_standby=on \
           -c hot_standby_feedback=on
     volumes:
-      - db2_data:/var/lib/postgresql/data
+      - db3_data:/var/lib/postgresql/data
       - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     depends_on:
       db:
@@ -229,6 +229,8 @@ services:
         condition: service_started
       db2:
         condition: service_started
+      db3 :
+        condition: service_started
     restart: unless-stopped
     command: ["./start.sh"]
     healthcheck:
@@ -257,4 +259,5 @@ volumes:
   app_data1:
   db_data:
   db2_data:
+  db3_data:
   pending_sql:
