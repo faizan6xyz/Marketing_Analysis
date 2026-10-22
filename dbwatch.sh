@@ -83,18 +83,32 @@ set_sync() {
     q "$host" "SELECT pg_reload_conf();" >/dev/null
 }
 set_label() {
-    local host="$1" want="$2" cur
-    cur=$(q "$host" "SHOW ha.primary;")
+    local host="$1" want="$2" ns="${3:-default}" pod="${4:-$1}"
+    local cur pcur changed=0
+    cur=$(q "$host" "SELECT current_setting('ha.primary', true);")
     if [ "$want" = "on" ]; then
-        [ "$cur" = "true" ] && return 0
-        log "LABEL: setting primary=true on $host"
-        q "$host" "ALTER SYSTEM SET ha.primary = 'true';" >/dev/null
+        if [ "$cur" != "true" ]; then
+            log "LABEL: setting ha.primary=true on $host"
+            q "$host" "ALTER SYSTEM SET ha.primary = 'true';" >/dev/null && changed=1
+        fi
     else
-        [ -z "$cur" ] && return 0
-        log "LABEL: removing primary label from $host"
-        q "$host" "ALTER SYSTEM RESET ha.primary;" >/dev/null
+        if [ -n "$cur" ]; then
+            log "LABEL: resetting ha.primary on $host"
+            q "$host" "ALTER SYSTEM RESET ha.primary;" >/dev/null && changed=1
+        fi
     fi
-    q "$host" "SELECT pg_reload_conf();" >/dev/null
+    [ "$changed" -eq 1 ] && q "$host" "SELECT pg_reload_conf();" >/dev/null
+    command -v kubectl >/dev/null 2>&1 || return 0   # skip if not running with k8s
+    pcur=$(kubectl -n "$ns" get pod "$pod" -o jsonpath='{.metadata.labels.primary}' 2>/dev/null)
+    if [ "$want" = "on" ]; then
+        [ "$pcur" = "true" ] && return 0
+        log "LABEL: setting primary=true on pod $pod"
+        kubectl -n "$ns" label pod "$pod" primary=true --overwrite >/dev/null
+    else
+        [ "$pcur" = "false" ] && return 0
+        log "LABEL: setting primary=false on pod $pod"
+        kubectl -n "$ns" label pod "$pod" primary=false --overwrite >/dev/null
+    fi
 }
 promote_node() {
     local host="$1"
