@@ -1,15 +1,35 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: db_read_service
-  labels:
-    primary: false
-spec:
-  type: ClusterIP
-  selector:
-    primary: false
-  ports:
-    - name: http
-      port: 5431
-      targetPort: 5431
-      protocol: TCP
+apiVersion: v1                          # API version; Service lives in the core "v1" group
+kind: Service                           # Type of Kubernetes object being created
+metadata:                               # Identifying info about this object
+  name: db-read-service                 # Service name; also its DNS name (db-read-service.default.svc)
+  namespace: default                    # Namespace the Service is created in
+  labels:                               # Labels on the Service itself (for filtering/organizing)
+    app: postgres                       # Marks this Service as part of the postgres app
+    role: read                          # Marks it as the read endpoint
+    app.kubernetes.io/name: postgres    # Standard recommended label: application name
+    app.kubernetes.io/component: database   # Standard label: what part of the system this is
+    app.kubernetes.io/part-of: my-app   # Standard label: the larger system it belongs to (rename this)
+    app.kubernetes.io/managed-by: kubectl   # Standard label: tool managing it (helm, argocd, etc.)
+  annotations:                          # Free-form metadata, not used for selection
+    description: "Load-balances read-only queries across replica pods"   # Human-readable purpose
+spec:                                   # Desired behavior of the Service
+  type: ClusterIP                       # Internal-only virtual IP, reachable only inside the cluster
+  # clusterIP: 10.96.0.50               # Pin a fixed internal IP (must be in the cluster's service range)
+  selector:                             # Which pods receive this Service's traffic
+    app: postgres                       # Only pods labeled app=postgres...
+    primary: "false"                    # ...and primary=false, i.e. the replicas (quoted: must be a string)
+  ports:                                # List of ports the Service exposes
+    - name: postgres                    # Port name, clearer than "http" for a database
+      port: 5432                        # Port clients use when connecting to the Service
+      targetPort: 5432                  # Port on the replica pod (can be a named container port, e.g. "pg")
+      protocol: TCP                     # Transport protocol (TCP is the default)
+  sessionAffinity: ClientIP             # Keeps a client IP pinned to the same replica
+  sessionAffinityConfig:                # Settings for the affinity above
+    clientIP:                           # Applies to ClientIP-based affinity
+      timeoutSeconds: 10800             # How long the pinning lasts (10800 = 3 hours, the default)
+  publishNotReadyAddresses: false       # Don't send traffic to pods that fail their readiness check
+  internalTrafficPolicy: Cluster        # Route to replicas on any node (Local = same node only, can fail if none)
+  # trafficDistribution: PreferClose    # Prefer replicas in the same zone (needs a recent Kubernetes version)
+  ipFamilyPolicy: SingleStack           # Use one IP family only (not both IPv4 and IPv6)
+  ipFamilies:                           # Which IP family to use
+    - IPv4                              # IPv4 only
