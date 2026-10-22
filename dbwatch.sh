@@ -25,7 +25,13 @@ AUTO_DEMOTE="${AUTO_DEMOTE:-true}"
 AUTO_FAILBACK="${AUTO_FAILBACK:-true}"
 FAILBACK_CMD="${FAILBACK_CMD:-}"
 SYNC_REPL="${SYNC_REPL:-true}"
-SYNC_NAMES="${SYNC_NAMES:-*}"   # '*' = any connected standby
+SYNC_NAMES="${SYNC_NAMES:-*}"   
+K8S_LABELS="${K8S_LABELS:-auto}"            # auto = use kubectl if installed | true | false
+K8S_NAMESPACE="${K8S_NAMESPACE:-default}"
+LABEL_KEY="${LABEL_KEY:-primary}"           # pod label key (value is true / false)
+DB1_POD="${DB1_POD:-$DB1_HOST}"             # pod names, if they differ from the host names
+DB2_POD="${DB2_POD:-$DB2_HOST}"
+DB3_POD="${DB3_POD:-$DB3_HOST}"
 exec 9>/tmp/ha-controller.lock
 if ! flock -n 9; then
     echo "$(date '+%F %T') CRIT: another ha-controller instance is already running"
@@ -34,6 +40,7 @@ fi
 ts()  { date '+%F %T'; }
 log() { echo "$(ts) $*"; }
 trap 'log "INFO: controller stopped"; exit 0' INT TERM
+declare -A K8S_WARNED=()
 q() {
     psql -X -h "$1" -U "$DB_USER" -d "$DB_NAME" -Atc "$2" 2>/dev/null
 }
@@ -82,9 +89,17 @@ set_sync() {
     fi
     q "$host" "SELECT pg_reload_conf();" >/dev/null
 }
-set_label() {
-    local host="$1" want="$2" ns="${3:-default}" pod="${4:-$1}"
-    local cur pcur changed=0
+pod_of() {
+    case "$1" in
+        "$DB1_HOST") echo "$DB1_POD" ;;
+        "$DB2_HOST") echo "$DB2_POD" ;;
+        "$DB3_HOST") echo "$DB3_POD" ;;
+        *)           echo "$1" ;;
+    esac
+}
+set_pg_marker() {
+    local host="$1" want="$2" cur changed=0
+    pg_isready -q -h "$host" -U "$DB_USER" -d "$DB_NAME" || return 0
     cur=$(q "$host" "SELECT current_setting('ha.primary', true);")
     if [ "$want" = "on" ]; then
         if [ "$cur" != "true" ]; then
@@ -97,18 +112,34 @@ set_label() {
             q "$host" "ALTER SYSTEM RESET ha.primary;" >/dev/null && changed=1
         fi
     fi
-    [ "$changed" -eq 1 ] && q "$host" "SELECT pg_reload_conf();" >/dev/null
-    command -v kubectl >/dev/null 2>&1 || return 0   # skip if not running with k8s
-    pcur=$(kubectl -n "$ns" get pod "$pod" -o jsonpath='{.metadata.labels.primary}' 2>/dev/null)
-    if [ "$want" = "on" ]; then
-        [ "$pcur" = "true" ] && return 0
-        log "LABEL: setting primary=true on pod $pod"
-        kubectl -n "$ns" label pod "$pod" primary=true --overwrite >/dev/null
-    else
-        [ "$pcur" = "false" ] && return 0
-        log "LABEL: setting primary=false on pod $pod"
-        kubectl -n "$ns" label pod "$pod" primary=false --overwrite >/dev/null
+    if [ "$changed" -eq 1 ]; then
+        q "$host" "SELECT pg_reload_conf();" >/dev/null
     fi
+    return 0
+}
+set_pod_label() {
+    local host="$1" want="$2" pod target cur
+    case "$K8S_LABELS" in
+        false) return 0 ;;
+        auto)  command -v kubectl >/dev/null 2>&1 || return 0 ;;
+    esac
+    pod=$(pod_of "$host")
+    if [ "$want" = "on" ]; then target="true"; else target="false"; fi
+    cur=$(kubectl -n "$K8S_NAMESPACE" get pod "$pod" -o "jsonpath={.metadata.labels.${LABEL_KEY}}" 2>/dev/null)
+    [ "$cur" = "$target" ] && return 0
+    if kubectl -n "$K8S_NAMESPACE" label pod "$pod" "${LABEL_KEY}=${target}" --overwrite >/dev/null 2>&1; then
+        log "LABEL: pod $pod -> ${LABEL_KEY}=${target}"
+        unset 'K8S_WARNED[$pod]'
+    elif [ -z "${K8S_WARNED[$pod]:-}" ]; then
+        K8S_WARNED[$pod]=1
+        log "WARN: could not label pod '$pod' in namespace '$K8S_NAMESPACE' (check pod name, RBAC, or that this runs against Kubernetes)"
+    fi
+    return 0
+}
+set_label() {
+    local host="$1" want="$2"
+    set_pg_marker "$host" "$want"
+    set_pod_label "$host" "$want"
 }
 promote_node() {
     local host="$1"
@@ -158,7 +189,8 @@ demote_to_standby() {
     fi
     log "DEMOTE: rewinding $l_host to follow $w_host..."
     if ! podman run --rm --user postgres ${net_args[@]+"${net_args[@]}"} -v "$l_volume":/var/lib/postgresql/data "$PG_IMAGE" pg_rewind --target-pgdata=/var/lib/postgresql/data --source-server="host=$w_host port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" --write-recovery-conf --progress; then
-        log "CRIT: pg_rewind failed, $l_container is left STOPPED , CRIT: rebuild it by hand, e.g. wipe volume $l_volume and run pg_basebackup -R from $w_host"
+        log "CRIT: pg_rewind failed, $l_container is left STOPPED"
+        log "CRIT: rebuild it by hand, e.g. wipe volume $l_volume and run pg_basebackup -R from $w_host"
         return 1
     fi
     log "DEMOTE: starting $l_container as standby..."
@@ -179,6 +211,7 @@ demote_to_standby() {
         fi
     done
     set_label "$l_host" off
+
     for i in {1..15}; do
         if is_streaming "$l_host"; then
             log "DEMOTE: $l_host is streaming from $w_host"
@@ -191,7 +224,7 @@ demote_to_standby() {
 }
 handle_split_brain() {
     local w_host l_host l_container l_volume
-    log "CRIT: SPLIT-BRAIN - $DB1_HOST AND $DB2_HOST are both PRIMARY , CRIT: DO NOT write to both databases."
+    log "CRIT: SPLIT-BRAIN - $DB1_HOST AND $DB2_HOST are both PRIMARY ,CRIT: DO NOT write to both databases."
     case "$PRIMARY_DB" in
         "$DB1_HOST")
             w_host="$DB1_HOST"
@@ -202,11 +235,13 @@ handle_split_brain() {
             l_host="$DB1_HOST"; l_container="$DB1_CONTAINER"; l_volume="$DB1_VOLUME"
             ;;
         *)
-            log "CRIT: last known primary is unknown - refusing to guess which node to demote , CRIT: restart with PRIMARY_DB=$DB1_HOST or PRIMARY_DB=$DB2_HOST, or demote manually"
+            log "CRIT: last known primary is unknown - refusing to guess which node to demote"
+            log "CRIT: restart with PRIMARY_DB=$DB1_HOST or PRIMARY_DB=$DB2_HOST, or demote manually"
             return 1
             ;;
     esac
     log "CRIT: keeping $w_host as PRIMARY, demoting $l_host (its unreplicated writes will be lost)"
+    set_label "$l_host" off
     set_label "$w_host" on
     if [ "$AUTO_FENCE" = "true" ]; then
         fence_node "$l_host"
@@ -214,11 +249,18 @@ handle_split_brain() {
     if [ "$AUTO_DEMOTE" != "true" ]; then
         log "WARN: AUTO_DEMOTE=false, $l_host left running - demote it manually"
         return 1
-    fi
+    fi  
     demote_to_standby "$l_container" "$l_host" "$l_volume" "$w_host"
 }
 FAILS=0
-log "PostgreSQL HA controller started  ,  db  = $DB1_HOST (container $DB1_CONTAINER, volume $DB1_VOLUME)  ,  db2 = $DB2_HOST (container $DB2_CONTAINER, volume $DB2_VOLUME)  ,  known primary = ${PRIMARY_DB:-<unknown>}  ,  interval      = ${INTERVAL}s  ,  threshold     = ${FAIL_THRESHOLD}  ,  auto promote  = ${AUTO_PROMOTE}  ,  auto fence    = ${AUTO_FENCE}  ,  auto demote   = ${AUTO_DEMOTE}  ,  auto failback = ${AUTO_FAILBACK}  ,  sync repl     = ${SYNC_REPL} (standby names: ${SYNC_NAMES})"
+log "PostgreSQL HA controller started"
+log "  db  = $DB1_HOST (container $DB1_CONTAINER, volume $DB1_VOLUME, pod $DB1_POD)"
+log "  db2 = $DB2_HOST (container $DB2_CONTAINER, volume $DB2_VOLUME, pod $DB2_POD)"
+log "  db3 = $DB3_HOST (container $DB3_CONTAINER, volume $DB3_VOLUME, pod $DB3_POD)"
+log "  known primary = ${PRIMARY_DB:-<unknown>}, interval = ${INTERVAL}s, threshold = ${FAIL_THRESHOLD}"
+log "  auto promote = ${AUTO_PROMOTE}, fence = ${AUTO_FENCE}, demote = ${AUTO_DEMOTE}, failback = ${AUTO_FAILBACK}"
+log "  sync repl = ${SYNC_REPL} (standby names: ${SYNC_NAMES})"
+log "  k8s labels = ${K8S_LABELS} (namespace ${K8S_NAMESPACE}, label ${LABEL_KEY}=true|false)"
 while true; do
     R1=$(role "$DB1_HOST")
     R2=$(role "$DB2_HOST")
@@ -228,8 +270,9 @@ while true; do
     elif [ "$R1" = "primary" ]; then
         PRIMARY_DB="$DB1_HOST"
         FAILS=0
+        set_label "$DB2_HOST" off
+        set_label "$DB3_HOST" off
         set_label "$DB1_HOST" on
-        [ "$R2" != "down" ] && set_label "$DB2_HOST" off
         ROW=$(repl_info "$DB1_HOST")
         STANDBYS=${ROW%%|*}
         LAG=${ROW##*|}
@@ -269,14 +312,19 @@ while true; do
                     if [ "$AUTO_PROMOTE" != "true" ]; then
                         log "WARN: AUTO_PROMOTE=false, db2 remains STANDBY"
                     elif is_streaming "$DB2_HOST"; then
-                        log "WARN: db2 is still streaming from db - db looks ALIVE , WARN: refusing to promote (would cause split-brain)"
+                        log "WARN: db2 is still streaming from db - db looks ALIVE"
+                        log "WARN: refusing to promote (would cause split-brain)"
                     else
-                        log "FAILOVER: db failed, db2 stopped receiving WAL , FAILOVER: promoting db2..."
+                        log "FAILOVER: db failed, db2 stopped receiving WAL"
+                        log "FAILOVER: promoting db2..."
                         if promote_node "$DB2_HOST"; then
                             PRIMARY_DB="$DB2_HOST"
                             set_sync "$DB2_HOST" off
+                            # old primary off first (pod label works even though db is down)
+                            set_label "$DB1_HOST" off
+                            set_label "$DB3_HOST" off
                             set_label "$DB2_HOST" on
-                            log "FAILOVER COMPLETE , db2 = PRIMARY , db  = FAILED , Repoint apps to db2."
+                            log "FAILOVER COMPLETE: db2 = PRIMARY, db = FAILED. Repoint apps to db2."
                             FAILS=0
                         else
                             log "CRIT: FAILOVER FAILED"
@@ -287,6 +335,8 @@ while true; do
             primary)
                 PRIMARY_DB="$DB2_HOST"
                 set_sync "$DB2_HOST" off
+                set_label "$DB1_HOST" off
+                set_label "$DB3_HOST" off
                 set_label "$DB2_HOST" on
                 log "OK: db2 is already PRIMARY (serving traffic) , INFO: db is currently unavailable"
                 FAILS=0
@@ -301,8 +351,9 @@ while true; do
     elif [ "$R1" = "standby" ] && [ "$R2" = "primary" ]; then
         PRIMARY_DB="$DB2_HOST"
         FAILS=0
-        set_label "$DB2_HOST" on
         set_label "$DB1_HOST" off
+        set_label "$DB3_HOST" off
+        set_label "$DB2_HOST" on
         ROW=$(repl_info "$DB2_HOST")
         STANDBYS=${ROW%%|*}
         LAG=${ROW##*|}
@@ -323,4 +374,8 @@ while true; do
                 log "CRIT: FAILBACK_CMD failed - db2 remains PRIMARY"
             fi
         fi
+    else
+        log "CRIT: no healthy primary found (db=$R1, db2=$R2, db3=$R3)"
+    fi
+    sleep "$INTERVAL"
 done
