@@ -45,3 +45,5 @@ spec:
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain
     whenScaled: Retain
+
+# This runs your database pods. Unlike a Deployment, it gives each pod a stable identity (db-0, db-1), starts and stops them in order, and keeps each pod’s identity attached to its own storage. If db-0 is deleted and recreated, it comes back with the same name and the same volume, so PostgreSQL data survives. It usually uses volumeClaimTemplates, which automatically creates one PVC per pod (data-db-0, data-db-1).
