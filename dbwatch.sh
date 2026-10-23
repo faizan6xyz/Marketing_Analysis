@@ -26,7 +26,7 @@ AUTO_FAILBACK="${AUTO_FAILBACK:-true}"
 FAILBACK_CMD="${FAILBACK_CMD:-}"
 SYNC_REPL="${SYNC_REPL:-true}"
 SYNC_NAMES="${SYNC_NAMES:-*}"   
-K8S_LABELS="${K8S_LABELS:-auto}"            # auto = use kubectl if installed | true | false
+K8S_LABELS="${K8S_LABELS:-auto}"            # whether to run kubectl
 K8S_NAMESPACE="${K8S_NAMESPACE:-default}"
 LABEL_KEY="${LABEL_KEY:-primary}"           # pod label key (value is true / false)
 DB1_POD="${DB1_POD:-$DB1_HOST}"             # pod names, if they differ from the host names
@@ -180,6 +180,7 @@ demote_to_standby() {
     fi
     q "$w_host" "CHECKPOINT;" >/dev/null
     log "DEMOTE: stopping $l_container..."
+    # delete the kubernetes pod from here instead of the container  
     if ! podman stop -t 60 "$l_container" >/dev/null; then
         log "CRIT: failed to stop $l_container"
         return 1
@@ -188,12 +189,14 @@ demote_to_standby() {
         net_args=(--network "$PODMAN_NETWORK")
     fi
     log "DEMOTE: rewinding $l_host to follow $w_host..."
+    # run the contianer inside the pod with the kuberentes 
     if ! podman run --rm --user postgres ${net_args[@]+"${net_args[@]}"} -v "$l_volume":/var/lib/postgresql/data "$PG_IMAGE" pg_rewind --target-pgdata=/var/lib/postgresql/data --source-server="host=$w_host port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" --write-recovery-conf --progress; then
         log "CRIT: pg_rewind failed, $l_container is left STOPPED"
         log "CRIT: rebuild it by hand, e.g. wipe volume $l_volume and run pg_basebackup -R from $w_host"
         return 1
     fi
     log "DEMOTE: starting $l_container as standby..."
+    # try to start the pod with the container inside with kubernetes
     if ! podman start "$l_container" >/dev/null; then
         log "CRIT: failed to start $l_container"
         return 1
