@@ -17,4 +17,4 @@ spec:                               # Desired behavior of the Service
     - name: postgres                # Port name; "postgres" is clearer than "http" for a database
       port: 5432                    # Port clients use when connecting to the Service
       targetPort: 5432              # Port on the replica pod that traffic is forwarded to
-      protocol: TCP                 # Transport protocol (TCP is the default)
+      protocol: TCP                 # Transport protocol (TCP is the default) 
