@@ -15,6 +15,6 @@ spec:                               # Desired behavior of the Service
     primary: "false"                # ...and primary=false, i.e. the replicas (quoted: must be a string)
   ports:                            # List of ports the Service exposes
     - name: postgres                # Port name; "postgres" is clearer than "http" for a database
-      port: 5432                    # Port clients use when connecting to the Service
+      port: 5432                   # Port clients use when connecting to the Service
       targetPort: 5432              # Port on the replica pod that traffic is forwarded to
       protocol: TCP                 # Transport protocol (TCP is the default) 

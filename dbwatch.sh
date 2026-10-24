@@ -17,8 +17,8 @@ DB_USER="${DB_USER:-leojr}"
 DB_NAME="${DB_NAME:-userdb}"
 PRIMARY_DB="${PRIMARY_DB:-}"
 STANDBY_DB="${STANDBY_DB:-}"
-INTERVAL="${CHECK_INTERVAL:-3}"
-FAIL_THRESHOLD="${FAIL_THRESHOLD:-5}"
+INTERVAL="${CHECK_INTERVAL:-1}"
+FAIL_THRESHOLD="${FAIL_THRESHOLD:-2}"
 AUTO_PROMOTE="${AUTO_PROMOTE:-true}"
 AUTO_FENCE="${AUTO_FENCE:-true}"
 AUTO_DEMOTE="${AUTO_DEMOTE:-true}"
@@ -138,9 +138,9 @@ set_pod_label() {
 }
 set_label() {
     local host="$1" want="$2"
-    set_pg_marker "$host" "$want"
-    set_pod_label "$host" "$want"
-}
+#     set_pg_marker "$host" "$want"
+#     set_pod_label "$host" "$want"
+ }
 promote_node() {
     local host="$1"
     local result i
@@ -181,7 +181,7 @@ demote_to_standby() {
     q "$w_host" "CHECKPOINT;" >/dev/null
     log "DEMOTE: stopping $l_container..."
     # delete the kubernetes pod from here instead of the container  
-    if ! podman stop -t 60 "$l_container" >/dev/null; then
+    if ! podman kill -t 5 "$l_container" >/dev/null; then
         log "CRIT: failed to stop $l_container"
         return 1
     fi
@@ -323,7 +323,6 @@ while true; do
                         if promote_node "$DB2_HOST"; then
                             PRIMARY_DB="$DB2_HOST"
                             set_sync "$DB2_HOST" off
-                            # old primary off first (pod label works even though db is down)
                             set_label "$DB1_HOST" off
                             set_label "$DB3_HOST" off
                             set_label "$DB2_HOST" on
@@ -369,6 +368,7 @@ while true; do
         fi
         DB_LAG=$(q "$DB2_HOST" "SELECT COALESCE(max(pg_wal_lsn_diff(sent_lsn, replay_lsn)), -1)::bigint FROM pg_stat_replication WHERE application_name = 'db' AND state = 'streaming';")
         log "INFO: db2 is PRIMARY, standbys streaming=${STANDBYS:-0} (${NAMES:-none}), max lag=${LAG:-?} bytes, db lag=${DB_LAG:-?} bytes"
+        # instead of the failback coomand we beed to the promote db and demote the db2
         if [ "$AUTO_FAILBACK" = "true" ] && [ "${DB_LAG:--1}" -eq 0 ] && [ -n "$FAILBACK_CMD" ]; then
             log "FAILBACK: db is caught up, running FAILBACK_CMD"
             if $FAILBACK_CMD; then

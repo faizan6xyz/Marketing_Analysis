@@ -15,6 +15,6 @@ spec:                               # Desired behavior of the Service
     primary: "true"                 # ...and primary=true (label values must be strings, so quoted)
   ports:                            # List of ports the Service exposes
     - name: postgres                # Port name (helpful for readability and multi-port Services)
-      port: 5432                    # Port clients use when connecting to the Service
+      port: 5432                   # Port clients use when connecting to the Service
       targetPort: 5432              # Port on the pod that traffic is forwarded to
       protocol: TCP                 # Transport protocol (TCP is the default)
