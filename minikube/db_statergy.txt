@@ -1,0 +1,10 @@
+the cycle for db pods deployment :
+
+    Stage 1
+        DB/DB2/DB3 never leaves Stage 1 before completing the sync. Standby moves from Stage 1 to Stage 2 in the “DB-read-service”. Primary moves from Stage 1 to Stage 3 in “DB-write-service”.
+
+    Stage 2
+        DB2/DB3 are the standby ones which are in the “DB-read-service”, and DB2 is the standby one which could be able to be promoted to primary.
+
+    Stage 3
+        DB is the primary DB which is in “DB-write-service”, only one primary DB at a time (two causes split brain). DB2 promotes when DB isn't working.
