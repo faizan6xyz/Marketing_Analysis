@@ -1,25 +1,106 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
-  name: db-primary
+  name: db
+  labels:
+    app: postgres
+    role: primary
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      primary: "true"
-  template:
-    metadata:
-      labels:
-        primary: "true"
-    spec:
-      containers:
-        - name: db
-          image: db_image
-          ports:
-            - containerPort: 5432
-          env:
-            - name: ENV
-              value: "production"
-          resources:
-            requests: { cpu: "100m", memory: "500Mi" }
-            limits:   { cpu: "300m", memory: "1Gi" }
+  hostname: db
+  restartPolicy: Always
+  containers:
+    - name: pg
+      image: docker.io/library/postgres:16
+      args:
+        - postgres
+        - -c
+        - shared_buffers=256MB
+        - -c
+        - effective_cache_size=512MB
+        - -c
+        - work_mem=4MB
+        - -c
+        - maintenance_work_mem=64MB
+        - -c
+        - max_connections=80
+        - -c
+        - max_parallel_workers_per_gather=0
+        - -c
+        - autovacuum_max_workers=2
+        - -c
+        - autovacuum_work_mem=64MB
+        - -c
+        - wal_compression=zstd
+        - -c
+        - default_toast_compression=lz4
+        - -c
+        - max_wal_size=512MB
+        - -c
+        - min_wal_size=80MB
+        - -c
+        - temp_file_limit=1GB
+        - -c
+        - statement_timeout=60s
+        - -c
+        - idle_in_transaction_session_timeout=30s
+        - -c
+        - hba_file=/etc/postgresql/pg_hba.conf
+        - -c
+        - wal_level=replica
+        - -c
+        - max_wal_senders=5
+        - -c
+        - max_replication_slots=5
+        - -c
+        - max_slot_wal_keep_size=1GB
+        - -c
+        - wal_log_hints=on
+        - -c
+        - hot_standby=on
+      env:
+        - name: POSTGRES_USER
+          value: leojr
+        - name: POSTGRES_DB
+          value: userdb
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-env
+              key: DB_PASSWORD
+      resources:
+        limits:
+          cpu: 100m
+          memory: 1Gi
+      livenessProbe:
+        exec:
+          command: ["pg_isready", "-U", "leojr", "-d", "userdb"]
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 5
+      volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: dshm
+          mountPath: /dev/shm
+        - name: schema
+          mountPath: /docker-entrypoint-initdb.d/01-schema.sql
+          readOnly: true
+        - name: hba
+          mountPath: /etc/postgresql/pg_hba.conf
+          readOnly: true
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: db_data
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 256Mi
+    - name: schema
+      hostPath:
+        path: /opt/pg/schema.sql
+        type: File
+    - name: hba
+      hostPath:
+        path: /opt/pg/pg_hba.conf
+        type: File
