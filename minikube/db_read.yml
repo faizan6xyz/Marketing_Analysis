@@ -4,8 +4,7 @@ metadata:                           # Identifying info about this object
   name: db-read-service             # Service name; also its DNS name (no underscores allowed)
   namespace: default                # Namespace the Service is created in
   labels:                           # Labels on the Service itself (for filtering/organizing)
-    app: postgres                   # Marks this Service as belonging to the postgres app
-    role: read                      # Marks it as the read endpoint
+    type: db                        # Marks this Service as belonging to the db type
   annotations:                      # Free-form metadata, not used for selection
     description: "Routes to the standby db for the reads only"   # Human-readable note about its purpose
 spec:                               # Desired behavior of the Service
