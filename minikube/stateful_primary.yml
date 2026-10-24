@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+spec:
+  serviceName: db-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      primary: "true"
+      instance: db
+  template:
+    metadata:
+      labels:
+        instance: db
+        primary: "false"
+    spec:
+      containers:
+        - name: db
+          image: db_image
+          ports:
+            - containerPort: 5432
+          resources:
+            requests: { cpu: "100m", memory: "500Mi" }
+            limits:   { cpu: "500m", memory: "1Gi" }

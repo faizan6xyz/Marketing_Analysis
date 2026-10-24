@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db2
+spec:
+  serviceName: db-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      primary: "false"
+      instance: db2
+  template:
+    metadata:
+      labels:
+        instance: db2
+        primary: "false"
+    spec:
+      containers:
+        - name: db2
+          image: db2_image
+          ports:
+            - containerPort: 5432
+          resources:
+            requests: { cpu: "100m", memory: "300Mi" }
+            limits:   { cpu: "200m", memory: "1Gi" }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db3
+spec:
+  serviceName: db-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      primary: "false"
+      instance: db3
+  template:
+    metadata:
+      labels:
+        instance: db3
+        primary: "false"
+    spec:
+      containers:
+        - name: db2
+          image: db2_image
+          ports:
+            - containerPort: 5432
+          resources:            
+            requests: { cpu: "100m", memory: "300Mi" }
+            limits:   { cpu: "200m", memory: "1Gi" }
