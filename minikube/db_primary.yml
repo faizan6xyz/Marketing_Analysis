@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-primary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      primary: "true"
+  template:
+    metadata:
+      labels:
+        primary: "true"
+    spec:
+      containers:
+        - name: db
+          image: db_image
+          ports:
+            - containerPort: 5432
+          env:
+            - name: ENV
+              value: "production"
+          resources:
+            requests: { cpu: "100m", memory: "500Mi" }
+            limits:   { cpu: "300m", memory: "1Gi" }
