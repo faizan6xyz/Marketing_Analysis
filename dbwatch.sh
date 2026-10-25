@@ -180,8 +180,8 @@ demote_to_standby() {
     fi
     q "$w_host" "CHECKPOINT;" >/dev/null
     log "DEMOTE: stopping $l_container..."
-    # delete the kubernetes pod from here instead of the container  
-    if ! podman kill -t 5 "$l_container" >/dev/null; then
+    # stops the container for making another one only primary
+    if ! podman kill "$l_container" >/dev/null; then
         log "CRIT: failed to stop $l_container"
         return 1
     fi
@@ -189,14 +189,14 @@ demote_to_standby() {
         net_args=(--network "$PODMAN_NETWORK")
     fi
     log "DEMOTE: rewinding $l_host to follow $w_host..."
-    # run the contianer inside the pod with the kuberentes 
-    if ! podman run --rm --user postgres ${net_args[@]+"${net_args[@]}"} -v "$l_volume":/var/lib/postgresql/data "$PG_IMAGE" pg_rewind --target-pgdata=/var/lib/postgresql/data --source-server="host=$w_host port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" --write-recovery-conf --progress; then
+    # checks if its able to resume the stopped container because after the restart its the standby again 
+    if ! podman run --rm --name "$l_container"  --pod "$w_pod" --user postgres ${net_args[@]+"${net_args[@]}"} -v "$l_volume:/var/lib/postgresql/data" "$PG_IMAGE" pg_rewind --target-pgdata=/var/lib/postgresql/data --source-server="host=$w_host port=5432 user=$DB_USER password=$DB_PASSWORD dbname=$DB_NAME" --write-recovery-conf --progress ; then
         log "CRIT: pg_rewind failed, $l_container is left STOPPED"
         log "CRIT: rebuild it by hand, e.g. wipe volume $l_volume and run pg_basebackup -R from $w_host"
         return 1
     fi
     log "DEMOTE: starting $l_container as standby..."
-    # try to start the pod with the container inside with kubernetes
+    # podman resumes the container 
     if ! podman start "$l_container" >/dev/null; then
         log "CRIT: failed to start $l_container"
         return 1
@@ -368,7 +368,6 @@ while true; do
         fi
         DB_LAG=$(q "$DB2_HOST" "SELECT COALESCE(max(pg_wal_lsn_diff(sent_lsn, replay_lsn)), -1)::bigint FROM pg_stat_replication WHERE application_name = 'db' AND state = 'streaming';")
         log "INFO: db2 is PRIMARY, standbys streaming=${STANDBYS:-0} (${NAMES:-none}), max lag=${LAG:-?} bytes, db lag=${DB_LAG:-?} bytes"
-        # instead of the failback coomand we beed to the promote db and demote the db2
         if [ "$AUTO_FAILBACK" = "true" ] && [ "${DB_LAG:--1}" -eq 0 ] && [ -n "$FAILBACK_CMD" ]; then
             log "FAILBACK: db is caught up, running FAILBACK_CMD"
             if $FAILBACK_CMD; then
