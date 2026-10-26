@@ -198,7 +198,6 @@ demote_to_standby() {
     fi
     q "$w_host" "CHECKPOINT;" >/dev/null
     log "DEMOTE: stopping $l_container (clean shutdown, needed by pg_rewind)..."
-    # clean stop, pg_rewind refuses a target that was SIGKILLed
     if ! podman stop -t 60 "$l_container" >/dev/null; then
         log "CRIT: failed to stop $l_container"
         return 1
@@ -207,14 +206,12 @@ demote_to_standby() {
         net_args=(--network "$PODMAN_NETWORK")
     fi
     log "DEMOTE: rewinding $l_host to follow $w_host..."
-    # separate name so it does not clash with the stopped container, password via env so it is not visible in ps
     if ! podman run --rm --name "${l_container}-rewind" --user postgres ${net_args[@]+"${net_args[@]}"} -e PGPASSWORD="$DB_PASSWORD" -v "$l_volume:/var/lib/postgresql/data" "$PG_IMAGE" pg_rewind --target-pgdata=/var/lib/postgresql/data --source-server="host=$w_host port=5432 user=$DB_USER dbname=$DB_NAME" --write-recovery-conf --progress ; then
         log "CRIT: pg_rewind failed, $l_container is left STOPPED"
         log "CRIT: rebuild it by hand, e.g. wipe volume $l_volume and run pg_basebackup -R from $w_host"
         return 1
     fi
     log "DEMOTE: starting $l_container as standby..."
-    # podman resumes the container
     if ! podman start "$l_container" >/dev/null; then
         log "CRIT: failed to start $l_container"
         return 1
@@ -248,12 +245,10 @@ handle_split_brain() {
     log "CRIT: SPLIT-BRAIN - $DB1_HOST AND $DB2_HOST are both PRIMARY ,CRIT: DO NOT write to both databases."
     case "$PRIMARY_DB" in
         "$DB1_HOST")
-            w_host="$DB1_HOST"
-            l_host="$DB2_HOST"; l_container="$DB2_CONTAINER"; l_volume="$DB2_VOLUME"
+            w_host="$DB1_HOST";l_host="$DB2_HOST"; l_container="$DB2_CONTAINER"; l_volume="$DB2_VOLUME"
             ;;
         "$DB2_HOST")
-            w_host="$DB2_HOST"
-            l_host="$DB1_HOST"; l_container="$DB1_CONTAINER"; l_volume="$DB1_VOLUME"
+            w_host="$DB2_HOST";l_host="$DB1_HOST"; l_container="$DB1_CONTAINER"; l_volume="$DB1_VOLUME"
             ;;
         *)
             log "CRIT: last known primary is unknown - refusing to guess which node to demote"
@@ -284,22 +279,17 @@ log "  auto promote = ${AUTO_PROMOTE}, fence = ${AUTO_FENCE}, demote = ${AUTO_DE
 log "  sync repl = ${SYNC_REPL} (standby names: ${SYNC_NAMES})"
 log "  k8s labels = ${K8S_LABELS} (namespace ${K8S_NAMESPACE}, label ${LABEL_KEY}=true|false)"
 while true; do
-    # db_state.yml would be taken and executed using the acces token from the github repo . beacuse it can change it remotely and make it easy to to update and apply as compared to local file  
-    # curl -H "Authorization: token <YOUR_PAT>" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/db_state.yml | kubectl apply -f -
     if ! kubectl get pod "$DB1_POD" >/dev/null 2>&1; then
         echo "db pod missing , Recreating the db "
         curl -H "Authorization: token $ACCESS_TOKEN" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/$DB1_YML | kubectl apply -f -
-        # kubectl apply -f db_state.yml
     fi
     if ! kubectl get pod "$DB2_POD" >/dev/null 2>&1; then
         echo "db2 pod missing , Recreating the db2 "
         curl -H "Authorization: token $ACCESS_TOKEN" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/$DB2_YML | kubectl apply -f -
-        # kubectl apply -f db_state.yml
     fi
     if ! kubectl get pod "$DB3_POD" >/dev/null 2>&1; then
         echo "db3 pod missing , Recreating the db3 "
         curl -H "Authorization: token $ACCESS_TOKEN" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/$DB3_YML | kubectl apply -f -
-        # kubectl apply -f db_state.yml
     fi
     R1=$(role "$DB1_HOST")
     R2=$(role "$DB2_HOST")
@@ -309,15 +299,12 @@ while true; do
         sleep "$INTERVAL"
         continue
     elif [ "$R1" = "primary" ]; then
-        PRIMARY_DB="$DB1_HOST"
-        STANDBY_DB="$DB2_HOST"
+        PRIMARY_DB="$DB1_HOST"STANDBY_DB="$DB2_HOST"
     elif [ "$R2" = "primary" ]; then
-        PRIMARY_DB="$DB2_HOST"
-        STANDBY_DB="$DB1_HOST"
-    else
+        PRIMARY_DB="$DB2_HOST";STANDBY_DB="$DB1_HOST"
+    elif [ -z "$PRIMARY_DB" ]; then
         log "WARN: no primary discovered yet (db=$R1, db2=$R2), waiting"
-        sleep "$INTERVAL"
-        continue
+        sleep "$INTERVAL"; continue
     fi
     health_pm=$(role "$PRIMARY_DB")
     health_st=$(role "$STANDBY_DB")
@@ -338,10 +325,7 @@ while true; do
                 fi
                 log "FAILOVER: promoting $STANDBY_DB..."
                 if promote_node "$STANDBY_DB"; then
-                    old_primary="$PRIMARY_DB"
-                    new_primary="$STANDBY_DB"
-                    PRIMARY_DB="$new_primary"
-                    STANDBY_DB="$old_primary"
+                    old_primary="$PRIMARY_DB";new_primary="$STANDBY_DB";PRIMARY_DB="$new_primary";STANDBY_DB="$old_primary"
                     set_sync "$PRIMARY_DB" off
                     set_label "$STANDBY_DB" off
                     set_label "$DB3_HOST" off
