@@ -54,7 +54,7 @@ role() {
         echo "down"
         return
     fi
-    if ! pg_isready -q -h "$host" -U "$DB_USER" -d "$DB_NAME"; then
+    if ! pg_isready -q -t 3 -h "$host" -U "$DB_USER" -d "$DB_NAME"; then
         echo "down"
         return
     fi
@@ -147,7 +147,7 @@ promote_node() {
     local host="$1"
     local result i
     log "PROMOTE: requesting promotion of $host..."
-    result=$(psql -X -h "$host" -U "$DB_USER" -d "$DB_NAME" -Atc "SELECT pg_promote();" 2>&1)
+    result=$(psql -X -w -h "$host" -U "$DB_USER" -d "$DB_NAME" -Atc "SELECT pg_promote();" 2>&1)
     if [ "$result" != "t" ]; then
         log "CRIT: pg_promote() on $host did not succeed"
         log "DETAIL: $result"
@@ -294,7 +294,7 @@ while true; do
         PRIMARY_DB="$DB1_HOST";STANDBY_DB="$DB2_HOST"
     elif [ "$R2" = "primary" ]; then
         PRIMARY_DB="$DB2_HOST";STANDBY_DB="$DB1_HOST"
-    # elif in case the PRIMARY_DB variable is empty , btw it wouldn't happen because after the restart the variable will be given be the secrects in which PRIMARY_DB will be defined  
+    # elif in case the PRIMARY_DB variable is empty , btw it wouldn't happen because after the restart the variable will be given be the secrects in which PRIMARY_DB will be defined  . in simple this elif is prepared for the fault  which wouldn't happen
     elif [ -z "$PRIMARY_DB" ]; then
         log "WARN: no primary discovered yet (db=$R1, db2=$R2), waiting"
         if [ "$R1" != "down" ] && [ "$R2" != "down" ]; then
