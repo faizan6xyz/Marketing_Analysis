@@ -143,8 +143,8 @@ set_pod_label() {
 }
 set_label() {
     local host="$1" want="$2"
-#     set_pg_marker "$host" "$want"
-#     set_pod_label "$host" "$want"
+    set_pg_marker "$host" "$want"
+    set_pod_label "$host" "$want"
     return 0
 }
 promote_node() {
@@ -298,8 +298,13 @@ while true; do
     if [ -n "$PRIMARY_DB" ] && [ -z "$STANDBY_DB" ]; then
         if [ "$PRIMARY_DB" = "$DB1_HOST" ]; then STANDBY_DB="$DB2_HOST"; else STANDBY_DB="$DB1_HOST"; fi
     fi
-    if [ -z "$PRIMARY_DB" ] || [ -z "$STANDBY_DB" ]; then
+    if [ -z "$PRIMARY_DB" ]; then
         log "WARN: no primary discovered yet (db=$R1, db2=$R2), waiting"
+        sleep "$INTERVAL"
+        continue
+    fi
+    if [ -z "$STANDBY_DB" ]; then
+        log "WARN: no recovery standby discovered yet (primary=$PRIMARY_DB)"
         sleep "$INTERVAL"
         continue
     fi
