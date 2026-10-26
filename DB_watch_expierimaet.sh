@@ -67,12 +67,6 @@ role() {
         *) echo "unknown" ;;
     esac
 }
-standby_name() {
-    local name
-    name=$(q "$1" "SELECT application_name FROM pg_stat_replication WHERE state = 'streaming' ORDER BY application_name LIMIT 1;")
-    [ -n "$name" ] || return 1
-    echo "$name"
-}
 repl_info() {
     local row
     row=$(q "$1" "SELECT count(*), COALESCE(max(pg_wal_lsn_diff(sent_lsn, replay_lsn)), 0)::bigint  FROM pg_stat_replication;")
