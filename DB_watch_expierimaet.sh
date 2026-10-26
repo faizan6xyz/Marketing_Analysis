@@ -33,6 +33,10 @@ LABEL_KEY="${LABEL_KEY:-primary}"           # pod label key (value is true / fal
 DB1_POD="${DB1_POD:-$DB1_HOST}"             # pod names, if they differ from the host names
 DB2_POD="${DB2_POD:-$DB2_HOST}"
 DB3_POD="${DB3_POD:-$DB3_HOST}"
+DB1_YML="${DB1_YML:-}"
+DB2_YML="${DB2_YML:-}"
+DB3_YML="${DB3_YML:-}"
+ACCESS_TOKEN="${ACCESS_TOKEN:-}"
 exec 9>/tmp/ha-controller.lock
 if ! flock -n 9; then
     echo "$(date '+%F %T') CRIT: another ha-controller instance is already running"
@@ -280,17 +284,22 @@ log "  auto promote = ${AUTO_PROMOTE}, fence = ${AUTO_FENCE}, demote = ${AUTO_DE
 log "  sync repl = ${SYNC_REPL} (standby names: ${SYNC_NAMES})"
 log "  k8s labels = ${K8S_LABELS} (namespace ${K8S_NAMESPACE}, label ${LABEL_KEY}=true|false)"
 while true; do
+    # db_state.yml would be taken and executed using the acces token from the github repo . beacuse it can change it remotely and make it easy to to update and apply as compared to local file  
+    # curl -H "Authorization: token <YOUR_PAT>" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/db_state.yml | kubectl apply -f -
     if ! kubectl get pod "$DB1_POD" >/dev/null 2>&1; then
-        echo "db pod missing , Recreating the pod for the db "
-        kubectl apply -f db_state.yml
+        echo "db pod missing , Recreating the db "
+        curl -H "Authorization: token $ACCESS_TOKEN" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/$DB1_YML | kubectl apply -f -
+        # kubectl apply -f db_state.yml
     fi
     if ! kubectl get pod "$DB2_POD" >/dev/null 2>&1; then
-        echo "db2 pod missing , Recreating the pod for the db2 "
-        kubectl apply -f db_state.yml
+        echo "db2 pod missing , Recreating the db2 "
+        curl -H "Authorization: token $ACCESS_TOKEN" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/$DB2_YML | kubectl apply -f -
+        # kubectl apply -f db_state.yml
     fi
     if ! kubectl get pod "$DB3_POD" >/dev/null 2>&1; then
-        echo "db3 pod missing , Recreating the pod for the db3 "
-        kubectl apply -f db_state.yml
+        echo "db3 pod missing , Recreating the db3 "
+        curl -H "Authorization: token $ACCESS_TOKEN" -fsSL https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube/$DB3_YML | kubectl apply -f -
+        # kubectl apply -f db_state.yml
     fi
     R1=$(role "$DB1_HOST")
     R2=$(role "$DB2_HOST")

@@ -74,7 +74,7 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
-        sleep 8
+        sleep 5
         if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
           echo "Empty data dir, cloning from db..."
           pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db2_slot -P \
@@ -140,7 +140,7 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
-        sleep 8
+        sleep 5
         if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
           echo "Empty data dir, cloning from db..."
           pg_basebackup -h db -U leojr -D /var/lib/postgresql/data -R -X stream -C -S db3_slot -P \
@@ -195,13 +195,17 @@ services:
     entrypoint: ["/bin/bash", "/dbwatch.sh"]
     cpus: "0.1"
     mem_limit: 50m
+    command:
+      - |
+        sleep 5
+        apt-get update && apt-get install -y curl
     environment:
       DB_PASSWORD: ${DB_PASSWORD}
-      CHECK_INTERVAL: "10"
-      FAIL_THRESHOLD: "3"
-      AUTO_PROMOTE: "false"
-      AUTO_FENCE: "false"
-      AUTO_DEMOTE: "false"
+      CHECK_INTERVAL: "2"
+      FAIL_THRESHOLD: "2"
+      AUTO_PROMOTE: "true"
+      AUTO_FENCE: "true"
+      AUTO_DEMOTE: "true"
     volumes:
       - ./dbwatch.sh:/dbwatch.sh:ro
     depends_on:
@@ -235,25 +239,9 @@ services:
     command: ["./start.sh"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
+      interval: 10s
       timeout: 5s
       retries: 2
-
-# Internet → nginx (container, port 80) → backend1 / backend2 / backend3 / backend4
-
-  # nginx:
-  #   image: docker.io/library/nginx:alpine
-  #   container_name: nginx_lb
-  #   ports:
-  #     - "80:80"
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
-  #   depends_on:
-  #     - backend1
-  #     - backend2
-  #     - backend3
-  #     - backend4
-  #   restart: unless-stopped 
 
 volumes:
   app_data1:
