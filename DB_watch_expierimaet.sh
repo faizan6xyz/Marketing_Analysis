@@ -280,6 +280,18 @@ log "  auto promote = ${AUTO_PROMOTE}, fence = ${AUTO_FENCE}, demote = ${AUTO_DE
 log "  sync repl = ${SYNC_REPL} (standby names: ${SYNC_NAMES})"
 log "  k8s labels = ${K8S_LABELS} (namespace ${K8S_NAMESPACE}, label ${LABEL_KEY}=true|false)"
 while true; do
+    if ! kubectl get pod "$DB1_POD" >/dev/null 2>&1; then
+        echo "db pod missing , Recreating the pod for the db "
+        kubectl apply -f db_state.yml
+    fi
+    if ! kubectl get pod "$DB2_POD" >/dev/null 2>&1; then
+        echo "db2 pod missing , Recreating the pod for the db2 "
+        kubectl apply -f db_state.yml
+    fi
+    if ! kubectl get pod "$DB3_POD" >/dev/null 2>&1; then
+        echo "db3 pod missing , Recreating the pod for the db3 "
+        kubectl apply -f db_state.yml
+    fi
     R1=$(role "$DB1_HOST")
     R2=$(role "$DB2_HOST")
     R3=$(role "$DB3_HOST")
@@ -293,18 +305,8 @@ while true; do
     elif [ "$R2" = "primary" ]; then
         PRIMARY_DB="$DB2_HOST"
         STANDBY_DB="$DB1_HOST"
-    fi
-    # primary known from env but standby not yet derived
-    if [ -n "$PRIMARY_DB" ] && [ -z "$STANDBY_DB" ]; then
-        if [ "$PRIMARY_DB" = "$DB1_HOST" ]; then STANDBY_DB="$DB2_HOST"; else STANDBY_DB="$DB1_HOST"; fi
-    fi
-    if [ -z "$PRIMARY_DB" ]; then
+    else
         log "WARN: no primary discovered yet (db=$R1, db2=$R2), waiting"
-        sleep "$INTERVAL"
-        continue
-    fi
-    if [ -z "$STANDBY_DB" ]; then
-        log "WARN: no recovery standby discovered yet (primary=$PRIMARY_DB)"
         sleep "$INTERVAL"
         continue
     fi
@@ -374,3 +376,6 @@ while true; do
     fi
     sleep "$INTERVAL"
 done
+
+
+# neet to add the fallback if someone accidently deleted the pod or any of the db 
