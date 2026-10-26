@@ -17,13 +17,11 @@ DB_USER="${DB_USER:-leojr}"
 DB_NAME="${DB_NAME:-userdb}"
 PRIMARY_DB="${PRIMARY_DB:-}"
 STANDBY_DB="${STANDBY_DB:-}"
-INTERVAL="${CHECK_INTERVAL:-1}"
+INTERVAL="${CHECK_INTERVAL:-4}"
 FAIL_THRESHOLD="${FAIL_THRESHOLD:-2}"
 AUTO_PROMOTE="${AUTO_PROMOTE:-true}"
 AUTO_FENCE="${AUTO_FENCE:-true}"
 AUTO_DEMOTE="${AUTO_DEMOTE:-true}"
-AUTO_FAILBACK="${AUTO_FAILBACK:-true}"
-FAILBACK_CMD="${FAILBACK_CMD:-}"
 SYNC_REPL="${SYNC_REPL:-true}"
 SYNC_NAMES="${SYNC_NAMES:-*}"
 REPOINT_STANDBYS="${REPOINT_STANDBYS:-false}"   # after failover, repoint the other standby's primary_conninfo to the new primary
@@ -293,12 +291,19 @@ while true; do
         sleep "$INTERVAL"
         continue
     elif [ "$R1" = "primary" ]; then
-        PRIMARY_DB="$DB1_HOST"STANDBY_DB="$DB2_HOST"
+        PRIMARY_DB="$DB1_HOST";STANDBY_DB="$DB2_HOST"
     elif [ "$R2" = "primary" ]; then
         PRIMARY_DB="$DB2_HOST";STANDBY_DB="$DB1_HOST"
+    # elif in case the PRIMARY_DB variable is empty , btw it wouldn't happen because after the restart the variable will be given be the secrects in which PRIMARY_DB will be defined  
     elif [ -z "$PRIMARY_DB" ]; then
         log "WARN: no primary discovered yet (db=$R1, db2=$R2), waiting"
-        sleep "$INTERVAL"; continue
+        if [ "$R1" != "down" ] && [ "$R2" != "down" ]; then
+            PRIMARY_DB="$DB1_HOST";STANDBY_DB="$DB2_HOST"
+        elif [ "$R1" = "down" ]; then
+            PRIMARY_DB="$DB2_HOST";STANDBY_DB="$DB1_HOST"
+        elif [ "$R2" = "down" ]; then
+            PRIMARY_DB="$DB1_HOST";STANDBY_DB="$DB2_HOST"
+        fi
     fi
     health_pm=$(role "$PRIMARY_DB")
     health_st=$(role "$STANDBY_DB")
