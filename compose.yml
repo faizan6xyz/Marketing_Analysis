@@ -2,8 +2,8 @@ name: myapp
 
 networks:
   dbnet:
-    # driver: bridge   # tellls to create one
-    external: true # tells that the network already exists so no confilicts 
+    driver: bridge   # tellls to create one
+    # external: true # tells that the network already exists so no confilicts 
     dns_enabled: true # Podman runs a small DNS server for it (aardvark-dns). Its address is the network gateway (10.89.0.1).
 
 services:
@@ -192,7 +192,7 @@ services:
   dbwatch:
     image: docker.io/library/postgres:16
     container_name: db_watch
-    entrypoint: ["/bin/bash", "/dbwatch.sh"]
+    entrypoint: ["/bin/bash", "./dbb.sh"]
     cpus: "0.1"
     mem_limit: 50m
     command:
@@ -207,7 +207,7 @@ services:
       AUTO_FENCE: "true"
       AUTO_DEMOTE: "true"
     volumes:
-      - ./dbwatch.sh:/dbwatch.sh:ro
+      - ./dbb.sh:/dbb.sh:ro
     depends_on:
       - db
       - db2

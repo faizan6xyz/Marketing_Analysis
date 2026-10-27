@@ -254,6 +254,7 @@ fence_node() {
     local host="$1"
     grep -qx "$host" "$FENCED_FILE" 2>/dev/null || echo "$host" >> "$FENCED_FILE"
     set_pod_label "$host" off
+    # make a fence for the write queries so it just only accept the read queries only , none of the write queries 
     if q "$host" "ALTER SYSTEM SET default_transaction_read_only = on;" >/dev/null \
        && q "$host" "SELECT pg_reload_conf();" >/dev/null; then
         log "FENCE: $host set to read-only"
@@ -265,6 +266,7 @@ fence_node() {
 }
 unfence_node() {
     local host="$1"
+    # remove a fence for the write queries so it accept the read and write queries 
     q "$host" "ALTER SYSTEM RESET default_transaction_read_only;" >/dev/null
     q "$host" "SELECT pg_reload_conf();" >/dev/null
     sed -i "/^${host}\$/d" "$FENCED_FILE" 2>/dev/null
