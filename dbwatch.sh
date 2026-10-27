@@ -25,10 +25,11 @@ LABEL_KEY="${LABEL_KEY:-primary}"           # pod label key (value is true / fal
 DB1_POD="${DB1_POD:-$DB1_HOST}"             # pod names, if they differ from the host names
 DB2_POD="${DB2_POD:-$DB2_HOST}"
 DB3_POD="${DB3_POD:-$DB3_HOST}"
-DB1_YML="${DB1_YML:-}"                      # manifest file names, relative to MANIFEST_DIR
+DB1_YML="${DB1_YML:-}"                      # manifest file names, which are in the github repo
 DB2_YML="${DB2_YML:-}"
 DB3_YML="${DB3_YML:-}"
-MANIFEST_DIR="${MANIFEST_DIR:-/etc/ha/manifests}"
+MANIFEST_BASE="${MANIFEST_BASE:-https://raw.githubusercontent.com/faizan6xyz/Marketing_Analysis/main/minikube}"  # pin to a commit SHA
+ACCESS_TOKEN="${ACCESS_TOKEN:-}"
 RECREATE_COOLDOWN="${RECREATE_COOLDOWN:-30}"
 REWIND_MARKER="${REWIND_MARKER:-/var/lib/postgresql/data/.rewind_from}"  # file the initContainer reads to know who to rewind from
 STATE_DIR="${STATE_DIR:-/var/lib/ha-controller}"
@@ -168,12 +169,11 @@ k8s_enabled() {
     return 0
 }
 reconcile_pod() {
-    local host="$1" pod yml out now
+    local host="$1" pod yml out now tmp
     k8s_enabled || return 0
     pod=$(pod_of "$host")
     yml=$(yml_of "$host")
     [ -n "$yml" ] || return 0
-    [ -f "$MANIFEST_DIR/$yml" ] || return 0
     out=$(kubectl -n "$K8S_NAMESPACE" get pod "$pod" -o name 2>&1) && return 0
     case "$out" in
         *NotFound*) ;;
@@ -184,13 +184,18 @@ reconcile_pod() {
         return 0
     fi
     LAST_RECREATE[$pod]=$now
-    log "WARN: pod $pod is missing, re-applying $MANIFEST_DIR/$yml"
-    if kubectl -n "$K8S_NAMESPACE" apply -f "$MANIFEST_DIR/$yml" >/dev/null 2>&1; then
-        # never let a recreated pod take traffic until its role is known
-        kubectl -n "$K8S_NAMESPACE" label pod "$pod" "${LABEL_KEY}=false" --overwrite >/dev/null 2>&1
+    log "WARN: pod $pod is missing, pulling $yml from GitHub and applying"
+    tmp=$(mktemp) || { log "WARN: mktemp failed for $pod"; return 0; }
+    if printf 'header = "Authorization: token %s"\n' "$ACCESS_TOKEN" | curl -K - -fsSL --retry 3 --retry-delay 2 --max-time 30 -o "$tmp" "$MANIFEST_BASE/$yml" && [ -s "$tmp" ]; then
+        if kubectl -n "$K8S_NAMESPACE" apply -f "$tmp" >/dev/null 2>&1; then
+            kubectl -n "$K8S_NAMESPACE" label pod "$pod" "${LABEL_KEY}=false" --overwrite >/dev/null 2>&1
+        else
+            log "WARN: kubectl apply failed for $pod"
+        fi
     else
-        log "WARN: kubectl apply failed for $pod"
+        log "WARN: failed to fetch $yml from GitHub for $pod"
     fi
+    rm -f "$tmp"
     return 0
 }
 set_pg_marker() {
