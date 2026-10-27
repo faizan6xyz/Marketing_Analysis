@@ -1,6 +1,7 @@
 apiVersion: apps/v1                # API group/version for Deployment objects
 kind: Deployment                   # manages a set of identical pods and rolling updates
 metadata:                          # identifying info for this object
+  namespace: Leo_social
   name: backend                    # name of the Deployment in the namespace
 spec:                              # desired state of the Deployment
   selector:                        # how the Deployment finds the pods it owns

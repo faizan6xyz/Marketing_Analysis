@@ -1,19 +1,19 @@
-  apiVersion: v1                      # API version; Service lives in the core "v1" group
-  kind: Service                       # Type of Kubernetes object being created
-  metadata:                           # Identifying info about this object
-    name: db-write-service            # Service name; also its DNS name (no underscores allowed)
-    namespace: default                # Namespace the Service is created in
-    labels:                           # Labels on the Service itself (for filtering/organizing)
-      type: db                        # Marks this Service as belonging to the db type
-    annotations:                      # Free-form metadata, not used for selection
-      description: "Routes to the current primary only"   # Human-readable note about its purpose
-  spec:                               # Desired behavior of the Service
-    type: ClusterIP                   # Internal-only virtual IP, reachable only inside the cluster
-    selector:                         # Which pods receive this Service's traffic
-      app: postgres                   # Only pods labeled app=postgres...
-      primary: "true"                 # ...and primary=true (label values must be strings, so quoted)
-    ports:                            # List of ports the Service exposes
-      - name: postgres                # Port name (helpful for readability and multi-port Services)
-        port: 5432                   # Port clients use when connecting to the Service
-        targetPort: 5432              # Port on the pod that traffic is forwarded to
-        protocol: TCP                 # Transport protocol (TCP is the default)
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-write-service
+  namespace: Leo_social
+  labels:
+    type: db
+  annotations:
+    description: "Routes to the current primary only"
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    primary: "true"
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP

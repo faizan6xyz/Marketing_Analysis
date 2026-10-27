@@ -4,7 +4,6 @@ networks:
   dbnet:
     driver: bridge   # tellls to create one
     # external: true # tells that the network already exists so no confilicts 
-    dns_enabled: true # Podman runs a small DNS server for it (aardvark-dns). Its address is the network gateway (10.89.0.1).
 
 services:
   db:
@@ -215,7 +214,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: shi
+    image: ghcr.io/faizan6xyz/shi
     user: appuser
     container_name: backend
     cpus: "0.2"
