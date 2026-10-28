@@ -1,7 +1,7 @@
 apiVersion: apps/v1                # API group/version for Deployment objects
 kind: Deployment                   # manages a set of identical pods and rolling updates
 metadata:                          # identifying info for this object
-  namespace: Leo_social
+  namespace: leo-social
   name: backend                    # name of the Deployment in the namespace
 spec:                              # desired state of the Deployment
   selector:                        # how the Deployment finds the pods it owns
@@ -16,10 +16,12 @@ spec:                              # desired state of the Deployment
         runAsNonRoot: true         # refuses to start if the container would run as root
         runAsUser: 1000            # run the container process as UID 1000
         fsGroup: 1000              # group ID given ownership of mounted volumes so the process can access them
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:                  # list of containers in the pod
         - name: backend-container  # container name, used in logs and kubectl exec
-          image: apptest1          # image to run (use a full registry path for remote images)
-          imagePullPolicy: IfNotPresent # only pull the image if it isn't already on the node
+          image: ghcr.io/faizan6xyz/shi:latest # image to run (use a full registry path for remote images)
+          imagePullPolicy: Always # only pull the image if it isn't already on the node
           envFrom:                 # bulk-load env vars from other objects
             - secretRef:           # load env vars from a Secret
                 name: envshit      # Secret name; every key becomes an env var (sensitive data)

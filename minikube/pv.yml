@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  namespace: myapp
+  namespace: leo-social
   name: myapp-pv
 spec:
   capacity:
