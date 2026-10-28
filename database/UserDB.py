@@ -14,8 +14,8 @@ import authnew as au
 import secrets
 load_dotenv()
 SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
-pool_write = ThreadedConnectionPool( 1, 5, host=os.environ.get("DB_HOST_write", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
-pool_read = ThreadedConnectionPool( 1, 5, host=os.environ.get("DB_HOST_read", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="prefer-standby",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
+pool_write = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST_write", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
+pool_read = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST_read", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="prefer-standby",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
 ALLOWED_TABLES = { "drive", "gmail", "instagram", "paypal", "paypal_verify", "pinterest", "razorpay", "razorpay_verify", "threads", "whatsapp", "x", "youtube", "users",}
 _SIMPLE_OPS = { "eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=","like": "LIKE", "ilike": "ILIKE", "contains": "@>",}
 
