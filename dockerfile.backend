@@ -18,4 +18,4 @@ RUN chown -R root:project_m /app
 RUN chmod -R g+rX /app 
 RUN chmod +x /app/start.sh
 USER appuser
-cmd ["./start.sh"]
+CMD ["./start.sh"]

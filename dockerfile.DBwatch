@@ -1,0 +1,7 @@
+FROM alpine:3.20
+RUN apk add --no-cache bash curl postgresql16-client tzdata
+COPY dbb.sh /dbb.sh
+RUN chmod +x /dbb.sh
+ENTRYPOINT ["/bin/bash", "/dbb.sh"]
+
+# db_watch doesn’t need the Postgres image for the watcher itself, but it needs the psql/pg_isready/pg_ctl-style tools your dbb.sh almost certainly calls. The Postgres image is just a convenient way to get them.
