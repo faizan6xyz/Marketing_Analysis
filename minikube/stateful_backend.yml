@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: backend
+  namespace: leo-social
+spec:
+  serviceName: backend-headless      # must match the headless service
+  # replicas omitted on purpose: the HPA owns it
+  podManagementPolicy: Parallel      # don't wait for pod N before starting N+1
+  updateStrategy:
+    type: RollingUpdate
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000                # makes the PVC writable by uid 1000
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: backend-container
+          image: ghcr.io/faizan6xyz/shi:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: envshit
+            - configMapRef:
+                name: configshit
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000             # fixed: was 500
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 400Mi
+            limits:
+              cpu: 250m
+              memory: 600Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data   # change to wherever your app writes
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # storageClassName: <your-class>   # omit to use the cluster default
+        resources:
+          requests:
+            storage: 1Gi

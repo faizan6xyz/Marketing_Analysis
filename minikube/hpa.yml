@@ -6,40 +6,40 @@ metadata:
   labels:
     app: backend
 spec:
-  scaleTargetRef:                    # workload this HPA controls
+  scaleTargetRef:
     apiVersion: apps/v1
-    kind: Deployment
-    name: backend                    # must match the Deployment name
-  minReplicas: 4                     # never scale below 3 pods
-  maxReplicas: 10                    # never scale above 10 pods
-  metrics:                           # highest desired replica count across metrics wins
+    kind: StatefulSet                # changed from Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
     - type: Resource
       resource:
         name: cpu
         target:
-          type: Utilization          # % of CPU request (100m)
-          averageUtilization: 70     # scale up when avg CPU > 70m per pod
+          type: Utilization
+          averageUtilization: 70     # 70% of the 100m request
     - type: Resource
       resource:
         name: memory
         target:
-          type: AverageValue         # absolute value per pod
-          averageValue: 300Mi        # fixed: 200Mi was only 50% of the 400Mi request
+          type: AverageValue
+          averageValue: 300Mi
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 0  # scale up immediately
-      selectPolicy: Max              # pick the policy that adds the most pods
+      stabilizationWindowSeconds: 2
+      selectPolicy: Max
       policies:
         - type: Percent
-          value: 100                 # add up to 100% of current pods...
-          periodSeconds: 60          # ...per 60 seconds
+          value: 100
+          periodSeconds: 60
         - type: Pods
-          value: 2                   # or add up to 2 pods...
-          periodSeconds: 60          # ...per 60 seconds
+          value: 2
+          periodSeconds: 60
     scaleDown:
-      stabilizationWindowSeconds: 300  # wait 5 min of low load before scaling down
-      selectPolicy: Min              # pick the policy that removes the fewest pods
+      stabilizationWindowSeconds: 300
+      selectPolicy: Min
       policies:
-        - type: Pods                 # fixed: missing space before "#" broke the YAML
-          value: 1                   # remove at most 1 pod...
-          periodSeconds: 60          # ...per 60 seconds
+        - type: Pods
+          value: 1
+          periodSeconds: 60
