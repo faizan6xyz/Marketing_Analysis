@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: leo-social
+spec:
+  selector:
+    matchLabels:
+      app: controller
+  template:
+    metadata:
+      labels:
+        app: controller
+    spec:
+      containers:
+        - name: db_watch
+          image: ghcr.io/faizan6xyz/db_watch:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "50Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          ports:
+          - containerPort: 6000
