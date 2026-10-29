@@ -2,10 +2,10 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   namespace: leo-social
-  name: myapp-pv
+  name: server-volume
 spec:
   capacity:
-    storage: 10Gi
+    storage: 180Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain

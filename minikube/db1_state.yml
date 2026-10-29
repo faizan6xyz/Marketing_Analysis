@@ -1,3 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: leo-social
+  name: db-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -109,6 +121,9 @@ spec:
               mountPath: /etc/postgresql/pg_hba.conf
               readOnly: true
       volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: db-data
         - name: dshm
           emptyDir:
             medium: Memory
