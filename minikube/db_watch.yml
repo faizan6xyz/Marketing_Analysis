@@ -4,6 +4,9 @@ metadata:
   name: controller
   namespace: leo-social
 spec:
+  replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: controller
@@ -12,12 +15,16 @@ spec:
       labels:
         app: controller
     spec:
+      serviceAccountName: db-controller
       imagePullSecrets:
         - name: ghcr-secret
       containers:
-        - name: db_watch
+        - name: db-watch
           image: ghcr.io/faizan6xyz/db_watch:latest
           imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: env-shit
           resources:
             requests:
               memory: "50Mi"
@@ -26,7 +33,10 @@ spec:
               memory: "128Mi"
               cpu: "500m"
           ports:
-          - containerPort: 6000
+            - containerPort: 6000
           volumeMounts:
             - name: data
               mountPath: /app/data
+      volumes:
+        - name: data
+          emptyDir: {}
