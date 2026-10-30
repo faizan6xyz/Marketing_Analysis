@@ -115,7 +115,7 @@ def upload_path_to_drive(service, file_path, filename, mimetype):
         return None, str(e)
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/auth/drivecallback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/drive/auth/drivecallback",)
+    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/drive/auth/drivecallback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/drive/auth/drivecallback",)
 
 def get_drive_service(user_id):
     tokens = load_tokens(user_id)
