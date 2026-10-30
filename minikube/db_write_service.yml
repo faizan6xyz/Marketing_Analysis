@@ -17,3 +17,34 @@ spec:
       port: 5432
       targetPort: 5432
       protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: write-allow-backend-only
+  namespace: leo-social
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+      primary: "true"
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # Only pods labeled app=backend in the SAME namespace
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 5432        
+
+        # if the pod is from the different namespace
+    # - from:
+    #    - namespaceSelector:
+    #        matchLabels:
+    #          kubernetes.io/metadata.name: backend-ns
+    #      podSelector:
+    #        matchLabels:
+    #          app: backend
