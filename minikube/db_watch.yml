@@ -12,6 +12,8 @@ spec:
       labels:
         app: controller
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: db_watch
           image: ghcr.io/faizan6xyz/db_watch:latest
@@ -25,3 +27,6 @@ spec:
               cpu: "500m"
           ports:
           - containerPort: 6000
+          volumeMounts:
+            - name: data
+              mountPath: /app/data

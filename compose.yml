@@ -189,7 +189,7 @@ services:
     restart: unless-stopped
  
   dbwatch:
-    image: docker.io/library/postgres:16
+    image: ghcr.io/faizan6xyz/db_watch:latest
     container_name: db_watch
     entrypoint: ["/bin/bash", "./dbb.sh"]
     cpus: "0.1"
@@ -214,7 +214,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: ghcr.io/faizan6xyz/shi
+    image: ghcr.io/faizan6xyz/shi:latest
     user: appuser
     container_name: backend
     cpus: "0.2"
@@ -232,10 +232,98 @@ services:
         condition: service_started
       db2:
         condition: service_started
-      db3 :
+      db3:
         condition: service_started
     restart: unless-stopped
-    command: ["./start.sh"]
+    command: ["sh", "-c", "sleep 8 && exec ./start.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+
+  backend1:
+    image: ghcr.io/faizan6xyz/shi:latest
+    user: appuser
+    container_name: backend1
+    cpus: "0.2"
+    mem_limit: 500m
+    ports:
+      - "5100-5115:5000-5015"
+    env_file:
+      - .env
+    networks:
+      - dbnet
+    volumes:
+      - app_data2:/data
+    depends_on:
+      db:
+        condition: service_started
+      db2:
+        condition: service_started
+      db3:
+        condition: service_started
+    restart: unless-stopped
+    command: ["sh", "-c", "sleep 8 && exec ./start.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  backend2:
+    image: ghcr.io/faizan6xyz/shi:latest
+    user: appuser
+    container_name: backend2
+    cpus: "0.2"
+    mem_limit: 500m
+    ports:  
+      - "5200-5215:5000-5015"
+    env_file:
+      - .env
+    networks:
+      - dbnet
+    volumes:
+      - app_data3:/data
+    depends_on:
+      db:
+        condition: service_started
+      db2:
+        condition: service_started
+      db3:
+        condition: service_started
+    restart: unless-stopped
+    command: ["sh", "-c", "sleep 8 && exec ./start.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+
+  backend3:
+    image: ghcr.io/faizan6xyz/shi:latest
+    user: appuser
+    container_name: backend3
+    cpus: "0.2"
+    mem_limit: 500m
+    ports:  
+      - "5300-5315:5000-5015"
+    env_file:
+      - .env
+    networks:
+      - dbnet
+    volumes:
+      - app_data4:/data
+    depends_on:
+      db:
+        condition: service_started
+      db2:
+        condition: service_started
+      db3:
+        condition: service_started
+    restart: unless-stopped
+    command: ["sh", "-c", "sleep 8 && exec ./start.sh"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 10s
@@ -243,7 +331,10 @@ services:
       retries: 2
 
 volumes:
+  app_data2:
   app_data1:
+  app_data3:
+  app_data4:
   db_data:
   db2_data:
   db3_data:

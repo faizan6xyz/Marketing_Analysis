@@ -1,4 +1,4 @@
-# Headless service: gives each pod a stable DNS name (backend-0.backend-headless...)
+# gives each pod a stable DNS name . backend-headless — lets you address individual backend Pods using stable DNS names.
 apiVersion: v1
 kind: Service
 metadata:
@@ -15,7 +15,7 @@ spec:
       port: 5000
       targetPort: 5000
 ---
-# Regular service: load-balanced entry point for clients
+# load-balanced entry point for clients . backend-service — gives clients one DNS name and distributes requests across the backend Pods.
 apiVersion: v1
 kind: Service
 metadata:
