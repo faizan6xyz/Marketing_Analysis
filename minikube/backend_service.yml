@@ -11,9 +11,54 @@ spec:
   selector:
     app: backend
   ports:
-    - name: http
+    - name: http-main
       port: 5000
       targetPort: 5000
+    - name: http-campaign
+      port: 5001
+      targetPort: 5001
+    - name: http-youtube
+      port: 5002
+      targetPort: 5002
+    - name: http-x
+      port: 5003
+      targetPort: 5003
+    - name: http-whatsapp
+      port: 5004
+      targetPort: 5004
+    - name: http-threads
+      port: 5005
+      targetPort: 5005
+    - name: http-thr-hook
+      port: 5006
+      targetPort: 5006
+    - name: http-razorpay
+      port: 5007
+      targetPort: 5007
+    - name: http-pinterest
+      port: 5008
+      targetPort: 5008
+    - name: http-paypal
+      port: 5009
+      targetPort: 5009
+    - name: http-instagram
+      port: 5010
+      targetPort: 5010
+    - name: http-ig-hook
+      port: 5011
+      targetPort: 5011
+    - name: http-gmail
+      port: 5012
+      targetPort: 5012
+    - name: http-drive
+      port: 5013
+      targetPort: 5013
+    - name: http-gmail-hook
+      port: 5014
+      targetPort: 5014
+    - name: http-wa-hook
+      port: 5015
+      targetPort: 5015
 ---
 # load-balanced entry point for clients . backend-service — gives clients one DNS name and distributes requests across the backend Pods.
 apiVersion: v1
@@ -26,9 +71,69 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: backend
+    app: backend  
   ports:
-    - name: http
+    - name: http-main
       port: 5000
       targetPort: 5000
+      protocol: TCP
+    - name: http-campaign
+      port: 5001
+      targetPort: 5001
+      protocol: TCP
+    - name: http-youtube
+      port: 5002
+      targetPort: 5002
+      protocol: TCP
+    - name: http-x
+      port: 5003
+      targetPort: 5003
+      protocol: TCP
+    - name: http-whatsapp
+      port: 5004
+      targetPort: 5004
+      protocol: TCP
+    - name: http-threads
+      port: 5005
+      targetPort: 5005
+      protocol: TCP
+    - name: http-thr-hook
+      port: 5006
+      targetPort: 5006
+      protocol: TCP
+    - name: http-razorpay
+      port: 5007
+      targetPort: 5007
+      protocol: TCP
+    - name: http-pinterest
+      port: 5008
+      targetPort: 5008
+      protocol: TCP
+    - name: http-paypal
+      port: 5009
+      targetPort: 5009
+      protocol: TCP
+    - name: http-instagram
+      port: 5010
+      targetPort: 5010
+      protocol: TCP
+    - name: http-ig-hook
+      port: 5011
+      targetPort: 5011
+      protocol: TCP
+    - name: http-gmail
+      port: 5012
+      targetPort: 5012
+      protocol: TCP
+    - name: http-drive
+      port: 5013
+      targetPort: 5013
+      protocol: TCP
+    - name: http-gmail-hook
+      port: 5014
+      targetPort: 5014
+      protocol: TCP
+    - name: http-wa-hook
+      port: 5015
+      targetPort: 5015
       protocol: TCP
