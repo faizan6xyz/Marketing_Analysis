@@ -255,7 +255,7 @@ def logincheck(token ,user_id):
         return {"logged_in": False}
     return {"logged_in": bool(found)}
 
-@app.route("/api/demo/seed-cart", methods=["POST"])
+@app.route("/paypal/api/demo/seed-cart", methods=["POST"])
 def seed_cart():
     body = request.get_json(silent=True) or {}
     cart_id = body.get("cart_id")
@@ -273,7 +273,7 @@ def seed_cart():
     seed_demo_cart(tokench["token"],user_id, cart_id, plan_key)
     return jsonify({"seeded": True, "cart_id": cart_id})
 
-@app.route("/api/payment/create", methods=["POST"])
+@app.route("/paypal/api/payment/create", methods=["POST"])
 def create_payment():
     body = request.get_json(silent=True) or {}
     cart_id = body.get("cart_id")
@@ -341,7 +341,7 @@ def create_payment():
     logger.info("Order created: %s for user %s", order["id"], user_id)
     return jsonify(result)
 
-@app.route("/api/payment/status/<order_id>", methods=["GET"])
+@app.route("/paypal/api/payment/status/<order_id>", methods=["GET"])
 def payment_status(order_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -368,7 +368,7 @@ def payment_status(order_id):
     status = resp.json().get("status")
     return jsonify({"status": "Payment Done" if status == "COMPLETED" else status})
 
-@app.route("/api/payment/capture/<order_id>", methods=["POST"])
+@app.route("/paypal/api/payment/capture/<order_id>", methods=["POST"])
 def capture_payment(order_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -406,7 +406,7 @@ def capture_payment(order_id):
         return jsonify({"status": "Payment Done"})
     return jsonify({"status": data.get("status")})
 
-@app.route("/api/paypal/webhook", methods=["POST"])
+@app.route("/paypal/api/webhook", methods=["POST"])
 def paypal_webhook():
     raw_body = request.get_data()
     event = request.get_json(silent=True)

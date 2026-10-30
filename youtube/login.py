@@ -304,7 +304,7 @@ def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, descriptio
     request_ = youtube_service.videos().insert(part="snippet,status", body=body, media_body=media)
     return _upload_resumable_with_retry(request_)
 
-@app.route("/connect-youtube")
+@app.route("/youtube/connect-youtube")
 def connect_youtube():
     token = request.args.get("token")
     if not token:
@@ -318,7 +318,7 @@ def connect_youtube():
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
     return redirect(auth_url)
 
-@app.route("/oauth/youtube/callback")
+@app.route("/youtube/oauth/callback")
 def youtube_oauth_callback():
     state = request.args.get("state")
     code = request.args.get("code")
@@ -347,10 +347,10 @@ def youtube_oauth_callback():
     internal_token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     payload = {"id": user_id, "Account_id": channel_id, "channel_title": channel_title, "creds": creds_json, "token": internal_token}
     signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/auth/youtube/callbackshi", json={"data": signed_payload}, timeout=5)
+    resp = requests.post(f"{BASE_URL}/youtube/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/auth/youtube/callbackshi", methods=["POST"])
+@app.route("/youtube/auth/callbackshi", methods=["POST"])
 def youtube_callback_internal():
     raw = request.get_json(silent=True) or {}
     try:

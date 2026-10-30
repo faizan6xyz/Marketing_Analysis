@@ -348,7 +348,7 @@ def get_video_duration(file_path):
     with VideoFileClip(file_path) as video:
         return video.duration
 
-@app.route("/auth/pinterest/login", methods=["GET", "POST"])
+@app.route("/pinterest/auth/login", methods=["GET", "POST"])
 def pinterest_login():
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token")
     tokench = au.process(token=token)
@@ -363,7 +363,7 @@ def pinterest_login():
     auth_url = PINTEREST_AUTH_URL + "?" + urlencode(params)
     return redirect(auth_url)
 
-@app.route("/auth/pinterest/callback")
+@app.route("/pinterest/auth/callback")
 def pinterest_callback():
     error = request.args.get("error")
     if error:
@@ -405,10 +405,10 @@ def pinterest_callback():
     expire = expire_time.isoformat()
     payload = { "user_id": user_id, "account_id": account_id, "username": username, "expire": expire, "timestamp": timestamp, "token": token, "access": access_token, "refresh": refresh_token, }
     signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/auth/pinterest/callbackshi", json={"data": signed_payload}, timeout=5)
+    resp = requests.post(f"{BASE_URL}/pinterest/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/auth/pinterest/callbackshi", methods=["POST"])
+@app.route("/pinterest/auth/callbackshi", methods=["POST"])
 def pinterest_dataget():
     raw = request.get_json(silent=True) or {}
     try:
@@ -465,7 +465,7 @@ def pins_with_metrics():
     except requests.HTTPError as e:
         return jsonify({"error": str(e), "response": e.response.text}), e.response.status_code
 
-@app.route("/post/pinterest/photo", methods=["POST"])
+@app.route("/pinterest/post/photo", methods=["POST"])
 def post_to_pinterest_photo():
     data = request.get_json(silent=True) or {}
     access_tokens ,err , Account_ids , user_id = _authenticate(data)
@@ -516,7 +516,7 @@ def post_to_pinterest_photo():
             os.remove(tmp_path)
     return jsonify({"success": True, "pin_id": pin.get("id")}), 200
 
-@app.route("/post/pinterest/video", methods=["POST"])
+@app.route("/pinterest/post/video", methods=["POST"])
 def post_to_pinterest_video():
     data = request.get_json(silent=True) or {}
     access_tokens ,err , Account_ids , user_id = _authenticate(data)

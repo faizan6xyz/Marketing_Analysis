@@ -12,7 +12,7 @@ VERIFY_TOKEN = os.getenv("IG_VERIFY_TOKEN")
 APP_SECRET = os.getenv("IG_APP_SECRET")
 table = "Instagram"
 
-@app.route("/instagram/comments/", methods=["GET", "POST"])
+@app.route("/instagram/webhook/comments/", methods=["GET", "POST"])
 def webhook():
     if request.method == "GET":
         return verify_webhook()

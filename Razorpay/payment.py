@@ -85,7 +85,7 @@ def verify_webhook_signature(raw_body: bytes, signature: str) -> bool:
     expected = hmac.new(WEBHOOK_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature or "")
 
-@app.route("/checkout")
+@app.route("/razorpay/checkout")
 def checkout_page():
     body = request.get_json(silent=True) or {}
     plan_id = body.get("plan_id", "basic_monthly") # Basic_montly as default
@@ -93,7 +93,7 @@ def checkout_page():
         return jsonify({"error": "invalid_plan_id"}), 400
     return render_template("checkout.html", plan_id=plan_id, key_id=KEY_ID)
 
-@app.route("/api/payment/create", methods=["POST"])
+@app.route("/razorpay/api/payment/create", methods=["POST"])
 def create_payment():
     body = request.get_json(silent=True) or {}
     plan_id = body.get("plan_id")
@@ -156,7 +156,7 @@ def create_payment():
         return jsonify({"error": "order_persist_failed", "details": str(e), "order_id": order["id"]}), 502
     return jsonify(result)
 
-@app.route("/api/payment/verify", methods=["POST"])
+@app.route("/razorpay/api/payment/verify", methods=["POST"])
 def verify_payment():
     body = request.get_json(silent=True) or {}
     body = request.get_json(silent=True) or {}
@@ -194,7 +194,7 @@ def verify_payment():
         dbimp.insert_rows(tokench['token'],TABLE_NAME_verify, {"Key": store_key, "Response_json": json.dumps(result)})
     return jsonify(result)
 
-@app.route("/api/payment/status/<payment_id>", methods=["GET"])
+@app.route("/razorpay/api/payment/status/<payment_id>", methods=["GET"])
 def payment_status(payment_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -220,7 +220,7 @@ def payment_status(payment_id):
         return jsonify({"status": "Payment Done"})
     return jsonify({"status": status})
 
-@app.route("/api/payment/capture/<payment_id>", methods=["POST"])
+@app.route("/razorpay/api/payment/capture/<payment_id>", methods=["POST"])
 def capture_payment(payment_id):
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -291,7 +291,7 @@ def _handle_order_paid(event: dict):
 
 _WEBHOOK_HANDLERS = {"payment.captured": _handle_payment_captured,"payment.failed": _handle_payment_failed,"order.paid": _handle_order_paid,}
 
-@app.route("/api/razorpay/webhook", methods=["POST"])
+@app.route("/razorpay/api/webhook", methods=["POST"])
 def razorpay_webhook():
     raw_body = request.get_data()
     signature = request.headers.get("X-Razorpay-Signature")

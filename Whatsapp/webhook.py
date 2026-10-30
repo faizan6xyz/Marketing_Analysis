@@ -20,7 +20,7 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds
 
 
-@app.route("/webhook", methods=["GET"])
+@app.route("/webhook/whatsapp", methods=["GET"])
 def verify_webhook():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
@@ -30,7 +30,7 @@ def verify_webhook():
     log.warning("Webhook verification attempt failed (bad mode/verify token).")
     return "Verification failed", 403
 
-@app.route("/webhook", methods=["POST"])  # add a reply to message for every incoming message
+@app.route("/webhook/whatsapp", methods=["POST"])  # add a reply to message for every incoming message
 def receive_webhook_message():
     if not is_valid_signature(request):
         log.error("Rejected webhook POST: invalid or missing signature.")
@@ -81,3 +81,7 @@ def receive_webhook_message():
     return jsonify({"status": "received"}), 200
 
 
+
+if __name__ == "__main__":
+    # debug=False in production — the Werkzeug debugger is an RCE risk if exposed.
+    app.run(host="0.0.0.0", port=5000, debug=False)

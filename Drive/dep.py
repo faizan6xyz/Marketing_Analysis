@@ -115,7 +115,7 @@ def upload_path_to_drive(service, file_path, filename, mimetype):
         return None, str(e)
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/auth/drivecallback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/auth/drivecallback",)
+    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/auth/drivecallback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/drive/auth/drivecallback",)
 
 def get_drive_service(user_id):
     tokens = load_tokens(user_id)
@@ -482,7 +482,7 @@ def authenticate_request(token):
         return None, (jsonify({"error": "user_id required"}), 400)
     return user_id, None
 
-@app.route("/connect-drive")
+@app.route("/drive/connect-drive")
 def connect_drive():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -493,7 +493,7 @@ def connect_drive():
     auth_url, _ = flow.authorization_url( access_type="offline", prompt="consent", state=signed_state )
     return redirect(auth_url)
 
-@app.route("/auth/drivecallback")
+@app.route("/drive/auth/drivecallback")
 def oauth_callback():
     signed_state = request.args.get("state")
     try:
@@ -515,10 +515,10 @@ def oauth_callback():
     email_addr = service.users().getProfile(userId='me').execute()['emailAddress']
     payload = {"user_id": user_id,"access": creds.token,"expire": expire,"refresh": creds.refresh_token ,"token":token,"email":email_addr}
     signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/auth/drive/callbackshi", json={"data": signed_payload}, timeout=5)
+    resp = requests.post(f"{BASE_URL}/drive/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/auth/drive/callbackshi", methods=["POST"])
+@app.route("/drive/auth/drive/callbackshi", methods=["POST"])
 def oauth_callbac():
     raw = request.get_json(silent=True) or {}
     try:

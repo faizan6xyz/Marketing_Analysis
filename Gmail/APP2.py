@@ -67,7 +67,7 @@ def connect_gmail():
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
     return redirect(auth_url)
 
-@app.route("/oauth/gmail/callback")
+@app.route("/gmail/oauth/callback")
 def gmail_oauth_callback():
     state = request.args.get("state")
     code = request.args.get("code")
@@ -97,7 +97,7 @@ def gmail_oauth_callback():
     resp = requests.post(f"{BASE_URL}/auth/gmail/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/auth/gmail/callbackshi", methods=["POST"])
+@app.route("/gmail/auth/callbackshi", methods=["POST"])
 def oauth_callbac():
     raw = request.get_json(silent=True) or {}
     try:
@@ -117,7 +117,7 @@ def oauth_callbac():
         return jsonify({"status": False, "error": str(e)}), 403
     return jsonify({"status": True}), 200
 
-@app.route('/messages', methods=['GET'])
+@app.route('/gmail/messages', methods=['GET'])
 @limiter.limit("30 per minute")
 def list_messages():
     body = request.get_json(silent=True) or {}
@@ -143,7 +143,7 @@ def list_messages():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/filters', methods=['GET'])
+@app.route('/gmail/filters', methods=['GET'])
 @limiter.limit("30 per minute")
 def list_filters():
     body = request.get_json(silent=True) or {}
@@ -162,7 +162,7 @@ def list_filters():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/filters/create', methods=['POST'])
+@app.route('/gmail/filters/create', methods=['POST'])
 @limiter.limit("15 per minute")
 def create_filter():
     body = request.get_json(silent=True) or {}
@@ -189,7 +189,7 @@ def create_filter():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/labels', methods=['GET'])
+@app.route('/gmail/labels', methods=['GET'])
 @limiter.limit("30 per minute")
 def list_labels():
     body = request.get_json(silent=True) or {}
@@ -207,7 +207,7 @@ def list_labels():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/labels/create', methods=['POST'])
+@app.route('/gmail/labels/create', methods=['POST'])
 @limiter.limit("15 per minute")
 def create_label():
     body = request.get_json(silent=True) or {}
@@ -237,7 +237,7 @@ def create_label():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/messages/read', methods=['POST'])
+@app.route('/gmail/messages/read', methods=['POST'])
 @limiter.limit("60 per minute")
 def mark_as_read():
     body = request.get_json(silent=True) or {}
@@ -268,7 +268,7 @@ def mark_as_read():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/messages/unread', methods=['POST'])
+@app.route('/gmail/messages/unread', methods=['POST'])
 @limiter.limit("60 per minute")
 def mark_as_unread():
     body = request.get_json(silent=True) or {}
@@ -299,7 +299,7 @@ def mark_as_unread():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/filters/delete', methods=['DELETE'])
+@app.route('/gmail/filters/delete', methods=['DELETE'])
 @limiter.limit("15 per minute")
 def delete_filter():
     body = request.get_json(silent=True) or {}
@@ -331,7 +331,7 @@ def delete_filter():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/labels/count', methods=['GET'])
+@app.route('/gmail/labels/count', methods=['GET'])
 @limiter.limit("30 per minute")
 def get_label_count():
     body = request.get_json(silent=True) or {}
@@ -360,7 +360,7 @@ def get_label_count():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/labels/messages', methods=['GET'])
+@app.route('/gmail/labels/messages', methods=['GET'])
 @limiter.limit("30 per minute")
 def get_label_messages():
     body = request.get_json(silent=True) or {}

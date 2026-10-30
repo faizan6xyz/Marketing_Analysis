@@ -180,7 +180,7 @@ def get_authenticated_access_token(user_id,token,account_id):
         access_token = uploadd.refresh_token(token, user_id, access_token)
     return access_token, None
 
-@app.route("/auth/instagram/login")
+@app.route("/instagram/auth/login")
 def instagram_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -196,7 +196,7 @@ def instagram_login():
     return redirect(auth_url)
 
 
-@app.route("/auth/instagram/callback")
+@app.route("/instagram/auth/callback")
 def instagram_callback():
     code = request.args.get("code")
     state = request.args.get("state")
@@ -231,10 +231,10 @@ def instagram_callback():
     expire = expire_time.isoformat()
     payload = {"user_id": user_id,"account_id": account_id,"username": account,"expire": expire,"timestamp": timestamp,"token": token,"access": long_token,}
     signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/auth/instagram/callbackshi", json={"data": signed_payload}, timeout=5)
+    resp = requests.post(f"{BASE_URL}/instagram/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/auth/instagram/callbackshi", methods=["POST"])
+@app.route("/instagram/auth/callbackshi", methods=["POST"])
 def dataget():
     raw = request.get_json(silent=True) or {}
     try:

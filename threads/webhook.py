@@ -32,7 +32,7 @@ def send_message(text, ACCESS_TOKEN, THREADS_USER_ID, reply_to_id=None):
         return {"success": False, "error": publish_resp.json(), "stage": "publish"}
     return {"success": True, "data": publish_resp.json()}
 
-@app.route("/threads/comments/", methods=["GET", "POST"])
+@app.route("webhook/threads/comments/", methods=["GET", "POST"])
 def webhook():
     if request.method == "GET":
         return verify_webhook()
