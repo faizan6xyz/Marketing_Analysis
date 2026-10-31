@@ -85,7 +85,7 @@ spec:
               value: userdb
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
-            - name: PGPASSWORD
+            - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: env-shit
@@ -94,9 +94,18 @@ spec:
             - name: pg
               containerPort: 5432
           resources:
-            limits:
+            requests:
               cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 300m
               memory: 1Gi
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "leojr", "-d", "userdb"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "leojr", "-d", "userdb"]
@@ -116,9 +125,11 @@ spec:
               mountPath: /dev/shm
             - name: schema
               mountPath: /docker-entrypoint-initdb.d/01-schema.sql
+              subPath: schema.sql
               readOnly: true
             - name: hba
               mountPath: /etc/postgresql/pg_hba.conf
+              subPath: pg_hba.conf
               readOnly: true
       volumes:
         - name: data
@@ -129,18 +140,8 @@ spec:
             medium: Memory
             sizeLimit: 256Mi
         - name: schema
-          hostPath:
-            path: /opt/pg/schema.sql
-            type: File
+          configMap:
+            name: db-config
         - name: hba
-          hostPath:
-            path: /opt/pg/pg_hba.conf
-            type: File
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 10Gi
+          configMap:
+            name: db-config

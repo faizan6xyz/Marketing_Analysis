@@ -22,21 +22,22 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      primary: "false"
+      app: db3
   template:
     metadata:
       labels:
+        app: db3
         primary: "false"
     spec:
       terminationGracePeriodSeconds: 60
       securityContext:
-        fsGroup: 1000
+        fsGroup: 999
       containers:
         - name: db3
           image: docker.io/library/postgres:16
           securityContext:
-            runAsUser: 1000
-            runAsGroup: 1000
+            runAsUser: 999
+            runAsGroup: 999
           command: ["/bin/bash", "-c"]
           args:
             - |
@@ -88,13 +89,21 @@ spec:
             - name: pg
               containerPort: 5432
           resources:
-            limits:
+            requests:
               cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
               memory: 1Gi
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "leojr", "-d", "userdb"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 120
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "leojr", "-d", "userdb"]
-            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
@@ -111,6 +120,7 @@ spec:
               mountPath: /dev/shm
             - name: hba
               mountPath: /etc/postgresql/pg_hba.conf
+              subPath: pg_hba.conf
               readOnly: true
       volumes:
         - name: data
@@ -121,14 +131,5 @@ spec:
             medium: Memory
             sizeLimit: 256Mi
         - name: hba
-          hostPath:
-            path: /opt/pg/pg_hba.conf
-            type: File
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 10Gi
+          configMap:
+            name: db-config
