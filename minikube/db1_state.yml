@@ -30,7 +30,7 @@ spec:
     spec:
       terminationGracePeriodSeconds: 60
       containers:
-        - name: pg
+        - name: db
           image: docker.io/library/postgres:16
           args:
             - postgres
@@ -79,16 +79,16 @@ spec:
             - -c
             - hot_standby=on
           env:
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_USER
               value: leojr
             - name: POSTGRES_DB
               value: userdb
-            - name: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: envshit
+                  name: env-shit
                   key: DB_PASSWORD
           ports:
             - name: pg

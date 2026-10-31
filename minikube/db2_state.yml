@@ -32,7 +32,7 @@ spec:
       securityContext:
         fsGroup: 1000
       containers:
-        - name: pg
+        - name: db2
           image: docker.io/library/postgres:16
           securityContext:
             runAsUser: 1000
@@ -82,7 +82,7 @@ spec:
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: db-env
+                  name: env-shit
                   key: DB_PASSWORD
           ports:
             - name: pg
