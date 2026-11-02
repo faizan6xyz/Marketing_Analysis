@@ -16,17 +16,19 @@ metadata:
   name: db2
   namespace: leo-social
   labels:
+    app: postgres
     primary: "false"
 spec:
   serviceName: db-read-service
   replicas: 1
   selector:
     matchLabels:
-      app: db2
+      app: postgres
+      primary: "false"
   template:
     metadata:
       labels:
-        app: db2
+        app: postgres
         primary: "false"
     spec:
       terminationGracePeriodSeconds: 60
@@ -93,7 +95,7 @@ spec:
               cpu: 100m
               memory: 512Mi
             limits:
-              cpu: 500m
+              cpu: 300m
               memory: 1Gi
           startupProbe:
             exec:

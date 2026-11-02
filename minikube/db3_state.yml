@@ -16,17 +16,19 @@ metadata:
   name: db3
   namespace: leo-social
   labels:
+    app: postgres
     primary: "false"
 spec:
   serviceName: db-read-service
   replicas: 1
   selector:
     matchLabels:
-      app: db3
+      app: postgres
+      primary: "false"
   template:
     metadata:
       labels:
-        app: db3
+        app: postgres
         primary: "false"
     spec:
       terminationGracePeriodSeconds: 60
@@ -41,7 +43,7 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
-              until pg_isready -h db -U leojr -d userdb; do sleep 2; done
+              until pg_isready -h db-write-service -U leojr -d userdb; do sleep 2; done
               if [ ! -s "$PGDATA/PG_VERSION" ]; then
                 echo "Empty data dir, cloning from db..."
                 pg_basebackup -h db -U leojr -D "$PGDATA" -R -X stream -C -S db3_slot -P \
@@ -93,7 +95,7 @@ spec:
               cpu: 100m
               memory: 512Mi
             limits:
-              cpu: 500m
+              cpu: 300m
               memory: 1Gi
           startupProbe:
             exec:
