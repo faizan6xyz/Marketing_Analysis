@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: leo-social
+  name: backend-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: backend
+  namespace: leo-social
+spec:
+  serviceName: backend-headless
+  # Replicas are managed by the HPA
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: ghcr-secret
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: backend-data
+      containers:
+        - name: backend-container
+          image: ghcr.io/faizan6xyz/shi:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: envshit
+            - configMapRef:
+                name: configshit
+          ports:
+            - name: main
+              containerPort: 5000
+            - name: campaign
+              containerPort: 5001
+            - name: youtube
+              containerPort: 5002
+            - name: x
+              containerPort: 5003
+            - name: whatsapp
+              containerPort: 5004
+            - name: threads
+              containerPort: 5005
+            - name: threads-we
+              containerPort: 5006
+            - name: razorpay
+              containerPort: 5007
+            - name: pinterest
+              containerPort: 5008
+            - name: paypal
+              containerPort: 5009
+            - name: instagram
+              containerPort: 5010
+            - name: instagram-we
+              containerPort: 5011
+            - name: gmail
+              containerPort: 5012
+            - name: drive
+              containerPort: 5013
+            - name: gmail-we
+              containerPort: 5014
+            - name: whatsapp-we
+              containerPort: 5015
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 400Mi
+            limits:
+              cpu: 250m
+              memory: 600Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data  
