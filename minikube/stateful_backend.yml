@@ -53,7 +53,38 @@ spec:
             - configMapRef:
                 name: configshit
           ports:
-            - containerPort: 5000
+            - name: main
+              containerPort: 5000
+            - name: campaign
+              containerPort: 5001
+            - name: youtube
+              containerPort: 5002
+            - name: x
+              containerPort: 5003
+            - name: whatsapp
+              containerPort: 5004
+            - name: threads
+              containerPort: 5005
+            - name: threads-we
+              containerPort: 5006
+            - name: razorpay
+              containerPort: 5007
+            - name: pinterest
+              containerPort: 5008
+            - name: paypal
+              containerPort: 5009
+            - name: instagram
+              containerPort: 5010
+            - name: instagram-we
+              containerPort: 5011
+            - name: gmail
+              containerPort: 5012
+            - name: drive
+              containerPort: 5013
+            - name: gmail-we
+              containerPort: 5014
+            - name: whatsapp-we
+              containerPort: 5015
           readinessProbe:
             httpGet:
               path: /health

@@ -29,7 +29,7 @@ spec:
     - name: http-threads
       port: 5005
       targetPort: 5005
-    - name: http-thr-hook
+    - name: http-threads-webhook
       port: 5006
       targetPort: 5006
     - name: http-razorpay
@@ -44,7 +44,7 @@ spec:
     - name: http-instagram
       port: 5010
       targetPort: 5010
-    - name: http-ig-hook
+    - name: http-instagram-webhook
       port: 5011
       targetPort: 5011
     - name: http-gmail
@@ -53,10 +53,10 @@ spec:
     - name: http-drive
       port: 5013
       targetPort: 5013
-    - name: http-gmail-hook
+    - name: http-gmail-webhook
       port: 5014
       targetPort: 5014
-    - name: http-wa-hook
+    - name: http-whatsapp-webhook
       port: 5015
       targetPort: 5015
 ---
@@ -97,7 +97,7 @@ spec:
       port: 5005
       targetPort: 5005
       protocol: TCP
-    - name: http-thr-hook
+    - name: http-threads-webhook
       port: 5006
       targetPort: 5006
       protocol: TCP
@@ -117,7 +117,7 @@ spec:
       port: 5010
       targetPort: 5010
       protocol: TCP
-    - name: http-ig-hook
+    - name: http-instagram-webhook
       port: 5011
       targetPort: 5011
       protocol: TCP
@@ -129,11 +129,11 @@ spec:
       port: 5013
       targetPort: 5013
       protocol: TCP
-    - name: http-gmail-hook
+    - name: http-gmail-webhook
       port: 5014
       targetPort: 5014
       protocol: TCP
-    - name: http-wa-hook
+    - name: http-whatsapp-webhook
       port: 5015
       targetPort: 5015
       protocol: TCP
