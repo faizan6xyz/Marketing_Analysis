@@ -11,8 +11,8 @@ from flask import Flask,request, jsonify
 from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
-GMAIL_TOPIC_NAME = 'projects/YOUR_PROJECT_ID/topics/gmail-notifications'
-PUBSUB_SERVICE_ACCOUNT = "your-service-account@project.iam.gserviceaccount.com"
+import os 
+PUBSUB_SERVICE_ACCOUNT = os.environ.get("PUBSUB_SERVICE_ACCOUNT")
 
 def verify_pubsub_jwt(req):
     auth_header = req.headers.get('Authorization', '')
