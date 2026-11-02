@@ -16,16 +16,19 @@ metadata:
   name: db
   namespace: leo-social
   labels:
+    app: postgres
     primary: "false"
 spec:
   serviceName: db-read-service
   replicas: 1
   selector:
     matchLabels:
+      app: postgres
       primary: "false"
   template:
     metadata:
       labels:
+        app: postgres
         primary: "false"
     spec:
       terminationGracePeriodSeconds: 60
