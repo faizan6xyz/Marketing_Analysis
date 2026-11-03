@@ -49,9 +49,7 @@ spec:
           imagePullPolicy: Always
           envFrom:
             - secretRef:
-                name: envshit
-            - configMapRef:
-                name: configshit
+                name: env-shit
           ports:
             - name: main
               containerPort: 5000
