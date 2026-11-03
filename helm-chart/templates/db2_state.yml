@@ -43,16 +43,16 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
-              until pg_isready -h db-write-service -U leojr -d userdb; do sleep 2; done
+              until pg_isready -h {{.values.db.changedservice}} -U leojr -d userdb; do sleep 2; done
               if [ ! -s "$PGDATA/PG_VERSION" ]; then
                 echo "Empty data dir, cloning from primary..."
                 rm -rf "$PGDATA"/*
-                psql -h db-write-service -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db2_slot')" 2>/dev/null || true
-                pg_basebackup -h db-write-service -U leojr -D "$PGDATA" -R -X stream -C -S db2_slot -P \
+                psql -h {{.values.db.changedservice}} -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db2_slot')" 2>/dev/null || true
+                pg_basebackup -h {{.values.db.changedservice}} -U leojr -D "$PGDATA" -R -X stream -C -S db2_slot -P \
                   || {
                     echo "clone failed"
                     rm -rf "$PGDATA"/*
-                    psql -h db-write-service -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db2_slot')" || true
+                    psql -h {{.values.db.changedservice}} -U leojr -d userdb -c "SELECT pg_drop_replication_slot('db2_slot')" || true
                     exit 1
                   }
                 chmod 700 "$PGDATA"
