@@ -3,14 +3,14 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: controller
-  namespace: leo-social
+  namespace: {{.values.namespace}}
 ---
 # A Role is a list of permissions, and it only applies inside leo-social. Each rule has three parts: which API group, which resources, and which verbs.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: controller
-  namespace: leo-social
+  namespace: {{.values.namespace}}
 rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log", "services", "endpoints"]
@@ -33,11 +33,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: controller
-  namespace: leo-social
+  namespace: {{.values.namespace}}
 subjects:
   - kind: ServiceAccount
     name: controller
-    namespace: leo-social
+    namespace: {{.values.namespace}}
 roleRef:
   kind: Role
   name: controller
@@ -47,7 +47,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller
-  namespace: leo-social
+  namespace: {{.values.namespace}}
 spec:
   replicas: 1
   strategy:
@@ -65,20 +65,20 @@ spec:
         - name: ghcr-secret
       containers:
         - name: db-watch
-          image: ghcr.io/faizan6xyz/db_watch:latest
+          image: {{.values.db.dbwatchimage}}
           imagePullPolicy: Always
           envFrom:
             - secretRef:
-                name: env-shit
+                name: {{.values.env}}
           resources:
             requests:
               memory: "50Mi"
-              cpu: "100m"
+              cpu: "70m"
             limits:
-              memory: "128Mi"
-              cpu: "500m"
+              memory: "200Mi"
+              cpu: "200m"
           ports:
-            - containerPort: 6000
+            - containerPort: {{.values.db.watchport}}
           volumeMounts:
             - name: data
               mountPath: /app/data

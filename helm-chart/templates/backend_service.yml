@@ -3,13 +3,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend-headless
-  namespace: leo-social
+  namespace: {{.values.namespace}}
   labels:
-    app: backend
+    {{.values.backend.label.key1}}: {{.values.backend.label.value1}}
 spec:
   clusterIP: None
   selector:
-    app: backend
+    {{.values.backend.label.key1}}: {{.values.backend.label.value1}}
   ports:
     - name: http-main
       port: 5000
@@ -65,13 +65,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend-service
-  namespace: leo-social
+  namespace: {{.values.namespace}}
   labels:
-    app: backend
+    {{.values.backend.label.key1}}: {{.values.backend.label.value1}}
 spec:
   type: ClusterIP
   selector:
-    app: backend  
+    {{.values.backend.label.key1}}: {{.values.backend.label.value1}}  
   ports:
     - name: http-main
       port: 5000

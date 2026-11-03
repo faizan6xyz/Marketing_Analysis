@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  namespace: leo-social
+  namespace: {{.values.namespace}}
   name: db3-data
 spec:
   accessModes:
@@ -14,22 +14,22 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: db3
-  namespace: leo-social
+  namespace: {{.values.namespace}}
   labels:
-    app: postgres
-    primary: "false"
+    {{.values.db.label.key1}}: {{.values.db.label.value1}}
+    {{.values.db.label.key2}}: {{.values.db.label.value2}}
 spec:
-  serviceName: db-read-service
+  serviceName: {{.values.db.defaulservice}}
   replicas: 1
   selector:
     matchLabels:
-      app: postgres
-      primary: "false"
+      {{.values.db.label.key1}}: {{.values.db.label.value1}}
+      {{.values.db.label.key2}}: {{.values.db.label.value2}}
   template:
     metadata:
       labels:
-        app: postgres
-        primary: "false"
+        {{.values.db.label.key1}}: {{.values.db.label.value1}}
+        {{.values.db.label.key2}}: {{.values.db.label.value2}}
     spec:
       terminationGracePeriodSeconds: 60
       securityContext:
@@ -87,18 +87,18 @@ spec:
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: env-shit
+                  name: {{.values.env}}
                   key: DB_PASSWORD
           ports:
             - name: pg
-              containerPort: 5432
+              containerPort: {{.values.db.podport}}
           resources:
             requests:
-              cpu: 100m
-              memory: 512Mi
+              cpu: {{.values.db.resources.requests.cpu}}
+              memory: {{.values.db.resources.requests.memory}}
             limits:
-              cpu: 300m
-              memory: 1Gi
+              cpu: {{.values.db.resources.limits.cpu}}
+              memory: {{.values.db.resources.requests.memory}}
           startupProbe:
             exec:
               command: ["pg_isready", "-U", "leojr", "-d", "userdb"]
@@ -136,4 +136,4 @@ spec:
             sizeLimit: 256Mi
         - name: hba
           configMap:
-            name: db-config
+            name: {{.values.db.dbconfig}}

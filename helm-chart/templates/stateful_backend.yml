@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  namespace: leo-social
+  namespace: {{.values.namespace}}
   name: backend-data
 spec:
   accessModes:
@@ -14,7 +14,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: backend
-  namespace: leo-social
+  namespace: {{.values.namespace}}
 spec:
   serviceName: backend-headless
   # Replicas are managed by the HPA
@@ -26,11 +26,11 @@ spec:
     whenScaled: Retain
   selector:
     matchLabels:
-      app: backend
+      {{.values.backend.label.key1}}: {{.values.backend.label.value1}}
   template:
     metadata:
       labels:
-        app: backend
+        {{.values.backend.label.key1}}: {{.values.backend.label.value1}}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -45,13 +45,11 @@ spec:
             claimName: backend-data
       containers:
         - name: backend-container
-          image: ghcr.io/faizan6xyz/shi:latest
+          image: {{.values.db.backendimage}}
           imagePullPolicy: Always
           envFrom:
             - secretRef:
-                name: envshit
-            - configMapRef:
-                name: configshit
+                name: {{.values.env}}
           ports:
             - name: main
               containerPort: 5000

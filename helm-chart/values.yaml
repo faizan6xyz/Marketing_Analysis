@@ -1,0 +1,34 @@
+namespace: leo-social
+
+db:
+  podport: 5432
+  serviceport: 5432
+  watchport: 6000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 300m
+      memory: 1Gi
+  label: 
+    key1: app
+    value1: postgres
+    key2: primary
+    value2: "false"
+    value3: "true"
+  dbconfig: db-config
+  defaulservice: db-read-service
+  changedservice: db-write-service
+  dbwatchimage: ghcr.io/faizan6xyz/db_watch:latest
+  backendimage: ghcr.io/faizan6xyz/shi:latest
+
+domain: 
+
+env: env-shit
+
+backend:
+  name: "backend-service"
+  label:
+    key1: app
+    value1: backend

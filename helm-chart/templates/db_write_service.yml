@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: db-write-service
-  namespace: leo-social
+  name: {{.values.db.changedservice}}
+  namespace: {{.values.namespace}}
   labels:
     type: db
   annotations:
@@ -10,24 +10,24 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: postgres
-    primary: "true"
+    {{.values.db.label.key1}}: {{.values.db.label.value1}}
+    {{.values.db.label.key2}}: {{.values.db.label.value3}}
   ports:
     - name: postgres
-      port: 5432
-      targetPort: 5432
+      port: {{.values.db.serviceport}}
+      targetPort: {{.values.db.port}}
       protocol: TCP
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: write-allow-backend-only
-  namespace: leo-social
+  namespace: {{.values.namespace}}
 spec:
   podSelector:
     matchLabels:
-      app: postgres
-      primary: "true"
+      {{.values.db.label.key1}}: {{.values.db.label.value1}}
+      {{.values.db.label.key2}}: {{.values.db.label.value3}}
   policyTypes:
     - Ingress
   ingress:
@@ -35,14 +35,14 @@ spec:
         # Only pods labeled app=backend in the SAME namespace
         - podSelector:
             matchLabels:
-              app: backend
+              {{.values.backend.label.key1}}: {{.values.backend.label.value1}}
         - podSelector:
             matchLabels:
-              app: postgres
-              primary: "false"
+              {{.values.db.label.key1}}: {{.values.db.label.value1}}
+              {{.values.db.label.key2}}: {{.values.db.label.value2}}
       ports:
         - protocol: TCP
-          port: 5432        
+          port: {{.values.db.port}}        
 
         # if the pod is from the different namespace
     # - from:

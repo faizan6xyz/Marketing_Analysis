@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  namespace: leo-social
+  namespace: {{.values.namespace}}
   name: nginx-ingress
   annotations:
     # Use cert-manager to issue and renew the TLS certificate from Let's Encrypt
@@ -40,7 +40,7 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - api.yourdomain.com
+        - {{.values.domain}}
       secretName: app-tls
   rules:
     - host: api.yourdomain.com
@@ -50,111 +50,111 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5000
           - path: /campaign
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5001
           - path: /youtube
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5002
           - path: /x
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5003
           - path: /whatsapp
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5004
           - path: /threads
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5005
           - path: /webhook/threads
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5006
           - path: /razorpay
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5007
           - path: /pinterest
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5008
           - path: /paypal
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5009
           - path: /instagram
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5010
           - path: /instagram/webhook
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5011
           - path: /gmail
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5012
           - path: /drive
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5013
           - path: /webhook/gmail
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5014
           - path: /webhook/whatsapp
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: {{.values.backend.name}}
                 port:
                   number: 5015
