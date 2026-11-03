@@ -17,3 +17,5 @@ Gmail.Explain.txt
 complaint.csv
 differentport.txt
 creds.json
+minikube/
+helm-chart/
