@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress-webhooks
+  namespace: leo-social
+  annotations:
+    nginx.ingress.kubernetes.io/service-upstream: "false"
+    nginx.ingress.kubernetes.io/load-balance: "ewma"
+    nginx.ingress.kubernetes.io/proxy-next-upstream: "error timeout http_502 http_503"
+    nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "3"
+    nginx.ingress.kubernetes.io/proxy-body-size: "200m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.yourdomain.com
+      secretName: app-tls
+  rules:
+    - host: api.yourdomain.com
+      http:
+        paths:
+          - { path: /webhook/threads,   pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5006 } } } }
+          - { path: /instagram/webhook, pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5011 } } } }
+          - { path: /webhook/gmail,     pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5014 } } } }
+          - { path: /webhook/whatsapp,  pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5015 } } } }
