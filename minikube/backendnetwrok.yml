@@ -9,6 +9,7 @@ spec:
       app: backend
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     - from:
         - namespaceSelector:
@@ -21,3 +22,26 @@ spec:
         - protocol: TCP
           port: 5000
           endPort: 5015
+  egress:
+    # backend -> primary postgres
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+              primary: "true"
+      ports:
+        - protocol: TCP
+          port: 5432
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
