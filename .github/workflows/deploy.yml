@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["Build-push"]
+    types: [completed]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production   # add required reviewers in repo settings if you want manual approval
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0 # It then connects to your server over SSH using the secrets you stored, and runs this script there:
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: IMAGE,SHA
+          script: |
+            set -e
+            APP=myapp
+            PORT=8000
+
+            echo "${{ secrets.GHCR_PAT }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # remember what's running now so we can roll back
+            PREV=$(podman inspect -f '{{.Config.Image}}' $APP 2>/dev/null || true)
+
+            podman pull ghcr.io/${{ github.repository }}:${{ github.sha }}
+            podman rm -f $APP 2>/dev/null || true
+            podman run -d --name $APP --restart unless-stopped \
+              -p $PORT:$PORT --env-file /opt/$APP/.env \
+              ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+            # smoke test: wait up to ~30s for /health
+            for i in $(seq 1 10); do
+              if curl -fsS http://localhost:$PORT/health >/dev/null; then
+                echo "Healthy"; exit 0
+              fi
+              sleep 3
+            done
+
+            echo "Health check failed, rolling back"
+            podman rm -f $APP || true
+            if [ -n "$PREV" ]; then
+              podman run -d --name $APP --restart unless-stopped \
+                -p $PORT:$PORT --env-file /opt/$APP/.env "$PREV"
+            fi
+            exit 1
