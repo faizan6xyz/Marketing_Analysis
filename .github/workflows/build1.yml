@@ -21,23 +21,94 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install ruff pytest pip-audit
-      - name: Lint
-        run: ruff check .
+          pip install -r requirements.txt ruff pytest pip-audit
+      - name: 
+        run: ruff check .   # catches style problems and obvious bugs such as unused imports.
       - name: Unit tests
-        run: pytest -q
+        run: pytest -q    # runs your tests
         env:  # Dummy values so the app can import; never use real secrets in tests
           SUPABASE_URL: http://localhost
           SUPABASE_KEY: shittest
       - name: Dependency vulnerability scan
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt   # checks your dependencies against a database of known vulnerabilities.
+
   secret-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+          fetch-depth: 0   # means download all history from the git 
+      - uses: gitleaks/gitleaks-action@v2  # This uses gitleaks to scan your whole git history for accidentally committed API keys, tokens or passwords.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-push:
+    needs: [test, secret-scan]  # means it only starts after both earlier jobs pass.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4 
+      - uses: podman/setup-buildx-action@v3
+      - uses: podman/login-action@v3 # logs in to GHCR using GITHUB_TOKEN, a temporary token GitHub gives every run for free.
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push # builds your Docker image from your Dockerfile and uploads it with two tags:
+        uses: podman/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ------------------------------------------------------------ DEPLOY
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production   # add required reviewers in repo settings if you want manual approval
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0 # It then connects to your server over SSH using the secrets you stored, and runs this script there:
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: IMAGE,SHA
+          script: |
+            set -e
+            APP=myapp
+            PORT=8000
+
+            echo "${{ secrets.GHCR_PAT }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # remember what's running now so we can roll back
+            PREV=$(podman inspect -f '{{.Config.Image}}' $APP 2>/dev/null || true)
+
+            podman pull ghcr.io/${{ github.repository }}:${{ github.sha }}
+            podman rm -f $APP 2>/dev/null || true
+            podman run -d --name $APP --restart unless-stopped \
+              -p $PORT:$PORT --env-file /opt/$APP/.env \
+              ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+            # smoke test: wait up to ~30s for /health
+            for i in $(seq 1 10); do
+              if curl -fsS http://localhost:$PORT/health >/dev/null; then
+                echo "Healthy"; exit 0
+              fi
+              sleep 3
+            done
+
+            echo "Health check failed, rolling back"
+            podman rm -f $APP || true
+            if [ -n "$PREV" ]; then
+              podman run -d --name $APP --restart unless-stopped \
+                -p $PORT:$PORT --env-file /opt/$APP/.env "$PREV"
+            fi
+            exit 1
