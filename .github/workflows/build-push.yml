@@ -1,0 +1,33 @@
+name: Build-push
+
+on:
+  workflow_run:
+    workflows: ["Security"]
+    types: [completed]
+
+jobs:
+  build-and-push:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4 
+      - uses: podman/setup-buildx-action@v3
+      - uses: podman/login-action@v3 # logs in to GHCR using GITHUB_TOKEN, a temporary token GitHub gives every run for free.
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push # builds your Docker image from your Dockerfile and uploads it with two tags:
+        uses: podman/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
