@@ -1,0 +1,43 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # downloads your repo code onto the runner. Without it the runner is empty.
+      - uses: actions/setup-python@v5 # installs Python 3.12 and caches pip downloads, so later runs are faster.
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ruff pytest pip-audit
+      - name: Lint
+        run: ruff check .
+      - name: Unit tests
+        run: pytest -q
+        env:  # Dummy values so the app can import; never use real secrets in tests
+          SUPABASE_URL: http://localhost
+          SUPABASE_KEY: shittest
+      - name: Dependency vulnerability scan
+        run: pip-audit -r requirements.txt
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
