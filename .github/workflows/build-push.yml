@@ -1,0 +1,46 @@
+name: Build-push
+
+on:
+  workflow_run:
+    workflows: ["Security"] # Wait for the Security workflow
+    types: [completed] # Trigger after completion
+
+env:
+  REGISTRY: ghcr.io # GitHub Container Registry
+  IMAGE_NAME: ${{ github.repository_owner }}/shi # Docker image name
+
+jobs:
+  build-and-push:  # Run only if Security succeeds on a push to main
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest # Use an Ubuntu runner
+    permissions:
+      contents: read # Allow reading repository code
+      packages: write # Allow pushing images to GHCR
+    steps:
+      - uses: actions/checkout@v4 # Download repository code
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }} # Checkout the exact tested commit
+      - name: Lowercase image name
+        run: echo "IMAGE_NAME=${IMAGE_NAME,,}" >> $GITHUB_ENV # Convert image name to lowercase
+      - uses: docker/setup-buildx-action@v3 # Set up Docker Buildx
+      - uses: docker/login-action@v3 # Authenticate with GitHub Container Registry
+        with:
+          registry: ${{ env.REGISTRY }} # Registry to log in to
+          username: ${{ github.actor }} # GitHub username
+          password: ${{ secrets.GITHUB_TOKEN }} # Temporary authentication token
+      - uses: docker/build-push-action@v6
+        with:
+          context: . # Set the Docker build context
+          file: ./dockerfile.backend # Specify the Dockerfile
+          push: true # Push the built image to GHCR
+          tags: | # Create commit-specific and latest image tags
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.workflow_run.head_sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # Add repository information to the image
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha # Reuse previously cached build layers
+          cache-to: type=gha,mode=max # Save build layers for future runs
