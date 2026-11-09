@@ -29,6 +29,10 @@ spec:
             matchLabels:
               app: postgres
               primary: "true"
+        - podSelector:
+            matchLabels:
+              app: postgres
+              primary: "false"
       ports:
         - protocol: TCP
           port: 5432
