@@ -110,6 +110,8 @@ def signup():
     except Exception as e:
         return jsonify({"error": "signup failed", "detail": str(e)}), 400
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
+    if not user_id:
+        return jsonify({"error": "invalid credentials"}), 401
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
         insert = dbimp.insert_rows(token, "users", { "user_id": user_id, "email": mail, "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })

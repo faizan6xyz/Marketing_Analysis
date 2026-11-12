@@ -33,7 +33,7 @@ def _verify_password(password: str, stored: str) -> bool:
             _, salt_hex, dk_hex = stored.split("$")
             dk = hashlib.scrypt(_prehash(password), salt=bytes.fromhex(salt_hex), n=2**14, r=8, p=1, dklen=32)
         except ValueError:
-            return False
+            return None
         return hmac.compare_digest(dk.hex(), dk_hex)
     legacy = hmac.new(SECRET_KEY, password.encode("utf-8"), hashlib.sha256).hexdigest()
     return hmac.compare_digest(legacy, stored)
@@ -66,34 +66,34 @@ def _cursor_read():
 
 def add_new_user(email: str, password: str) -> bool:
     if not email or not password:
-        return False
+        return None
     user_id = str(uuid.uuid4()) 
     try:
         with _cursor_write() as cur:
             cur.execute( "INSERT INTO userdetails (email, password, user_id) VALUES (%s, %s, %s)",(email, _hash_password(password), user_id), )
     except psycopg2.errors.UniqueViolation:
-        return False
+        return None
     except psycopg2.Error as e:
-        return False
+        return None
     return user_id
 
 # require the pool of the read 
 def user_exist_check(email: str, password: str):
     if not email or not password:
-        return False
+        return None
     try:
         with _cursor_read() as cur:
             cur.execute("SELECT password, user_id FROM userdetails WHERE email = %s", (email,),)
             row = cur.fetchone()
     except psycopg2.Error as e:
-        return False
+        return None
     if not row:
-        return False
+        return None
     stored_hash, user_id = row
     if not stored_hash or not user_id:
-        return False
+        return None
     if not _verify_password(password, stored_hash):
-        return False
+        return None
     if not stored_hash.startswith("scrypt$"):
         try:
             with _cursor_read() as cur:
@@ -124,7 +124,7 @@ def _apply_filters(filters: dict[str, Any]) -> tuple[sql.Composable, list]:
         elif op == "neq" and value is None:
             parts.append(sql.SQL("{} IS NOT NULL").format(col))
         elif op == "is":
-            parts.append(sql.SQL("{} IS %s").format(col))      # True / False
+            parts.append(sql.SQL("{} IS %s").format(col))      # True / None
             params.append(value)
         elif op == "in":
             parts.append(sql.SQL("{} = ANY(%s)").format(col))
