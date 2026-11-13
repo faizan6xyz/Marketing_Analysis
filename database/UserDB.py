@@ -64,17 +64,22 @@ def _cursor_read():
     finally:
         pool_read.putconn(conn)
 
-def add_new_user(email: str, password: str) -> bool:
+def add_new_user(email: str, password: str):
+    email = email.strip().lower()
     if not email or not password:
         return None
-    user_id = str(uuid.uuid4()) 
+    user_id = str(uuid.uuid4())
     try:
         with _cursor_write() as cur:
-            cur.execute( "INSERT INTO userdetails (email, password, user_id) VALUES (%s, %s, %s)",(email, _hash_password(password), user_id), )
+            cur.execute("INSERT INTO users (email, password, user_id) VALUES (%s, %s, %s)",  (email, _hash_password(password), user_id))
     except psycopg2.errors.UniqueViolation:
-        return None
+            return None
     except psycopg2.Error as e:
-        return None
+        print("Database error:", e)
+        return e
+    except Exception as e:
+        print("Unexpected error:", e)
+        return e
     return user_id
 
 # require the pool of the read 
@@ -83,7 +88,7 @@ def user_exist_check(email: str, password: str):
         return None
     try:
         with _cursor_read() as cur:
-            cur.execute("SELECT password, user_id FROM userdetails WHERE email = %s", (email,),)
+            cur.execute("SELECT password, user_id FROM users WHERE email = %s", (email,),)
             row = cur.fetchone()
     except psycopg2.Error as e:
         return None
@@ -97,7 +102,7 @@ def user_exist_check(email: str, password: str):
     if not stored_hash.startswith("scrypt$"):
         try:
             with _cursor_read() as cur:
-                cur.execute( "UPDATE userdetails SET password = %s WHERE email = %s",(_hash_password(password), email),)
+                cur.execute( "UPDATE users SET password = %s WHERE email = %s",(_hash_password(password), email),)
         except psycopg2.Error as e:
             return e
     return str(user_id)
