@@ -60,7 +60,7 @@ def google_callback():
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
-        insert = dbimp.insert_rows(token, "users", { "user_id": user_id, "email": user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })
+        insert = dbimp.insert_rows(token, "users", { "user_id": user_id, "email": user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(), })
     except Exception as e:
         insert = None
         insert_error = str(e)
@@ -89,13 +89,12 @@ def login():
     created_at = datetime.now(timezone.utc) + TOKEN_TTL
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
-        dbimp.update_rows("users", {"Token": token}, filters={"user_id": user_id})  # adjust to real dbimp API
         rows = dbimp.select_rows(token, "users", select="Token", filters={"user_id": user_id})
     except Exception as e:
         return jsonify({"error": "failed to fetch user record", "detail": str(e)}), 500
     if not rows:
         return jsonify({"error": "user record not found"}), 500
-    resp = make_response(jsonify({"user_id": user_id, "Token": rows[0]["Token"]}), 200)
+    resp = make_response(jsonify({"user_id": user_id, "Token": token}), 200)
     return set_auth_cookie(resp, token)
 
 @app.route("/signup", methods=["POST"])
@@ -109,21 +108,14 @@ def signup():
         user_id = dbimp.add_new_user(email=mail,password=passw)
     except Exception as e:
         return jsonify({"error": "signup failed", "detail": str(e)}), 400
-    if not user_id:
+    if not user_id :
         return jsonify({"error": "invalid credentials"}), 401
+    if user_id == "exist" :
+        return jsonify({"error": "User Already exist "}), 401
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
-    try:
-        insert = dbimp.insert_rows(token, "users", { "user_id": user_id, "email": mail, "created_at": datetime.now(timezone.utc).isoformat(), "Token": token, })
-    except Exception as e:
-        insert = None
-        insert_error = str(e)
-    if not insert:
-        resp_body = {"Statusdb": False, "detail": "Could not save details"}
-        status = 202
-    else:
-        resp_body = {"Statusdb": True, "next": "/details"}
-        status = 200
+    resp_body = {"Statusdb": True, "next": "/details"}
+    status = 200
     resp = make_response(jsonify(resp_body), status)
     return set_auth_cookie(resp, token)
 

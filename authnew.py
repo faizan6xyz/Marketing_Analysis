@@ -20,7 +20,7 @@ def random_text(limit):
 def jsonspoof(user_id, timestamp):
     user_id1 = base64.b64encode(user_id.encode("utf-8")).decode("utf-8")
     time1 = base64.b64encode(str(timestamp).encode("utf-8")).decode("utf-8")
-    signature = hmac.new(SECRET_KEY, f"{user_id}.{timestamp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    signature = hmac.new(SECRET_KEY.encode("utf-8"), f"{user_id}.{timestamp}".encode("utf-8"), hashlib.sha256).hexdigest()
     signature1 = base64.b64encode(signature.encode("utf-8")).decode("utf-8")
     return f"{user_id1}.{time1}.{signature1}"
 
@@ -44,7 +44,7 @@ def process(token):
     sign = decd["sign"] if decd["sign"] else False
     if not user_id or not time or not sign :
         return {"status" : False, "reason" : "user_id,time,sign of them is missing"}
-    expected_sign = hmac.new(SECRET_KEY, f"{user_id}.{time}".encode("utf-8"), hashlib.sha256).hexdigest()
+    expected_sign = hmac.new(SECRET_KEY.encode("utf-8"), f"{user_id}.{time}".encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected_sign, sign):
         return {"status" : False, "reason" : "invalid signature"}
     now = datetime.now(timezone.utc)

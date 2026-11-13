@@ -73,7 +73,7 @@ def add_new_user(email: str, password: str):
         with _cursor_write() as cur:
             cur.execute("INSERT INTO users (email, password, user_id) VALUES (%s, %s, %s)",  (email, _hash_password(password), user_id))
     except psycopg2.errors.UniqueViolation:
-            return None
+            return "exist"
     except psycopg2.Error as e:
         print("Database error:", e)
         return e
@@ -142,18 +142,18 @@ def _apply_filters(filters: dict[str, Any]) -> tuple[sql.Composable, list]:
     return sql.SQL(" AND ").join(parts), params
 
 def insert_rows(token, table_name: str, data: dict | list[dict]) -> list[dict]:
-    table_name = _check(table_name,token)
+    table_name = _check(table_name, token)
     rows = [data] if isinstance(data, dict) else data
     if not rows:
         return []
     cols = list(rows[0].keys())
     if any(set(r.keys()) != set(cols) for r in rows):
         raise ValueError("All rows must have the same keys")
-    query = sql.SQL("INSERT INTO {} ({}) VALUES %s RETURNING *").format( sql.Identifier(table_name),sql.SQL(", ").join(map(sql.Identifier, cols)), )
+    query = sql.SQL( "INSERT INTO {} ({}) VALUES %s RETURNING *" ).format(sql.Identifier(table_name),sql.SQL(", ").join(map(sql.Identifier, cols)))
     values = [tuple(r[c] for c in cols) for r in rows]
     with _cursor_write() as cur:
-        execute_values(cur, query, values, fetch=True)
-        return [dict(r) for r in cur.fetchall()]
+        result = execute_values(cur, query, values, fetch=True)
+        return [dict(r) for r in result]
 
 def update_rows(token, table_name: str, updates: dict, filters: dict) -> list[dict]:
     table_name = _check(table_name,token)
