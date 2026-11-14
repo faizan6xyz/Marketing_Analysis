@@ -5,6 +5,7 @@ GH_USER="faizan6xyz"
 MK_MEMORY="6000mb"
 MK_CPUS="4"
 MK_LOG="minikube-start.log"
+ENV_FILE=".env"
 DB1_POD="db-0"
 DB2_POD="db2-0"
 DB3_POD="db3-0"
@@ -72,7 +73,7 @@ unset GH_PAT AUTH_B64
 kubectl create secret generic ghcr-secret --type=kubernetes.io/dockerconfigjson --from-file=.dockerconfigjson="$TMP/.dockerconfigjson" -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 ( umask 077
   sed -E -e '/^[[:space:]]*(#|$)/d' -e 's/^[[:space:]]*export[[:space:]]+//' -e "s/^([A-Za-z_][A-Za-z0-9_]*)=([\"'])(.*)\2\$/\1=\3/" .env > "$TMP/clean.env" )
-kubectl create secret generic app-env --from-env-file="$TMP/clean.env" -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic env-shit --from-env-file="$ENV_FILE" -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 kubectl create configmap db-config -n "$NAMESPACE" --from-file=schema.sql=schema.sql --from-file=pg_hba.conf=pg_hba.conf --dry-run=client -o yaml | kubectl apply -f -
 echo "Deploying primary database..."
 kubectl apply -f minikube/db1_state.yml
