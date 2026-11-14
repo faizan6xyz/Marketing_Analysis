@@ -11,7 +11,7 @@ spec:
     kind: StatefulSet                # changed from Deployment
     name: backend
   minReplicas: 4
-  maxReplicas: 8
+  maxReplicas: 10
   metrics:
     - type: Resource
       resource:

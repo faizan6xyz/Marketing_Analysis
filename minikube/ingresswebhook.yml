@@ -20,7 +20,7 @@ spec:
     - host: api.yourdomain.com
       http:
         paths:
-          - { path: /webhook/threads,   pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5006 } } } }
-          - { path: /instagram/webhook, pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5011 } } } }
-          - { path: /webhook/gmail,     pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5014 } } } }
-          - { path: /webhook/whatsapp,  pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5015 } } } }
+          - { path: /webhook/threads,   pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5000 } } } }
+          - { path: /instagram/webhook, pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5000 } } } }
+          - { path: /webhook/gmail,     pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5000 } } } }
+          - { path: /webhook/whatsapp,  pathType: Prefix, backend: { service: { name: backend-service, port: { number: 5000 } } } }

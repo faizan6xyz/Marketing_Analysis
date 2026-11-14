@@ -41,19 +41,4 @@ spec:
   selector:
     app: backend
   ports:                       # targetPort defaults to port, so it's omitted
-    - { name: http-main,              port: 5000 }
-    - { name: http-campaign,          port: 5001 }
-    - { name: http-youtube,           port: 5002 }
-    - { name: http-x,                 port: 5003 }
-    - { name: http-whatsapp,          port: 5004 }
-    - { name: http-threads,           port: 5005 }
-    - { name: http-threads-webhook,   port: 5006 }
-    - { name: http-razorpay,          port: 5007 }
-    - { name: http-pinterest,         port: 5008 }
-    - { name: http-paypal,            port: 5009 }
-    - { name: http-instagram,         port: 5010 }
-    - { name: http-instagram-webhook, port: 5011 }
-    - { name: http-gmail,             port: 5012 }
-    - { name: http-drive,             port: 5013 }
-    - { name: http-gmail-webhook,     port: 5014 }
-    - { name: http-whatsapp-webhook,  port: 5015 }
+    - { name: http, port: 5000, targetPort: 5000 }

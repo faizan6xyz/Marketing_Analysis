@@ -1,20 +1,17 @@
 import base64
-import string
-import secrets
 import hmac
 import hashlib
 from datetime import datetime, timezone, timedelta
 import os
-import database.UserDB as dbimp
 from dotenv import load_dotenv
 load_dotenv()
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
 def jsonspoof(user_id, timestamp):
     user_id1 = base64.b64encode(user_id.encode("utf-8")).decode("utf-8")
-    time1 = base64.b64encode(str(timestamp).encode("utf-8")).decode("utf-8")
-    signature = hmac.new(SECRET_KEY.encode("utf-8"), f"{user_id}.{timestamp}".encode("utf-8"), hashlib.sha256).hexdigest()
-    signature1 = base64.b64encode(signature.encode("utf-8")).decode("utf-8")
+    time1 = base64.b64encode(str(timestamp).encode("utf-8")).decode("utf-8") # converts the timestamp to string , then to byte for encoding and then after encoding it turns the bytes into python string 
+    signature = hmac.new(SECRET_KEY.encode("utf-8"), f"{user_id}.{timestamp}".encode("utf-8"), hashlib.sha256).hexdigest()  # creates the signature using sha256 hasing with secret key is done in byte
+    signature1 = base64.b64encode(signature.encode("utf-8")).decode("utf-8") 
     return f"{user_id1}.{time1}.{signature1}"
 
 def jp(token):
