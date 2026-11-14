@@ -10,13 +10,6 @@ from dotenv import load_dotenv
 load_dotenv()
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
-def random_text(limit):
-    password = [ secrets.choice(string.ascii_uppercase), secrets.choice(string.ascii_lowercase),secrets.choice(string.digits),]
-    characters = string.ascii_letters + string.digits
-    password.extend(secrets.choice(characters) for _ in range(limit))
-    secrets.SystemRandom().shuffle(password)
-    return ''.join(password)
-
 def jsonspoof(user_id, timestamp):
     user_id1 = base64.b64encode(user_id.encode("utf-8")).decode("utf-8")
     time1 = base64.b64encode(str(timestamp).encode("utf-8")).decode("utf-8")
@@ -56,20 +49,3 @@ def process(token):
     if now > token_time and now - token_time >= timedelta(hours=2):
         return {"status" : False, "reason" : "token expired"}
     return {"status" : True , "token" : token , "user_id":user_id }
-
-def paidcheck(token , user_id):  # this will be used in the analytics and locks the premium features 
-    if not user_id :
-        return False
-    rows = dbimp.select_rows(token , "users" , select="Payment_check" , filters={"user_id":user_id})
-    row = rows[0] if rows[0] else None
-    pay = str(row["Payment_check"]).strip().lower() == "false"
-    if pay :
-        return False
-    return True
-
-
-# time = datetime.now(timezone.utc) + timedelta(hours=1)
-# x = '451d8b58-4575-4b7b-9158-cb39dc3aed1e'
-# print(jsonspoof(user_id=x,timestamp=time))
-# print(jp(jsonspoof(user_id=x,timestamp=time)))
-# print(process("NDUxZDhiNTgtNDU3NS00YjdiLTkxNTgtY2IzOWRjM2FlZDFl.MjAyNi0wOC0yNiAxMTozMDo1Ny42ODYwNzMrMDA6MDA=.N2E0YzU2NzkwN2Y0ZjMwZWMzZDhmMTNhZmY5MzFkOTVhMjIzOWM1MmI5OGFkYTljYjVmMzFjZTM1YzUxZGI1ZA=="))

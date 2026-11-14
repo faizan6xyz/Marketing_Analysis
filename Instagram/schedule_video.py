@@ -116,15 +116,17 @@ def insert__story1(user_id, scheduled_time, access_token, media_id, typee):    #
 
 def get_containers_due(now):
     with get_conn_read() as conn,conn.cursor() as cur:
-            cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s", (now,0))
-    return cur.fetchall()
+        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s", (now,0))
+        rows = cur.fetchall()
+    return rows
 
 def get_failed_one(now):
     tim = datetime.fromisoformat(now) - timedelta(minutes=30)
     with get_conn_read() as conn,conn.cursor() as cur:
-            cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s ", (tim,1))
-    return cur.fetchall()
-
+        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s ", (tim,1))
+        rows = cur.fetchall()
+    return rows
+    
 def update_container_schedule(container_id, sctime):
     if not is_valid_iso_format(sctime):
         return
