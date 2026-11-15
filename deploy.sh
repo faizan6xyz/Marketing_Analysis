@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 NAMESPACE="leo-social"
 GH_USER="faizan6xyz"
-MK_MEMORY="6000mb"
+MK_MEMORY="8000mb"
 MK_CPUS="4"
 MK_LOG="minikube-start.log"
 ENV_FILE=".env"

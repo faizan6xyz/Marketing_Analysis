@@ -19,3 +19,6 @@ RUN chmod -R g+rX /app
 RUN chmod +x /app/start.sh
 USER appuser
 CMD ["./start.sh"]
+
+# RUN executes commands while building the Docker image.
+# CMD specifies the default command to execute when a container starts.

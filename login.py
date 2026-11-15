@@ -12,6 +12,7 @@ from authlib.integrations.flask_client import OAuth
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+IS_PROD = os.environ.get("IS_PROD").lower() == "true"
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 TOKEN_TTL = timedelta(hours=2)
 oauth = OAuth(app)
@@ -23,7 +24,7 @@ def all_values(rows, key):
     return [row.get(key) for row in rows]
 
 def set_auth_cookie(resp, token):
-    resp.set_cookie( "authToken", token, httponly=True, secure=True, samesite="None", max_age=int(TOKEN_TTL.total_seconds()), path="/",    )
+    resp.set_cookie("authToken",token,httponly=False,secure=IS_PROD,samesite="None" if IS_PROD else "Lax",max_age=int(TOKEN_TTL.total_seconds()),path="/",) # httponly=False means the browser hides the cookies from the js (document.cookie) but send it in every request , secure=IS_PROD (True) means the browser only stores and sends the cookie over HTTPS , samesite="None" means This decides whether the cookie is sent on cross-site requests, which is a defense against CSRF attacks.    
     return resp
 
 @app.route("/refresh", methods=["POST"])
@@ -88,12 +89,6 @@ def login():
         return jsonify({"error": "invalid credentials"}), 401
     created_at = datetime.now(timezone.utc) + TOKEN_TTL
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
-    try:
-        rows = dbimp.select_rows(token, "users", select="Token", filters={"user_id": user_id})
-    except Exception as e:
-        return jsonify({"error": "failed to fetch user record", "detail": str(e)}), 500
-    if not rows:
-        return jsonify({"error": "user record not found"}), 500
     resp = make_response(jsonify({"user_id": user_id, "Token": token}), 200)
     return set_auth_cookie(resp, token)
 
@@ -114,7 +109,7 @@ def signup():
         return jsonify({"error": "User Already exist "}), 401
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
-    resp_body = {"Statusdb": True, "next": "/details"}
+    resp_body = {"Statusdb": True}
     status = 200
     resp = make_response(jsonify(resp_body), status)
     return set_auth_cookie(resp, token)
