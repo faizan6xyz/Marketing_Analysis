@@ -8,7 +8,7 @@ load_dotenv()
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
 def jsonspoof(user_id, timestamp):
-    user_id1 = base64.b64encode(user_id.encode("utf-8")).decode("utf-8")
+    user_id1 = base64.b64encode(str(user_id).encode("utf-8")).decode("utf-8")
     time1 = base64.b64encode(str(timestamp).encode("utf-8")).decode("utf-8") # converts the timestamp to string , then to byte for encoding and then after encoding it turns the bytes into python string 
     signature = hmac.new(SECRET_KEY.encode("utf-8"), f"{user_id}.{timestamp}".encode("utf-8"), hashlib.sha256).hexdigest()  # creates the signature using sha256 hasing with secret key is done in byte
     signature1 = base64.b64encode(signature.encode("utf-8")).decode("utf-8") 
