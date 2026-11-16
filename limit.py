@@ -50,13 +50,14 @@ def get_or_create_window(user_id, now_ts):
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (str(user_id),))
             cur.execute( sql.SQL( "SELECT {}, {} FROM {} " "WHERE {} < %s AND {} > %s AND {} = %s").format(sql.Identifier("request_count"), sql.Identifier("id"), sql.Identifier("rate_limit"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("user_id")), (now_ts, now_ts, user_id), )
-            row = cur.fetchone()
+            row = dict(cur.fetchone())
             if row:
                 return row[0], row[1]
             start = datetime.now(timezone.utc)
             end = start + timedelta(days=30)
             cur.execute( sql.SQL( "INSERT INTO {} ({}, {}, {}, {}) " "VALUES (%s, %s, %s, %s) RETURNING {}" ).format(sql.Identifier("rate_limit"), sql.Identifier("user_id"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("request_count"), sql.Identifier("id")), (user_id, start, end, 0), )
-            return 0, cur.fetchone()[0]
+            row = dict(cur.fetchone())
+            return 0, row[0]
 
 def try_increment(row_id, amount, limit):
     with get_conn_write() as conn:

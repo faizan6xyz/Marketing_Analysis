@@ -63,7 +63,7 @@ def inert_workflow(id_, message, comment):
 def workflow_data_change(id_, message, comment):
     with get_conn_read() as conn,conn.cursor() as cur:
         cur.execute("SELECT message, comment FROM workflow WHERE id = %s", (id_,))
-        rows = cur.fetchall()
+        rows = dict(cur.fetchall())
         if rows:
             cur.execute("UPDATE workflow SET message = %s, comment = %s WHERE id = %s", (message, comment, id_))
         else:
@@ -73,7 +73,7 @@ def workflow_data_change(id_, message, comment):
 def workflow_10_days(time):
     with get_conn_read() as conn,conn.cursor() as cur:
         cur.execute("SELECT id FROM workflow WHERE time < %s", (time,))
-        return cur.fetchall()
+        return dict(cur.fetchall())
 
 def delete_by_10days(row_id):        
     _delete_by("workflow", "id", row_id)
@@ -81,8 +81,8 @@ def delete_by_10days(row_id):
 def workflow_data(id_):
     with get_conn_read() as conn,conn.cursor() as cur:
         cur.execute("SELECT message , comment FROM workflow WHERE id = %s ", (id_,))   # for the whatsapp theres no comment but for the gmail comment is the subject
-        return cur.fetchall()
-
+        return dict(cur.fetchall())
+    
 def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument
     if not is_valid_iso_format(scheduled_time):
         return
@@ -117,14 +117,14 @@ def insert__story1(user_id, scheduled_time, access_token, media_id, typee):    #
 def get_containers_due(now):
     with get_conn_read() as conn,conn.cursor() as cur:
         cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s", (now,0))
-        rows = cur.fetchall()
+        rows =  dict(cur.fetchall())
     return rows
 
 def get_failed_one(now):
     tim = datetime.fromisoformat(now) - timedelta(minutes=30)
     with get_conn_read() as conn,conn.cursor() as cur:
         cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s ", (tim,1))
-        rows = cur.fetchall()
+        rows = dict(cur.fetchall())
     return rows
     
 def update_container_schedule(container_id, sctime):
