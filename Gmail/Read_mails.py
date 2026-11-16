@@ -40,7 +40,7 @@ def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
     payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
     dbimp.update_rows(token,"users",{"gmail":True},{"user_id":user_id})
     if email_addr:
-        payload["Email"] = email_addr
+        payload["email"] = email_addr
     rows = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})
     if rows:
         dbimp.update_rows(token,TABLE_NAME, payload, filters={"id": user_id})
@@ -74,7 +74,7 @@ def get_service(token,user_id):
 def save_tokens_web(user_id, creds, google_account_id,email_addr=None):
     payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
     if email_addr:
-        payload["Email"] = email_addr
+        payload["email"] = email_addr
     rows = dbimp.select_rows_web(TABLE_NAME, select="id", filters={"id": user_id})
     if rows:
         dbimp.update_rows_web(TABLE_NAME, payload, filters={"id": user_id})
