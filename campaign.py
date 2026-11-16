@@ -51,14 +51,14 @@ def parse_datetime(value: str, require_tz: bool = True):
         return None
     return dt
 
-def upload_latewhat(Account_id , text1, text2, text3, file_id,reply = "" , subject = ""):
+def upload_latewhat(account_id , text1, text2, text3, file_id,reply = "" , subject = ""):
     target = json.loads(text1[0])
     combin = json.loads(text3[0])
     names = combin[1]
     body = combin[0]
     campaign_name = text2
     file_id = json.loads(file_id[0])
-    rows = dbimp.select_rows_web("Gmail",select="id",filters={"Account_id":Account_id})
+    rows = dbimp.select_rows_web("gmail",select="id",filters={"account_id":account_id})
     if not rows :
         return False
     user_id = rows[0]["id"]
@@ -67,15 +67,15 @@ def upload_latewhat(Account_id , text1, text2, text3, file_id,reply = "" , subje
     attachment_paths = []
     attachment_labels = []
     mimetypes = []
-    rows = dbimp.select_rows_web("Whatsapp", select="Access_token,Token_expire", filters={"Account_id": Account_id })
+    rows = dbimp.select_rows_web("whatsapp", select="access_token,token_expire", filters={"account_id": account_id })
     row = rows[0] if rows else None
     if not row:
         return False
-    acc = row["Access_token"]
-    expire = row["Token_expire"]
+    acc = row["access_token"]
+    expire = row["token_expire"]
     token_expiry = datetime.fromisoformat(expire)
     if token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
-        refreshed = whatt.refresh_token_web( Account_id, acc)
+        refreshed = whatt.refresh_token_web( account_id, acc)
         if not refreshed:
             return False
         acc = refreshed
@@ -87,20 +87,20 @@ def upload_latewhat(Account_id , text1, text2, text3, file_id,reply = "" , subje
     for recipient, recipient_name in zip(target, names):
         content = f"{recipient},{campaign_name},{now},,"
         personalized_body = body.replace("{name}", recipient_name) if recipient_name else body
-        whatt.send_whatsapp_message(PHONE_NUMBER_ID=Account_id, ACCESS_TOKEN=acc, recipient_number=recipient, message_body=personalized_body)
+        whatt.send_whatsapp_message(PHONE_NUMBER_ID=account_id, ACCESS_TOKEN=acc, recipient_number=recipient, message_body=personalized_body)
         for typee , path , name in zip(mimetypes,attachment_paths,attachment_labels) :
-            whatt.send_whatsapp_media( PHONE_NUMBER_ID=Account_id, ACCESS_TOKEN=acc, recipient_number=recipient, msg_type=typee, path=path,filename=name)
+            whatt.send_whatsapp_media( PHONE_NUMBER_ID=account_id, ACCESS_TOKEN=acc, recipient_number=recipient, msg_type=typee, path=path,filename=name)
         sccc.inert_workflow(campaign_name,reply,subject)
-        dpp.append_to_file(user_id=Account_id, platform="Whatsapp", filename="campaigns.txt", data_to_append=content)
+        dpp.append_to_file(user_id=account_id, platform="whatsapp", filename="campaigns.txt", data_to_append=content)
 
-def upload_lategmail(Account_id , text1, text2, text3, file_id,reply = "" , subject = ""):
+def upload_lategmail(account_id , text1, text2, text3, file_id,reply = "" , subject = ""):
     target = json.loads(text1[0])
     combin = json.loads(text3[0])
     names = combin[1]
     body = combin[0]
     campaign_name = text2
     file_id = json.loads(file_id[0])
-    rows = dbimp.select_rows_web("Gmail",select="id",filters={"Account_id":Account_id})
+    rows = dbimp.select_rows_web("gmail",select="id",filters={"account_id":account_id})
     if not rows :
         return False
     user_id = rows[0]["id"]
@@ -112,7 +112,7 @@ def upload_lategmail(Account_id , text1, text2, text3, file_id,reply = "" , subj
         tmp_path , mimetype,name = dpp.download_drive_file_to_temp(service,fileeee)
         attachment_paths.append(tmp_path)
         attachment_labels.append(name)
-    gmail_service = gc.get_service_web(user_id,Account_id)
+    gmail_service = gc.get_service_web(user_id,account_id)
     for recipient, recipient_name in zip(target, names):
         content = f"{recipient},{campaign_name},{now},,"
         if attachment_labels and attachment_paths :
@@ -120,7 +120,7 @@ def upload_lategmail(Account_id , text1, text2, text3, file_id,reply = "" , subj
         else:
             gc.send_message(service=gmail_service, to=recipient, subject=campaign_name or "", body_text=body, name=recipient_name)
         sccc.inert_workflow(campaign_name,reply,subject)
-        dpp.append_to_file(user_id=Account_id, platform="Gmail", filename="campaigns.txt", data_to_append=content)
+        dpp.append_to_file(user_id=account_id, platform="gmail", filename="campaigns.txt", data_to_append=content)
 
 @app.route('/campaign', methods=['POST'])
 @limiter.limit("5 per minute")
@@ -260,20 +260,20 @@ def campaign():
                     cleanup_local_files()
                     return jsonify({"status": "failed", "error": f"drive upload failed: {err}"}), 502
                 dr.append(drive_file_id)
-            rows = dbimp.select_rows( tokench["token"], "Gmail", select="Account_id,Access_token", filters={"id": user_id, "Email": email}, )
+            rows = dbimp.select_rows( tokench["token"], "gmail", select="account_id,access_token", filters={"id": user_id, "email": email}, )
             if not rows:
                 cleanup_local_files()
                 return jsonify({"status": "failed", "reason": "gmail account not connected"}), 401
-            Account_id = rows[0]["Account_id"]
-            access_token = rows[0]["Access_token"]  
+            account_id = rows[0]["account_id"]
+            access_token = rows[0]["access_token"]  
             camp = json.dumps(target)
             new_body  = [body , recipient_names]
             bodyy = json.dumps(new_body)
             file_id = json.dumps(dr)
             camll = f"{camp},1234,+++x{reply},1234,+++x{subject}"
-            sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token=access_token, typeee="email_later", text1=camll, text2=campaign_name, text3=bodyy, media_id=file_id, )
+            sccc.insert_post( user_id=account_id, scheduled_time=timee, access_token=access_token, typeee="email_later", text1=camll, text2=campaign_name, text3=bodyy, media_id=file_id, )
             cleanup_local_files()  
-            return jsonify({"account": Account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}), 200
+            return jsonify({"account": account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}), 200
         try:
             gmail_service = gc.get_service(token=token, user_id=user_id)
         except Exception:
@@ -282,11 +282,11 @@ def campaign():
         if not gmail_service:
             cleanup_local_files()
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
-        rows = dbimp.select_rows(tokench["token"], "Gmail", select="Account_id", filters={"id": user_id, "email": email})
+        rows = dbimp.select_rows(tokench["token"], "gmail", select="account_id", filters={"id": user_id, "email": email})
         if not rows:
             cleanup_local_files()
             return jsonify({"error": "gmail account not found for this email"}), 404
-        account_id = rows[0]["Account_id"]
+        account_id = rows[0]["account_id"]
         attachment_paths = [m["path"] for m in media] if media else None
         attachment_labels = [m.get("filename") for m in media] if media else None
         if attachment_labels and any(l is None for l in attachment_labels):
@@ -321,28 +321,28 @@ def campaign():
                     cleanup_local_files()
                     return jsonify({"status": "failed", "error": f"drive upload failed: {err}"}), 502
                 dr.append(drive_file_id)
-            rows = dbimp.select_rows( tokench["token"], "Whatsapp",select="Account_id,Access_token", filters={"id": user_id, "Phone_no": number}, )
+            rows = dbimp.select_rows( tokench["token"], "whatsapp",select="account_id,access_token", filters={"id": user_id, "phone_no": number}, )
             if not rows:
                 cleanup_local_files()
                 return jsonify({"status": "failed", "reason": "whatsapp account not connected"}), 401
-            Account_id = rows[0]["Account_id"]
-            access_token = rows[0]["Access_token"]  
+            account_id = rows[0]["account_id"]
+            access_token = rows[0]["access_token"]  
             camp = json.dumps(target)
             new_body  = [body , recipient_names]
             recipient_names = json.dumps(names)     
             file_id = json.dumps(dr)
             camll = f"{camp},1234,+++x{reply},1234,+++x{subject}"
-            sccc.insert_post( user_id=Account_id, scheduled_time=timee, access_token=access_token,typeee="message_later", text1=camll, text2=recipient_names, text3=bodyy, media_id=file_id,)
+            sccc.insert_post( user_id=account_id, scheduled_time=timee, access_token=access_token,typeee="message_later", text1=camll, text2=recipient_names, text3=bodyy, media_id=file_id,)
             cleanup_local_files()
-            return jsonify({"account": Account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}), 200
-        rows = dbimp.select_rows(tokench["token"], "Whatsapp", select="Access_token,Account_id,Token_expire", filters={"Phone_no": number, "id": user_id})
+            return jsonify({"account": account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}), 200
+        rows = dbimp.select_rows(tokench["token"], "whatsapp", select="access_token,account_id,token_expire", filters={"phone_no": number, "id": user_id})
         row = rows[0] if rows else None
         if not row:
             cleanup_local_files()
             return jsonify({"error": "not connected", "connect_url": "/connect-whatsapp"}), 401
-        account_id = row["Account_id"]
-        acc = row["Access_token"]
-        expire = row["Token_expire"]
+        account_id = row["account_id"]
+        acc = row["access_token"]
+        expire = row["token_expire"]
         try:
             token_expiry = datetime.fromisoformat(expire)
         except (TypeError, ValueError):

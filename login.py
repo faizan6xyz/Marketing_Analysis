@@ -128,12 +128,12 @@ def details():
     if not name or not gmail  or not phone:
         return jsonify({"status": False, "reason": "name, gmail, phone are all required"}), 400
     try:
-        dbimp.update_rows(tokench["token"], "users", {"Name": name, "Phone_number": phone, "Gmail": gmail }, {"user_id": user_id})
+        dbimp.update_rows(tokench["token"], "users", {"name": name, "phone_number": phone, "gmail": gmail }, {"user_id": user_id})
     except Exception as e:
         return jsonify({"status": True, "Statusdb": False, "detail": str(e)}), 500
     return jsonify({"status": True, "Statusdb": True}), 200
 
-@app.route("/check", methods=["GET"])
+@app.route("/check", methods=["POST"])
 def check_status():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -161,33 +161,32 @@ def check_accounts():
     user_id = tokench["user_id"]
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
-    rows = dbimp.select_rows(tokench['token'],"users",select="Gmail,Gdrive,X,Instagram,Threads,Pinterst,Whatsapp,Youtube",filters={"user_id":user_id})
+    rows = dbimp.select_rows(tokench['token'],"users",select="gmail,gdrive,x,instagram,threads,pinterst,whatsapp,youtube",filters={"user_id":user_id})
     if not rows:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     data0 = data1 = data2 = data3 = data4 = data5 = data6 = data7 = None
     try:
-        if rows[0]["Instagram"]:
-            data0 = dbimp.select_rows(tokench["token"], "Instagram", select="Username", filters={"id": user_id})
-        if rows[0]["Gmail"]:
-            data1 = dbimp.select_rows(tokench["token"], "Gmail", select="Email", filters={"id": user_id})
-        if rows[0]["Gdrive"]:
-            data2 = dbimp.select_rows(tokench["token"], "Drive", select="Email", filters={"id": user_id})
-        if rows[0]["Whatsapp"]:
-            data3 = dbimp.select_rows(tokench["token"], "Whatsapp", select="Phone_no", filters={"id": user_id})
-        if rows[0]["Threads"]:
-            data4 = dbimp.select_rows(tokench["token"], "Threads", select="Username", filters={"id": user_id})
-        if rows[0]["Youtube"]:
-            data5 = dbimp.select_rows(tokench["token"], "Youtube", select="channel_title", filters={"id": user_id})
-        if rows[0]["Pinterst"]:
-            data6 = dbimp.select_rows(tokench["token"], "Pinterst", select="Username", filters={"id": user_id})
-        if rows[0]["X"]:
-            data7 = dbimp.select_rows(tokench["token"], "X", select="Username", filters={"id": user_id})
+        if rows[0]["instagram"]:
+            data0 = dbimp.select_rows(tokench["token"], "instagram", select="username", filters={"id": user_id})
+        if rows[0]["gmail"]:
+            data1 = dbimp.select_rows(tokench["token"], "gmail", select="email", filters={"id": user_id})
+        if rows[0]["gdrive"]:
+            data2 = dbimp.select_rows(tokench["token"], "drive", select="email", filters={"id": user_id})
+        if rows[0]["whatsapp"]:
+            data3 = dbimp.select_rows(tokench["token"], "whatsapp", select="phone_no", filters={"id": user_id})
+        if rows[0]["threads"]:
+            data4 = dbimp.select_rows(tokench["token"], "threads", select="username", filters={"id": user_id})
+        if rows[0]["youtube"]:
+            data5 = dbimp.select_rows(tokench["token"], "youtube", select="channel_title", filters={"id": user_id})
+        if rows[0]["pinterst"]:
+            data6 = dbimp.select_rows(tokench["token"], "pinterst", select="username", filters={"id": user_id})
+        if rows[0]["x"]:
+            data7 = dbimp.select_rows(tokench["token"], "x", select="username", filters={"id": user_id})
     except Exception:
         app.logger.exception("Failed to fetch account data for user %s", user_id)
         return jsonify({"status": False, "reason": "unable to check db"}), 500
-    merged = { "instagram": all_values(data0, "Username"), "gmail": all_values(data1, "Email"), "drive": all_values(data2, "Email"),"whatsapp": all_values(data3, "Phone_no"), "threads": all_values(data4, "Username"), "youtube": all_values(data5, "channel_title"), "pinterest": all_values(data6, "Username"), "x": all_values(data7, "Username"), }
+    merged = {"instagram": all_values(data0, "username"),"gmail": all_values(data1, "email"),"drive": all_values(data2, "email"),"whatsapp": all_values(data3, "phone_no"),"threads": all_values(data4, "username"),"youtube": all_values(data5, "channel_title"),"pinterest": all_values(data6, "username"),"x": all_values(data7, "username"),}
     return jsonify({"status": True, "data": merged}), 200
-
 
 @app.route("/limit", methods=["POST"])
 def limit():

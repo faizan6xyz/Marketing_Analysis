@@ -37,8 +37,8 @@ CANCEL_URL = os.environ.get("CANCEL_URL", "https://example.com/cancel")
 PAYPAL_ENV = os.environ.get("PAYPAL_ENV", "sandbox")
 PLAN_CATALOG = json.loads(_require("PAYPAL_PLANS"))
 BASE_URL = "https://api-m.paypal.com" if PAYPAL_ENV == "live" else "https://api-m.sandbox.paypal.com"
-PAYPAL_TABLE = "Paypal"
-VERIFY_TABLE = "Paypal_verify"
+PAYPAL_TABLE = "paypal"
+VERIFY_TABLE = "paypal_verify"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("paypal_app")
 TRUSTED_CERT_HOSTS = ("api.paypal.com", "api.sandbox.paypal.com")
@@ -67,7 +67,7 @@ def seed_demo_cart(token,user_id, cart_id, plan_key):
     rows = dbimp.select_rows(token,PAYPAL_TABLE, select="id", filters={"id": user_id})
     existing = rows[0] if rows else None
 
-    data = {"Cart_id": cart_id, "Plan": plan_key, "Status": "CREATED", "Paid": 0}
+    data = {"cart_id": cart_id, "plan": plan_key, "status": "CREATED", "paid": 0}
     if existing:
         dbimp.update_rows(token,PAYPAL_TABLE, data, {"id": user_id})
     else:
@@ -75,40 +75,38 @@ def seed_demo_cart(token,user_id, cart_id, plan_key):
         dbimp.insert_rows(token,PAYPAL_TABLE, data)
 
 def get_cart_for_user(token,user_id):
-    rows = dbimp.select_rows(token, PAYPAL_TABLE, select="id,Cart_id,Plan,Status,Paid,Paypal_order_id", filters={"id": user_id}, )
+    rows = dbimp.select_rows(token, PAYPAL_TABLE, select="id,cart_id,plan,status,paid,paypal_order_id", filters={"id": user_id}, )
     row = rows[0] if rows else None
-
     return dict(row) if row else None
 
 def get_active_order_for_user(token,user_id):
     row = get_cart_for_user(token,user_id)
-    if row and row.get("Paypal_order_id") and row.get("Status") in ACTIVE_ORDER_STATUSES:
+    if row and row["paypal_order_id"] and row["status"] in ACTIVE_ORDER_STATUSES:
         return row
     return None
 
 def get_order_for_user(token,user_id, paypal_order_id):
     row = get_cart_for_user(token,user_id)
-    if not row or row.get("Paypal_order_id") != paypal_order_id:
+    if not row or row["paypal_order_id"] != paypal_order_id:
         return None
     return row
 
 def get_user_id_for_order(paypal_order_id):
-    rows = dbimp.select_rows_web(PAYPAL_TABLE, select="id", filters={"Paypal_order_id": paypal_order_id})
+    rows = dbimp.select_rows_web(PAYPAL_TABLE, select="id", filters={"paypal_order_id": paypal_order_id})
     row = rows[0] if rows else None
-
     return row["id"] if row else None
 
 def save_order(token,user_id, paypal_order_id, cart_id, plan_key) -> bool:
-    resp = dbimp.update_rows(token, PAYPAL_TABLE, {"Paypal_order_id": paypal_order_id,"Cart_id": cart_id,"Plan": plan_key,"Status": "CREATED","Updated_at": _now(),},{"id": user_id},)
+    resp = dbimp.update_rows(token, PAYPAL_TABLE, {"paypal_order_id": paypal_order_id,"cart_id": cart_id,"plan": plan_key,"status": "CREATED","updated_at": _now(),},{"id": user_id},)
     return _update_succeeded(resp)
 
 def mark_order_paid(user_id, paypal_order_id) -> bool:
-    rows = dbimp.select_rows_web(PAYPAL_TABLE , select="Plan" , filters={"id": user_id, "Paypal_order_id": paypal_order_id})
+    rows = dbimp.select_rows_web(PAYPAL_TABLE , select="plan" , filters={"id": user_id, "paypal_order_id": paypal_order_id})
     if not rows :
         return False
-    plan_id = rows[0]["Plan"]
-    dbimp.update_rows_web("users",{"Paid": True,"Plan":plan_id} , {"user_id" : user_id})
-    resp = dbimp.update_rows_web(PAYPAL_TABLE, {"Paid": 1, "Status": "COMPLETED", "Updated_at": _now()}, {"id": user_id, "Paypal_order_id": paypal_order_id, "Paid": 0},)
+    plan_id = rows[0]["plan"]
+    dbimp.update_rows_web("users",{"paid": True,"plan":plan_id} , {"user_id" : user_id})
+    resp = dbimp.update_rows_web(PAYPAL_TABLE, {"paid": 1, "status": "COMPLETED", "updated_at": _now()}, {"id": user_id, "paypal_order_id": paypal_order_id, "paid": 0},)
     return _update_succeeded(resp)
 
 def _hash_request(payload):
@@ -116,20 +114,20 @@ def _hash_request(payload):
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 def get_idempotent_response(token,user_id, key, request_hash):
-    rows = dbimp.select_rows( token,VERIFY_TABLE, select="Idempotency_key,Request_hash,Response", filters={"id": user_id})
+    rows = dbimp.select_rows( token,VERIFY_TABLE, select="idempotency_key,request_hash,response", filters={"id": user_id})
     row = rows[0] if rows else None
 
-    if not row or row["Idempotency_key"] != key:
+    if not row or row["idempotency_key"] != key:
         return None, False
-    if row["Request_hash"] != request_hash:
+    if row["request_hash"] != request_hash:
         return None, True
-    resp = row.get("Response")
+    resp = row["response"]
     return (json.loads(resp) if isinstance(resp, str) else resp), False
 
 def save_idempotent_response(token,user_id, key, request_hash, response):
     rows = dbimp.select_rows(token,VERIFY_TABLE, select="id", filters={"id": user_id})
     existing = rows[0] if rows else None
-    data = {"Idempotency_key": key, "Request_hash": request_hash, "Response": response}
+    data = {"idempotency_key": key, "request_hash": request_hash, "response": response}
     if existing:
         dbimp.update_rows(token,VERIFY_TABLE, data, {"id": user_id})
     else:
@@ -137,7 +135,7 @@ def save_idempotent_response(token,user_id, key, request_hash, response):
         dbimp.insert_rows(token,VERIFY_TABLE, data)
 
 def is_duplicate_webhook_event(event_id) -> bool:
-    rows = dbimp.select_rows_web(VERIFY_TABLE, select="Event_id", filters={"Event_id": event_id})
+    rows = dbimp.select_rows_web(VERIFY_TABLE, select="event_id", filters={"event_id": event_id})
     row = rows[0] if rows else None
 
     return row is not None
@@ -147,7 +145,7 @@ def record_webhook_event(event_id, user_id) -> bool:
         return False
     rows = dbimp.select_rows_web(VERIFY_TABLE, select="id", filters={"id": user_id})
     existing = rows[0] if rows else None
-    data = {"Event_id": event_id, "Created_at": _now()}
+    data = {"event_id": event_id, "created_at": _now()}
     if existing:
         dbimp.update_rows_web(VERIFY_TABLE, data, {"id": user_id})
     else:
@@ -284,7 +282,7 @@ def create_payment():
         return jsonify({"status": "failed" , "reason": tokench["reason"]})
     user_id = tokench['user_id']
     check = logincheck(tokench['token'],user_id)
-    ro = dbimp.select_rows(tokench["token"],"users",select="Paid",filters={"user_id":user_id})
+    ro = dbimp.select_rows(tokench["token"],"users",select="paid",filters={"user_id":user_id})
     if not ro :
         return jsonify({"error":"user_not_exist"}) , 400
     paid = ro[0]["Paid"]

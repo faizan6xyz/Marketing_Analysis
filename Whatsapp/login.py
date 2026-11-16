@@ -112,7 +112,7 @@ def oauth_callbac():
     except ValueError:
         return jsonify({"error": "invalid timestamp/expire format"}), 400
     try:
-        dbimp.update_rows(token,TABLE_NAME,{"Access_token": access,"Timestamp": timestamp ,"Token_expire": expire ,"Account_id": account_id ,"Phone_no": phone_no,},filters={"id": user_id},)
+        dbimp.update_rows(token,TABLE_NAME,{"access_token": access,"timestamp": timestamp ,"token_expire": expire ,"account_id": account_id ,"phone_no": phone_no,},filters={"id": user_id},)
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200

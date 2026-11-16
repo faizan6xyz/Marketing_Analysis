@@ -11,7 +11,7 @@ from googleapiclient.errors import HttpError
 import requests
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-TABLE_NAME = "Gmail"
+TABLE_NAME = "gmail"
 import logging
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -37,8 +37,8 @@ def build_flow():
     return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/gmail/oauth/callback"], }}, scopes=SCOPES, redirect_uri=f"{BASE_URL}gmail/oauth/callback")
 
 def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
-    payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(),"Account_id":google_account_id ,"Timestamp": datetime.now(timezone.utc).isoformat()}
-    dbimp.update_rows(token,"users",{"Gmail":True},{"user_id":user_id})
+    payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
+    dbimp.update_rows(token,"users",{"gmail":True},{"user_id":user_id})
     if email_addr:
         payload["Email"] = email_addr
     rows = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})
@@ -48,13 +48,13 @@ def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
         dbimp.insert_rows(token,TABLE_NAME, {"id": user_id, **payload})
 
 def get_service(token,user_id):
-    rows = dbimp.select_rows(token,TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"id": user_id})
+    rows = dbimp.select_rows(token,TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"id": user_id})
     row = rows[0] if rows else None
-    if not row or not row.get("Access_token"):
+    if not row or not row.get("access_token"):
         return None
-    creds = Credentials(token=row["Access_token"], refresh_token=row["Refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
-    if row.get("Token_expire"):
-        creds.expiry = datetime.fromisoformat(row["Token_expire"])
+    creds = Credentials(token=row["access_token"], refresh_token=row["refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
+    if row.get("token_expire"):
+        creds.expiry = datetime.fromisoformat(row["token_expire"])
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -72,7 +72,7 @@ def get_service(token,user_id):
     return build('gmail', 'v1', credentials=creds)
 
 def save_tokens_web(user_id, creds, google_account_id,email_addr=None):
-    payload = {"Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": creds.expiry.isoformat(),"Account_id":google_account_id ,"Timestamp": datetime.now(timezone.utc).isoformat()}
+    payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
     if email_addr:
         payload["Email"] = email_addr
     rows = dbimp.select_rows_web(TABLE_NAME, select="id", filters={"id": user_id})
@@ -81,14 +81,14 @@ def save_tokens_web(user_id, creds, google_account_id,email_addr=None):
     else:
         dbimp.insert_rows_web(TABLE_NAME, {"id": user_id, **payload})
 
-def get_service_web(user_id,Account_id):
-    rows = dbimp.select_rows_web(TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"id": user_id,"Account_id":Account_id})
+def get_service_web(user_id,account_id):
+    rows = dbimp.select_rows_web(TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"id": user_id,"account_id":account_id})
     row = rows[0] if rows else None
-    if not row or not row.get("Access_token"):
+    if not row or not row.get("access_token"):
         return None
-    creds = Credentials(token=row["Access_token"], refresh_token=row["Refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
-    if row.get("Token_expire"):
-        creds.expiry = datetime.fromisoformat(row["Token_expire"])
+    creds = Credentials(token=row["access_token"], refresh_token=row["refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
+    if row.get("token_expire"):
+        creds.expiry = datetime.fromisoformat(row["token_expire"])
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -153,7 +153,7 @@ def _validate_attachment(path: str, base_dir: str = None) -> str:
         raise ValueError(f"Attachment '{path}' is empty.")
     if size > MAX_ATTACHMENT_BYTES:
         raise ValueError(f"Attachment '{path}' is {size / (1024*1024):.1f} MB, which exceeds "
-            f"Gmail's {MAX_ATTACHMENT_BYTES / (1024*1024):.0f} MB per-message limit.")
+            f"gmail's {MAX_ATTACHMENT_BYTES / (1024*1024):.0f} MB per-message limit.")
     return resolved
 
 def _safe_output_path(out_dir: str, filename: str) -> str:
@@ -174,7 +174,7 @@ def _with_retry(func, *args, **kwargs):
         except HttpError as e:
             status = getattr(e, "status_code", None) or getattr(e.resp, "status", None)
             if status in RETRYABLE_HTTP_STATUSES and attempt < MAX_RETRIES:
-                logger.warning(f"Gmail API error {status} on attempt {attempt}/{MAX_RETRIES}, retrying")
+                logger.warning(f"gmail API error {status} on attempt {attempt}/{MAX_RETRIES}, retrying")
                 time.sleep(RETRY_BACKOFF_BASE ** attempt)
                 last_exc = e
                 continue
@@ -222,7 +222,7 @@ def list_messages(service, query='is:unread', max_results=10, all_pages=False, v
     for _ in range(max_pages):
         list_kwargs = {"userId": "me", "q": query, "maxResults": max_results}
         if page_token:
-            list_kwargs["pageToken"] = page_token
+            list_kwargs["pagetoken"] = page_token
         results = _with_retry(service.users().messages().list, **list_kwargs)
         messages = results.get('messages', [])
         for msg in messages:
@@ -235,7 +235,7 @@ def list_messages(service, query='is:unread', max_results=10, all_pages=False, v
             parsed.append(entry)
             if verbose:
                 print(f"From: {sender} | Subject: {subject} | Body: {body}")
-        page_token = results.get('nextPageToken')
+        page_token = results.get('nextPagetoken')
         if not page_token or not all_pages:
             break
     return parsed

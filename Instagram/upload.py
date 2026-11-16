@@ -26,7 +26,7 @@ MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 2               # seconds; doubles each retry
 RETRYABLE_IG_ERROR_CODES = {4, 17, 32}   # IG rate-limit / throttling codes
 ALLOWED_URL_SCHEMES = {"https"}
-TABLE_NAME = "Instagram"
+TABLE_NAME = "instagram"
 
 def _redact(text: str, access_token: str = None) -> str:
     if access_token:
@@ -46,7 +46,7 @@ def refresh_token(token, user_id, access_token):
     seconds = resp.get("expires_in")
     if new_token and seconds:
         new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows(token,TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"id": user_id},)
+        dbimp.update_rows(token,TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"id": user_id},)
         return new_token
     return access_token
 
@@ -56,7 +56,7 @@ def refresh_token11( IG_user_id, access_token):
     seconds = resp.get("expires_in")
     if new_token and seconds:
         new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows_web(TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"Account_id": IG_user_id},)
+        dbimp.update_rows_web(TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"account_id": IG_user_id},)
         return new_token
     return access_token
 
@@ -88,16 +88,16 @@ def _request_with_retry(method: str, url: str, access_token: str = None, **kwarg
     raise RuntimeError(_redact(f"Request to '{url}' failed after {MAX_RETRIES} attempts: {last_exc}", access_token))
 
 def access_tokenvali(account_id):
-    rows = dbimp.select_rows_web(TABLE_NAME, select="Access_token,Token_expire", filters={"Account_id": account_id})
+    rows = dbimp.select_rows_web(TABLE_NAME, select="access_token,token_expire", filters={"account_id": account_id})
     if not rows :
         return False
     row = rows[0]
-    access_token = row["Access_token"]
-    raw_expiry = row["Token_expire"]
-    Token_expiry = datetime.fromisoformat(raw_expiry)
-    if Token_expiry.tzinfo is None:
-        Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
-    if Token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
+    access_token = row["access_token"]
+    raw_expiry = row["token_expire"]
+    token_expiry = datetime.fromisoformat(raw_expiry)
+    if token_expiry.tzinfo is None:
+        token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+    if token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
         access_token = refresh_token11( account_id, access_token)
     return access_token
 

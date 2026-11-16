@@ -34,9 +34,9 @@ BASE_URL = os.environ.get("BASE_URL")
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds, state link expires after 10 min
-table_name = "Drive" 
+table_name = "drive" 
 APP_FOLDER = "Leo_Social"
-PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "linkedin","youtube","uplaod"]
+PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "youtube","x","pinterst","threads"]
 BASE_URL = os.environ.get("BASE_URL")
 SUBFOLDERS = "Analytics"
 campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
@@ -48,38 +48,38 @@ campaigns_content6 = "Video_ID,Published_At,Views,Likes,Comments,Shares,Watch_Ti
 campaigns_content7 = "Tweet_ID,Published At,Impressions,Likes,Retweets,Replies,Bookmarks"
 campaigns_content8 = "Pin_ID,Published_At,Impressions,Saves,Clicks,Outbound_Clicks,Engagements,Follower_Gained"
 
-filesss = {"Gmail": {"campains.txt": campaigns_content, "workflowmessage.json": "{}",},
-          "Whatsapp": {"campains.txt": campaigns_content1,"workflowmessage.json": "{}",},
-          "Instagram": {"workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
-          "Threads" : {"postanalysis.txt": campaigns_content2,"workflowcomment.json": "{}"},
-          "Youtube" : { "postanalysis.txt":campaigns_content6 },
+filesss = {"gmail": {"campains.txt": campaigns_content, "workflowmessage.json": "{}",},
+          "whatsapp": {"campains.txt": campaigns_content1,"workflowmessage.json": "{}",},
+          "instagram": {"workflowcomment.json": "{}","postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},
+          "threads" : {"postanalysis.txt": campaigns_content2,"workflowcomment.json": "{}"},
+          "youtube" : { "postanalysis.txt":campaigns_content6 },
           "x": {"postanalysis.txt":campaigns_content7 } ,
-          "Pinterst": {"postanalysis.txt":campaigns_content8}}
+          "pinterst": {"postanalysis.txt":campaigns_content8}}
 
 
 # need to remove the workflow.json from each platform and add the workflow for each post , campin in valkey cache and sqlitedb . the newest one (post and campaign workflow ) will in be in the cache and the old ones would be gotten in the sqlite 
 
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
-    dbimp.insert_rows(token,table_name, {"id" : user_id , "Timestamp":timestamp ,"Access_token" : access_token, "Refresh_token" : refresh_token, "Token_expire": expiry, "Connected" : 1 , "Scopes" : SCOPES,"Email":mail})
-    dbimp.update_rows(token,"users",{"Gdrive":True},{"user_id":user_id})
+    dbimp.insert_rows(token,table_name, {"id" : user_id , "timestamp":timestamp ,"access_token" : access_token, "refresh_token" : refresh_token, "token_expire": expiry, "connected" : 1 , "scopes" : SCOPES,"email":mail})
+    dbimp.update_rows(token,"users",{"gdrive":True},{"user_id":user_id})
 
 def Update_token(token , user_id, access_token, refresh_token, expiry):
-    dbimp.update_rows_web(token , table_name, {"Access_token" : access_token, "Refresh_token": refresh_token, "Token_expire": expiry}, {"id" : user_id})
+    dbimp.update_rows_web(token , table_name, {"access_token" : access_token, "refresh_token": refresh_token, "token_expire": expiry}, {"id" : user_id})
 
 def load_tokens(user_id):
-    rows = dbimp.select_rows_web(table_name , select="Access_token,Refresh_token,Token_expire,Connected" , filters= {"id" : user_id})
+    rows = dbimp.select_rows_web(table_name , select="access_token,refresh_token,token_expire,connected" , filters= {"id" : user_id})
     row = rows[0] if rows else None
     if not row :    
         return None
-    access_token = row["Access_token"]
-    refresh_token = row["Refresh_token"]
-    expiry = row["Token_expire"]
-    connected = row["Connected"]
+    access_token = row["access_token"]
+    refresh_token = row["refresh_token"]
+    expiry = row["token_expire"]
+    connected = row["connected"]
     return {"access_token": access_token , "refresh_token": refresh_token, "token_expiry":expiry , "connected": bool(connected) }
 
 def mark_disconnected(user_id):
-    dbimp.update_rows_web(table_name , {"Connected" : 0 } , {"id" : user_id} )
+    dbimp.update_rows_web(table_name , {"connected" : 0 } , {"id" : user_id} )
 
 def download_drive_file_to_temp(drive_service, file_id):
     meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
@@ -197,7 +197,7 @@ def create_files_in_folders(token, user_id, service, file_content, structure):
 def _resolve_and_verify_file(user_idd, platform, filename):
     if not platform or not filename:
         raise ValueError("filename and platform are required")
-    rows  = dbimp.select_rows_web(platform, select='id' , filters={"Account_id":user_idd})
+    rows  = dbimp.select_rows_web(platform, select='id' , filters={"account_id":user_idd})
     if rows :
         row = row[0]
     user_id = row["id"]

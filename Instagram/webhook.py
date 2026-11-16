@@ -2,7 +2,7 @@ import os
 import hmac
 import hashlib
 import database.UserDB as dbimp
-import upload as uploadd
+import Instagram.upload as uploadd
 import Instagram.schedule_video as sccc
 from flask import Flask, request, jsonify
 app = Flask(__name__)

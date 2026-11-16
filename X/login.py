@@ -32,7 +32,7 @@ X_REDIRECT_URI = os.getenv("x_redirect_uri")
 BASE_URL = os.getenv("BASE_URL")
 STATE_MAX_AGE = 600  # seconds
 TWEET_URL = "https://api.twitter.com/2/tweets"
-TABLE_NAME = "X"
+TABLE_NAME = "x"
 SCOPE = "tweet.read users.read offline.access"
 AUTH_URL = "https://twitter.com/i/oauth2/authorize"
 TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
@@ -46,10 +46,10 @@ def upload_image(access_token, file_bytes):
     return resp.get("media_id_string")
 
 def refresh_x_token11( account_id):
-    rows = dbimp.select_rows_web(TABLE_NAME,select="Refresh_token",filters={"Account_id": account_id})
+    rows = dbimp.select_rows_web(TABLE_NAME,select="refresh_token",filters={"account_id": account_id})
     if not rows:
         return None
-    refresh_token = rows[0]["Refresh_token"]
+    refresh_token = rows[0]["refresh_token"]
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
     resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
     new_access = resp.get("access_token")
@@ -58,7 +58,7 @@ def refresh_x_token11( account_id):
     if not new_access or not seconds:
         return None
     expire_time = (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
-    dbimp.update_rows_web( TABLE_NAME, {"Access_token": new_access, "Refresh_token": new_refresh, "Token_expire": expire_time}, filters={"Account_id": account_id})
+    dbimp.update_rows_web( TABLE_NAME, {"access_token": new_access, "refresh_token": new_refresh, "token_expire": expire_time}, filters={"account_id": account_id})
     return new_access
 
 def parse_aware_timestamp(timestamp: str) -> datetime:
@@ -148,9 +148,9 @@ def _post_tweet(access_token, text, media_ids=None):
         return None
     return tweet_id
 
-def post_later(tpyee, Account_id, text, text2 ,file_ids=None):
-    Account_ids = json.loads(Account_id[0])
-    rows = dbimp.select_rows_web("X", select="id", filters={"Account_id": Account_ids})
+def post_later(tpyee, account_id, text, text2 ,file_ids=None):
+    account_ids = json.loads(account_id[0])
+    rows = dbimp.select_rows_web(TABLE_NAME, select="id", filters={"account_id": account_ids})
     if not rows:
         return False
     user_id = rows[0]["id"]
@@ -160,12 +160,12 @@ def post_later(tpyee, Account_id, text, text2 ,file_ids=None):
         if not file_ids:
             return False
         file_ids = json.loads(file_ids[0])
-        media_ids_by_account = {acc_id: [] for acc_id in Account_ids}
-        tokens_by_account = {acc_id: refresh_x_token11(acc_id) for acc_id in Account_ids}
+        media_ids_by_account = {acc_id: [] for acc_id in account_ids}
+        tokens_by_account = {acc_id: refresh_x_token11(acc_id) for acc_id in account_ids}
         for drive_file_id in file_ids:
             tmp_path, mimetype, name = dpp.download_drive_file_to_temp(service, drive_file_id)
             try:
-                for acc_id in Account_ids:
+                for acc_id in account_ids:
                     access_token = tokens_by_account[acc_id]
                     with open(tmp_path, "rb") as file:
                         if tpyee == "photo_later":
@@ -184,7 +184,7 @@ def post_later(tpyee, Account_id, text, text2 ,file_ids=None):
             tweet_id, post_err = create_tweet_with_media(access_token, text, media_ids)
             results[acc_id] = (tweet_id, post_err)
     elif tpyee == "tweet_later":
-        for acc_id in Account_ids:
+        for acc_id in account_ids:
             access_token = refresh_x_token11(acc_id)
             tweet_id = _post_tweet(access_token, text)
             if text2 == "true" :
@@ -206,20 +206,20 @@ def fetch_tweet_metrics(tweet_ids: list[str], access_token: str) -> list[dict]:
     return results
 
 def get_access_token_by_username(token, user_id, username):
-    rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id,Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Username": username} )
+    rows = dbimp.select_rows( token, TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
     if not rows:
         return None, (jsonify({"error": "no x account linked for this username"}), 404), None
     row = rows[0]
-    account_id = row["Account_id"]
-    access_token = row["Access_token"]
-    raw_expiry = row["Token_expire"]
+    account_id = row["account_id"]
+    access_token = row["access_token"]
+    raw_expiry = row["token_expire"]
     if not access_token or not raw_expiry:
         return None, (jsonify({"error": "missing access_token"}), 400), account_id
-    Token_expiry = datetime.fromisoformat(raw_expiry)
-    if Token_expiry.tzinfo is None:
-        Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
-    if Token_expiry - datetime.now(timezone.utc) < timedelta(minutes=10):
-        refresh_token = row.get("Refresh_token")
+    token_expiry = datetime.fromisoformat(raw_expiry)
+    if token_expiry.tzinfo is None:
+        token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+    if token_expiry - datetime.now(timezone.utc) < timedelta(minutes=10):
+        refresh_token = row.get("refresh_token")
         if refresh_token:
             refreshed = refresh_x_token(token, user_id, account_id, refresh_token)
             if refreshed:
@@ -271,7 +271,7 @@ def refresh_x_token(token,user_id, account_id, refresh_token):
     if not new_access or not seconds:
         return None
     expire_time = (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
-    dbimp.update_rows(token, TABLE_NAME, {"Access_token": new_access, "Refresh_token": new_refresh, "Token_expire": expire_time}, filters={"Account_id": account_id,"id":user_id})
+    dbimp.update_rows(token, TABLE_NAME, {"access_token": new_access, "refresh_token": new_refresh, "token_expire": expire_time}, filters={"account_id": account_id,"id":user_id})
     return new_access
 
 @app.route("/x/auth/login")
@@ -360,8 +360,8 @@ def x_dataget():
     except (ValueError, TypeError):
         return jsonify({"error": "invalid timestamp/expire format"}), 400
     try:
-        dbimp.update_rows( token, TABLE_NAME, { "Access_token": access_token, "Refresh_token": refresh_token, "Timestamp": timestamp, "Token_expire": expirey, "Username": username, "Account_id": account_id, }, filters={"id": user_id}, ) 
-        dbimp.update_rows(token,"users",{"X":True},{"user_id":user_id})
+        dbimp.update_rows( token, TABLE_NAME, { "access_token": access_token, "refresh_token": refresh_token, "timestamp": timestamp, "token_expire": expirey, "username": username, "account_id": account_id, }, filters={"id": user_id}, ) 
+        dbimp.update_rows(token,"users",{"x":True},{"user_id":user_id})
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200

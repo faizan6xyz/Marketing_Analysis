@@ -15,7 +15,7 @@ load_dotenv()
 WA_APP_ID = os.getenv("WA_APP_ID")
 WA_REDIRECT_URI = os.getenv("WA_REDIRECT_URI")
 GRAPH_VERSION = "v20.0"
-TABLE_NAME = "WhatsApp"
+TABLE_NAME = "whatsApp"
 SCOPE = "whatsapp_business_management,whatsapp_business_messaging,business_management"
 SEND_API_KEY = os.environ.get("WHATSAPP_SEND_API_KEY")
 VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN")
@@ -166,7 +166,7 @@ def send_whatsapp_media(PHONE_NUMBER_ID, ACCESS_TOKEN, recipient_number: str, ms
 def get_user_for_phone_number_id(incoming_id: str):
     if not incoming_id:
         return None
-    rows = dbimp.select_rows_web(TABLE_NAME, select="id,Access_token", filters={"Account_id": incoming_id})
+    rows = dbimp.select_rows_web(TABLE_NAME, select="id,access_token", filters={"account_id": incoming_id})
     return rows[0] if rows else None
 
 def check_user_id(token,user_id):
@@ -179,7 +179,7 @@ def refresh_token(token,Account_id, access_token):
     seconds = resp.get("expires_in")
     if new_token and seconds:
         new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows(token,TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"Account_id": Account_id},)
+        dbimp.update_rows(token,TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"account_id": Account_id},)
         return new_token
     return access_token
 
@@ -189,7 +189,7 @@ def refresh_token_web(Account_id, access_token):
     seconds = resp.get("expires_in")
     if new_token and seconds:
         new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows_web(TABLE_NAME,{"Access_token": new_token, "Token_expire": new_expire.isoformat()},filters={"Account_id": Account_id},)
+        dbimp.update_rows_web(TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"account_id": Account_id},)
         return new_token
     return access_token
 

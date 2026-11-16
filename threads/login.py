@@ -20,7 +20,7 @@ CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
-THREADS_TABLE_NAME = "Threads"
+THREADS_TABLE_NAME = "threads"
 THREADS_APP_ID = os.environ.get("Threads_app_id")
 THREADS_APP_SECRET = os.environ.get("Threads_app_secrects")
 THREADS_REDIRECT_URI = os.environ.get("THREADS_REDIRECT_URI")
@@ -50,7 +50,7 @@ def refresh_threads_token(expire, access, token, user_id, username):
         new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
         new_access = data["access_token"]
         try:
-            dbimp.update_rows( token, THREADS_TABLE_NAME, { "Access_token": new_access, "Token_expire": new_expiry.isoformat(), }, filters={"Username": username, "id": user_id}, )
+            dbimp.update_rows( token, THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"username": username, "id": user_id}, )
         except Exception as e:
             print(f"Failed to persist refreshed Threads token for user_id={user_id}: {e}")
         return new_access
@@ -66,7 +66,7 @@ def refresh_threads_tokenww(expire, access, thread_user_id):
         new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
         new_access = data["access_token"]
         try:
-            dbimp.update_rows_web( THREADS_TABLE_NAME, { "Access_token": new_access, "Token_expire": new_expiry.isoformat(), }, filters={"Account_id": thread_user_id}, )
+            dbimp.update_rows_web( THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"account_id": thread_user_id}, )
         except Exception as e:
             print(f"Failed to persist refreshed Threads token for : {e}")
         return new_access
@@ -84,7 +84,7 @@ def refresh_threads_token11(expires, accesses, thread_user_ids):
             new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
             new_access = data["access_token"]
             try:
-                dbimp.update_rows_web( THREADS_TABLE_NAME, { "Access_token": new_access, "Token_expire": new_expiry.isoformat(), }, filters={"Account_id": thread_user_id}, )
+                dbimp.update_rows_web( THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"account_id": thread_user_id}, )
             except Exception as e:
                 print(f"Failed to persist refreshed Threads token for {thread_user_id}: {e}")
             new_accesses.append(new_access)
@@ -304,20 +304,20 @@ def wait_for_threads_container(access_token, creation_id, timeout=30, interval=2
     raise TimeoutError("container did not finish processing in time")
 
 def get_access_token_by_username(token, user_id, username):
-    rows = dbimp.select_rows( token, THREADS_TABLE_NAME, select="Account_id,Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Username": username} )
+    rows = dbimp.select_rows( token, THREADS_TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
     if not rows:
         return None,None, (jsonify({"error": "no x account linked for this username"}), 404)
     row = rows[0]
-    account_id = row["Account_id"]
-    access_token = row["Access_token"]
-    raw_expiry = row["Token_expire"]
+    account_id = row["account_id"]
+    access_token = row["access_token"]
+    raw_expiry = row["token_expire"]
     if not access_token or not raw_expiry:
         return None, None,(jsonify({"error": "missing access_token"}), 400)
-    Token_expiry = datetime.fromisoformat(raw_expiry)
-    if Token_expiry.tzinfo is None:
-        Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
-    if Token_expiry - datetime.now(timezone.utc) < timedelta(minutes=10):
-        refresh_token = row.get("Refresh_token")
+    token_expiry = datetime.fromisoformat(raw_expiry)
+    if token_expiry.tzinfo is None:
+        token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+    if token_expiry - datetime.now(timezone.utc) < timedelta(minutes=10):
+        refresh_token = row["refresh_token"]
         if refresh_token:
             refreshed = refresh_threads_token(raw_expiry, access_token, token, user_id, username)
             if refreshed:
@@ -433,8 +433,8 @@ def threads_dataget():
     except (ValueError, TypeError):
         return jsonify({"error": "invalid timestamp/expire format"}), 400
     try:
-        dbimp.update_rows( token, THREADS_TABLE_NAME, {"Access_token": access_token, "Timestamp": timestamp, "Token_expire": expirey, "Username": username,  "Account_id": account_id, }, filters={"id": user_id}, )
-        dbimp.update_rows(token,"users",{"Threads":True},{"user_id":user_id})
+        dbimp.update_rows( token, THREADS_TABLE_NAME, {"access_token": access_token, "timestamp": timestamp, "token_expire": expirey, "username": username,  "account_id": account_id, }, filters={"id": user_id}, )
+        dbimp.update_rows(token,"users",{"threads":True},{"user_id":user_id})
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
@@ -447,14 +447,14 @@ def posts_with_metrics():
     if not username or not token:
         return jsonify({"status": "failed"}), 400
     tokench = au.process(token=token)
-    rows = dbimp.select_rows( tokench["token"], THREADS_TABLE_NAME, select="Access_token,Token_expire,Account_id", filters={"Username": username, "id": tokench["user_id"]}, )
+    rows = dbimp.select_rows( tokench["token"], THREADS_TABLE_NAME, select="access_token,token_expire,account_id", filters={"username": username, "id": tokench["user_id"]}, )
     if not rows:
         return jsonify({"status": "failed"}), 400
     row = rows[0]
-    access_token = row["Access_token"]
-    Token_expire = row["Token_expire"]
-    account_id = row["Account_id"]
-    access_token = refresh_threads_token(Token_expire, access_token, tokench["token"], tokench["user_id"], username)
+    access_token = row["access_token"]
+    token_expire = row["token_expire"]
+    account_id = row["account_id"]
+    access_token = refresh_threads_token(token_expire, access_token, tokench["token"], tokench["user_id"], username)
     try:
         media = get_all_threads_media(access_token, account_id)
         media_ids = [m["id"] for m in media]

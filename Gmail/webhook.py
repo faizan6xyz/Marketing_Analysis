@@ -49,20 +49,20 @@ def gmail_webhook():
     new_history_id = data.get('historyId')
     if not email_address or not new_history_id:
         return jsonify({'error': 'missing fields'}), 400
-    rows = dbimp.select_rows_web( "Gmail", select="Account_id,id,LastHistoryId", filters={"Email": email_address})
+    rows = dbimp.select_rows_web( "gmail", select="account_id,id,last_history_id", filters={"email": email_address})
     if not rows:
         return jsonify({'status': 'unknown account'}), 200
-    account_id = rows[0]["Account_id"]
+    account_id = rows[0]["account_id"]
     user_id = rows[0]["id"]
-    stored_history_id = rows[0].get("LastHistoryId") or new_history_id
+    stored_history_id = rows[0].get("last_history_id") or new_history_id
     service = gc.get_service_web(user_id, account_id)
     try:
         history = service.users().history().list( userId='me', startHistoryId=stored_history_id, historyTypes=['messageAdded']).execute()
     except Exception as e:
         print(f"history.list failed for {email_address}: {e}")
-        dbimp.update_rows_web("Gmail", {"LastHistoryId": new_history_id},{"Email": email_address})
+        dbimp.update_rows_web("gmail", {"last_history_id": new_history_id},{"email": email_address})
         return jsonify({'status': 'history stale, resynced'}), 200
-    df1 = dpp.read_csv_from_drive(account_id, "Gmail", "campains.txt", as_json=False)
+    df1 = dpp.read_csv_from_drive(account_id, "gmail", "campains.txt", as_json=False)
     for record in history.get('history', []):
         for added in record.get('messagesAdded', []):
             msg_id = added['message']['id']
@@ -78,5 +78,5 @@ def gmail_webhook():
             reply_text , reply_subject = sccc.workflow_data(campaign_id)
             if reply_text and reply_subject:
                 gc.send_message( service=service, to=sender_email, subject=reply_subject, body_text=reply_text)
-    dbimp.update_rows_web( "Gmail",  {"LastHistoryId": new_history_id},{"Email": email_address})
+    dbimp.update_rows_web( "gmail",  {"last_history_id": new_history_id},{"email": email_address})
     return jsonify({'status': 'ok'}), 200

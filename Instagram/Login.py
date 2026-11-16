@@ -26,7 +26,7 @@ IG_APP_ID = os.getenv("IG_APP_ID")
 IG_APP_SECRET = os.getenv("IG_APP_SECRET")
 IG_REDIRECT_URI = os.getenv("IG_REDIRECT_URI")
 STATE_MAX_AGE = 600  # seconds
-TABLE_NAME = "Instagram"
+TABLE_NAME = "instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
 BASE_URL = ""
 MAX_SIZE = 400 * 1024 * 1024
@@ -165,18 +165,18 @@ def deleteFile(service ,file_id):
     return True
 
 def get_authenticated_access_token(user_id,token,account_id):
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Access_token,Token_expire", filters={"Account_id": account_id,"id":user_id})
+    rows = dbimp.select_rows(token, TABLE_NAME, select="access_token,token_expire", filters={"account_id": account_id,"id":user_id})
     if not rows:
         return None, (jsonify({"error": "no instagram account linked"}), 404)
     row = rows[0]
-    access_token = row["Access_token"]
-    raw_expiry = row["Token_expire"]
+    access_token = row["access_token"]
+    raw_expiry = row["token_expire"]
     if not access_token or not raw_expiry:
         return None, (jsonify({"error": "missing access_token"}), 400)
-    Token_expiry = datetime.fromisoformat(raw_expiry)
-    if Token_expiry.tzinfo is None:
-        Token_expiry = Token_expiry.replace(tzinfo=timezone.utc)
-    if Token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
+    token_expiry = datetime.fromisoformat(raw_expiry)
+    if token_expiry.tzinfo is None:
+        token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+    if token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
         access_token = uploadd.refresh_token(token, user_id, access_token)
     return access_token, None
 
@@ -256,7 +256,7 @@ def dataget():
     except ValueError:
         return jsonify({"error": "invalid timestamp/expire format"}), 400
     try:
-        dbimp.update_rows(token,TABLE_NAME,{"Access_token": access_token,"Timestamp": timestamp,"Token_expire": expirey,"Username": username,"Account_id": account_id},filters={"id": user_id},)
+        dbimp.update_rows(token,TABLE_NAME,{"access_token": access_token,"Timestamp": timestamp,"token_expire": expirey,"username": username,"account_id": account_id},filters={"id": user_id},)
         dbimp.update_rows(token,"users",{"Instagram":True},{"user_id":user_id})
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
@@ -358,8 +358,8 @@ def story():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
-    rows_by_username = {row["Username"]: row for row in rows}
+    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["username"]: row for row in rows}
     results = []
     service = dpp.authenticate_and_get_service(token)
     data , error , code  = get_files_and_upload_to_drive(service=service,type="story")
@@ -371,7 +371,7 @@ def story():
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
-        account_id = row["Account_id"]
+        account_id = row["account_id"]
         access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
@@ -432,15 +432,15 @@ def photo():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
-    rows_by_username = {row["Username"]: row for row in rows}
+    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["username"]: row for row in rows}
     results = []
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
-        account_id = row["Account_id"]
+        account_id = row["account_id"]
         access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
@@ -506,15 +506,15 @@ def video():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
-    rows_by_username = {row["Username"]: row for row in rows}
+    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["username"]: row for row in rows}
     results = []
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
-        account_id = row["Account_id"]
+        account_id = row["account_id"]
         access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})
@@ -580,15 +580,15 @@ def carousel():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Username,Account_id",filters={"id": tokench["user_id"]})
-    rows_by_username = {row["Username"]: row for row in rows}
+    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {row["username"]: row for row in rows}
     results = []
     for user in usernames:
         row = rows_by_username.get(user)
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
             continue
-        account_id = row["Account_id"]
+        account_id = row["account_id"]
         access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
         if err:
             results.append({"username": user, "account_id": account_id, "success": False, "message": err})

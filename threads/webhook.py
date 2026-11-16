@@ -12,7 +12,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 VERIFY_TOKEN = os.getenv("TH_VERIFY_TOKEN")
 APP_SECRET = os.getenv("Threads_app_secrects")
-table = "Threads"
+table = "threads"
 
 def send_message(text, ACCESS_TOKEN, THREADS_USER_ID, reply_to_id=None):
     container_url = f"https://graph.threads.net/v1.0/{THREADS_USER_ID}/threads"
@@ -67,17 +67,17 @@ def receive_webhook():
             media_id = value.get("media", {}).get("id")
         if not from_user_id or not media_id:
             continue  # nothing usable in this entry, move to next
-        access_rows = dbimp.select_rows_web( table, select="id,Access_token,", filters={"Account_id": th_account_id} )
+        access_rows = dbimp.select_rows_web( table, select="id,access_token,", filters={"account_id": th_account_id} )
         access = access_rows[0] if access_rows else None
         if not access:
             results.append({"entry": th_account_id, "error": "no access record found for account"})
             continue
-        Token_expire = datetime.fromisoformat(access["Token_expire"])
+        token_expire = datetime.fromisoformat(access["token_expire"])
         reply , comment = sccc.workflow_data(media_id)
         if not reply:
             results.append({"entry": th_account_id, "error": "no reply configured for this media_id"})
             continue
-        access_token = thhh.refresh_threads_tokenww(Token_expire, access, th_account_id)
+        access_token = thhh.refresh_threads_tokenww(token_expire, access, th_account_id)
         result = send_message(reply, access_token, th_account_id, from_user_id)
         if not result["success"]:
             results.append({"entry": th_account_id, "error": result})

@@ -43,7 +43,7 @@ Clientsec = os.environ.get("client_secrect")
 api_key = os.environ.get("api_key")
 frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],allow_headers=["Content-Type", "Authorization", "Request-ID"])
-TABLE_NAME = "Youtube"
+TABLE_NAME = "youtube"
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)
 MAX_SHORT_SECONDS = 180
@@ -113,38 +113,38 @@ def credentials_from_json(creds_json: str) -> Credentials:
     return creds
 
 def save_youtube_account(token, user_id, channel_id, channel_title, creds: Credentials):
-    payload = { "id": user_id, "Account_id": channel_id, "channel_title": channel_title, "Access_token": creds.token, "Refresh_token": creds.refresh_token, "Token_expire": _expiry_to_iso(creds.expiry), "Timestamp": datetime.now(timezone.utc).isoformat(), }
-    dbimp.update_rows(token,"users",{"Youtube":True},{"user_id":user_id})
-    rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "Account_id": channel_id},    )
+    payload = { "id": user_id, "account_id": channel_id, "channel_title": channel_title, "access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": _expiry_to_iso(creds.expiry), "timestamp": datetime.now(timezone.utc).isoformat(), }
+    dbimp.update_rows(token,"users",{"youtube":True},{"user_id":user_id})
+    rows = dbimp.select_rows( token, TABLE_NAME, select="account_id", filters={"id": user_id, "account_id": channel_id},    )
     if rows:
-        dbimp.update_rows(token, TABLE_NAME, payload, filters={"id": user_id, "Account_id": channel_id})
+        dbimp.update_rows(token, TABLE_NAME, payload, filters={"id": user_id, "account_id": channel_id})
     else:
         dbimp.insert_rows(token, TABLE_NAME, payload)
 
 def get_youtube_credentials_for_account(token, user_id, channel_id):
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Access_token,Refresh_token,Token_expire",filters={"id": user_id, "Account_id": channel_id},)
+    rows = dbimp.select_rows(token, TABLE_NAME, select="access_token,refresh_token,token_expire",filters={"id": user_id, "account_id": channel_id},)
     row = rows[0] if rows else None
     if not row:
         return None
-    creds = Credentials( token=row["Access_token"], refresh_token=row["Refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec,scopes=YOUTUBE_SCOPES,    )
-    expiry = _iso_to_aware_utc(row.get("Token_expire"))
+    creds = Credentials( token=row["access_token"], refresh_token=row["refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec,scopes=YOUTUBE_SCOPES,    )
+    expiry = _iso_to_aware_utc(row.get("token_expire"))
     needs_refresh = expiry is None or (expiry - datetime.now(timezone.utc) < timedelta(minutes=5))
     if needs_refresh and creds.refresh_token:
         creds.refresh(google.auth.transport.requests.Request())
-        dbimp.update_rows( token, TABLE_NAME, {"Access_token": creds.token, "Token_expire": _expiry_to_iso(creds.expiry)},filters={"id": user_id, "Account_id": channel_id},        )
+        dbimp.update_rows( token, TABLE_NAME, {"access_token": creds.token, "token_expire": _expiry_to_iso(creds.expiry)},filters={"id": user_id, "account_id": channel_id},        )
     return creds
 
 def get_youtube_credentials_for_account_web(channel_id):
-    rows = dbimp.select_rows_web( TABLE_NAME, select="Access_token,Refresh_token,Token_expire", filters={"Account_id": channel_id}, )
+    rows = dbimp.select_rows_web( TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"account_id": channel_id}, )
     row = rows[0] if rows else None
     if not row:
         return None
-    creds = Credentials( token=row["Access_token"], refresh_token=row["Refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=YOUTUBE_SCOPES,)
-    expiry = _iso_to_aware_utc(row.get("Token_expire"))
+    creds = Credentials( token=row["access_token"], refresh_token=row["refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=YOUTUBE_SCOPES,)
+    expiry = _iso_to_aware_utc(row.get("token_expire"))
     needs_refresh = expiry is None or (expiry - datetime.now(timezone.utc) < timedelta(minutes=5))
     if needs_refresh and creds.refresh_token:
         creds.refresh(google.auth.transport.requests.Request())
-        dbimp.update_rows_web( TABLE_NAME, {"Access_token": creds.token, "Token_expire": _expiry_to_iso(creds.expiry)}, filters={"Account_id": channel_id},)
+        dbimp.update_rows_web( TABLE_NAME, {"access_token": creds.token, "token_expire": _expiry_to_iso(creds.expiry)}, filters={"account_id": channel_id},)
     return creds
 
 def xcccc(user_id, access_token, media_id, typee):
@@ -163,7 +163,7 @@ def get_valid_access_token(channel_id, token, client_id, client_secret, refresh_
     new_access_token = token_data["access_token"]
     new_expiry_iso = (now + timedelta(seconds=token_data.get("expires_in", 3600))).isoformat()
     try:
-        dbimp.update_rows( token, TABLE_NAME, {"Access_token": new_access_token, "Token_expire": new_expiry_iso}, filters={"Account_id": channel_id}, )
+        dbimp.update_rows( token, TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
     except Exception as e:
         print(f"token update failed for channel {channel_id}: {e}")
         return False
@@ -180,7 +180,7 @@ def get_valid_access_token11(channel_id,client_id, client_secret, refresh_token,
     new_access_token = token_data["access_token"]
     new_expiry_iso = (now + timedelta(seconds=token_data.get("expires_in", 3600))).isoformat()
     try:
-        dbimp.update_rows_web(TABLE_NAME, {"Access_token": new_access_token, "Token_expire": new_expiry_iso}, filters={"Account_id": channel_id}, )
+        dbimp.update_rows_web(TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
     except Exception as e:
         print(f"token update failed for channel {channel_id}: {e}")
         return False
@@ -188,12 +188,12 @@ def get_valid_access_token11(channel_id,client_id, client_secret, refresh_token,
 
 def shorts_schedule(channel_id, video_id, access_token):
     start_date = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    rows = dbimp.select_rows_web( TABLE_NAME, select="Refresh_token,Token_expire", filters={"Account_id": channel_id})
+    rows = dbimp.select_rows_web( TABLE_NAME, select="refresh_token,token_expire", filters={"account_id": channel_id})
     row = rows[0] if rows else None
     if not row:
         return False
-    refresh_token = row["Refresh_token"]
-    expires_at_iso = row["Token_expire"]
+    refresh_token = row["refresh_token"]
+    expires_at_iso = row["token_expire"]
     access_token = get_valid_access_token11(channel_id,Clientid, Clientsec, refresh_token, access_token, expires_at_iso)
     if not access_token:
         return False
@@ -235,7 +235,7 @@ def _upload_resumable_with_retry(request_):
 def post_later(channel_id, file_id, text1, text2, text3):
     channel_ids = json.loads(channel_id[0])
     chann = channel_ids[0]
-    rows = dbimp.select_rows_web(TABLE_NAME,select="id",filters={"Account_id":chann})
+    rows = dbimp.select_rows_web(TABLE_NAME,select="id",filters={"account_id":chann})
     if not rows :
         return False
     user_id = rows[0]["id"]
@@ -264,10 +264,10 @@ def post_later(channel_id, file_id, text1, text2, text3):
 def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
     account_ids = []
     for account_title in account_channel_title :
-        rows = dbimp.select_rows( token, TABLE_NAME, select="Account_id", filters={"id": user_id, "channel_title": account_title},)
+        rows = dbimp.select_rows( token, TABLE_NAME, select="account_id", filters={"id": user_id, "channel_title": account_title},)
         if not rows:
             return False
-        channel_id = rows[0]["Account_id"]
+        channel_id = rows[0]["account_id"]
         account_ids.append(channel_id)
     if not publish_now:
         service = dpp.get_drive_service(user_id)
@@ -345,7 +345,7 @@ def youtube_oauth_callback():
     channel_id = items[0]["id"]
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     internal_token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    payload = {"id": user_id, "Account_id": channel_id, "channel_title": channel_title, "creds": creds_json, "token": internal_token}
+    payload = {"id": user_id, "account_id": channel_id, "channel_title": channel_title, "creds": creds_json, "token": internal_token}
     signed_payload = serializer.dumps(payload)
     resp = requests.post(f"{BASE_URL}/youtube/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
@@ -359,7 +359,7 @@ def youtube_callback_internal():
         return jsonify({"status": False, "error": "invalid or expired payload"}), 403
     token = data.get("token")
     user_id = data.get("id")
-    channel_id = data.get("Account_id")
+    channel_id = data.get("account_id")
     channel_title = data.get("channel_title")
     creds_json = data.get("creds")
     if not token or not user_id or not channel_id or not creds_json:
@@ -381,7 +381,7 @@ def list_youtube_accounts():
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Account_id,channel_title", filters={"id": user_id})
+    rows = dbimp.select_rows(token, TABLE_NAME, select="account_id,channel_title", filters={"id": user_id})
     return jsonify({"accounts": rows or []})
 
 @app.route("/youtube/upload/short", methods=["POST"])
@@ -450,10 +450,10 @@ def fetch_shorts():
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
-    rows = dbimp.select_rows(token, TABLE_NAME, select="Account_id", filters={"id": tokench["user_id"], "channel_title": account_name},    )
+    rows = dbimp.select_rows(token, TABLE_NAME, select="account_id", filters={"id": tokench["user_id"], "channel_title": account_name},    )
     if not rows:
         return jsonify({"error": "account not found"}), 404
-    channel_id = rows[0]["Account_id"]
+    channel_id = rows[0]["account_id"]
     channel_resp = requests.get( f"{YOUTUBE_DATA_URL}/channels", params={"part": "contentDetails", "id": channel_id, "key": YOUTUBE_API_KEY}, )
     channel_resp.raise_for_status()
     channel_items = channel_resp.json().get("items", [])
@@ -465,12 +465,12 @@ def fetch_shorts():
     while True:
         params = {"part": "contentDetails", "playlistId": uploads_playlist_id, "maxResults": 50, "key": YOUTUBE_API_KEY}
         if page_token:
-            params["pageToken"] = page_token
+            params["pagetoken"] = page_token
         playlist_resp = requests.get(f"{YOUTUBE_DATA_URL}/playlistItems", params=params)
         playlist_resp.raise_for_status()
         data = playlist_resp.json()
         video_ids.extend(item["contentDetails"]["videoId"] for item in data.get("items", []))
-        page_token = data.get("nextPageToken")
+        page_token = data.get("nextPagetoken")
         if not page_token:
             break
     shorts = []

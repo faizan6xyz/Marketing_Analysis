@@ -82,20 +82,22 @@ def add_new_user(email: str, password: str):
         return e
     return user_id
 
-# require the pool of the read 
 def user_exist_check(email: str, password: str):
     email = email.strip().lower()
     if not email or not password:
-        return None
+        return 1
     try:
         with _cursor_read() as cur:
-            cur.execute("SELECT password, user_id FROM users WHERE email = %s", (email,),)
+            cur.execute("SELECT password, user_id FROM users WHERE email = %s",(email,))
             row = cur.fetchone()
     except psycopg2.Error as e:
+        print("DATABASE ERROR:", repr(e))
         return None
     if not row:
         return None
-    stored_hash, user_id = row
+    data = dict(row)
+    stored_hash = data["password"]
+    user_id = data["user_id"]
     if not stored_hash or not user_id:
         return None
     if not _verify_password(password, stored_hash):
@@ -103,9 +105,9 @@ def user_exist_check(email: str, password: str):
     if not stored_hash.startswith("scrypt$"):
         try:
             with _cursor_write() as cur:
-                cur.execute( "UPDATE users SET password = %s WHERE email = %s",(_hash_password(password), email),)
+                cur.execute("UPDATE users SET password = %s WHERE email = %s",(_hash_password(password), email))
         except psycopg2.Error as e:
-            return e
+            return None
     return str(user_id)
 
 def _check(table_name: str, token = None) -> str:
