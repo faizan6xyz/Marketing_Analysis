@@ -254,3 +254,6 @@ if __name__ == "__main__":
         except Exception:
             logging.exception("workflow cleanup failed")
         time.sleep(5)
+
+
+# the fetch return the psycopg read dictionary not the python one , need to convert the fetch output to the python one for the use

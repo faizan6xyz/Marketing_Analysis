@@ -92,3 +92,6 @@ if __name__ == "__main__":
         except Exception:
             logger.exception("rate_limit cleanup failed")
         time.sleep(300)
+
+
+# the fetch return the psycopg read dictionary not the python one , need to convert the fetch output to the python one for the use
