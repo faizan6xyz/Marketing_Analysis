@@ -304,7 +304,7 @@ def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, descriptio
     request_ = youtube_service.videos().insert(part="snippet,status", body=body, media_body=media)
     return _upload_resumable_with_retry(request_)
 
-@app.route("/connect-youtube")
+@app.route("/auth/login")
 def connect_youtube():
     token = request.args.get("token")
     if not token:

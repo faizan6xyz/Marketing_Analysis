@@ -41,13 +41,6 @@ duation = 300
 max_size = 100 * 1024 * 1024
 METRIC_TYPES = "IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK,ENGAGEMENT,USER_FOLLOW"
 
-def check_user_id(token, uuser_id):
-    rows = dbimp.select_rows(token, PINTEREST_TABLE_NAME, select="id", filters={"id": uuser_id})
-    exist = rows[0] if rows else None
-    if not exist:
-        return False
-    return True
-
 def get_all_pins(access_token, page_size=100):
     pins = []
     bookmark = None
@@ -137,8 +130,6 @@ def _authenticate(data):
     now = datetime.now(timezone.utc).isoformat()
     if not lmmm.checkk(tokench["token"],user_id,now,len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    if not check_user_id(tokench["token"], user_id):
-        return None, (jsonify({"error": "invalid user id"}), 401) , None , None
     if not username:
         return None, (jsonify({"error": "username is required"}), 400) , None , None
     for username in usernames :
@@ -355,8 +346,6 @@ def pinterest_login():
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
     user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return jsonify({"error": "invalid user id"}), 401
     code_verifier, code_challenge = generate_pkce_pair()
     state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
     params = { "response_type": "code", "client_id": PINTEREST_APP_ID, "redirect_uri": PINTEREST_REDIRECT_URI, "scope": PINTEREST_SCOPES, "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256",}
@@ -386,8 +375,6 @@ def pinterest_callback():
         return jsonify({"error": "invalid state payload"}), 400
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    if not check_user_id(token, user_id):
-        return jsonify({"error": "invalid user id"}), 400
     basic_auth = base64.b64encode(f"{PINTEREST_APP_ID}:{PINTEREST_APP_SECRET}".encode()).decode()
     token_resp = requests.post( PINTEREST_TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={ "grant_type": "authorization_code", "code": code, "redirect_uri": PINTEREST_REDIRECT_URI, "code_verifier": code_verifier, }, ).json()
     access_token = token_resp.get("access_token")

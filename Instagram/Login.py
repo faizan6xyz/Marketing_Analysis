@@ -40,13 +40,6 @@ photo_szie = 20 * 1024 * 1024
 sotry_szie = 180 * 1024 * 1024
 reel_szie = 270 * 1024 * 1024
 
-def check_user_id(token, uuser_id):
-    rows = dbimp.select_rows(token, TABLE_NAME, select="id", filters={"id": uuser_id})
-    exist = rows[0] if rows else None
-    if not exist:
-        return False
-    return True
-
 def parse_datetime(value: str, require_tz: bool = True):
     if not value or not isinstance(value, str):
         return None
@@ -180,7 +173,7 @@ def get_authenticated_access_token(user_id,token,account_id):
         access_token = uploadd.refresh_token(token, user_id, access_token)
     return access_token, None
 
-@app.route("/instagram/auth/login")
+@app.route("/auth/login")
 def instagram_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -188,15 +181,12 @@ def instagram_login():
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
     user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return jsonify({"error": "invalid user id"}), 401
     state = serializer.dumps(user_id)
     params = {"client_id": IG_APP_ID,"redirect_uri": IG_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
     auth_url = "https://www.instagram.com/oauth/authorize?" + urlencode(params)
     return redirect(auth_url)
 
-
-@app.route("/instagram/auth/callback")
+@app.route("/auth/callback")
 def instagram_callback():
     code = request.args.get("code")
     state = request.args.get("state")
@@ -212,8 +202,6 @@ def instagram_callback():
         return jsonify({"error": "invalid state"}), 400
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    if not check_user_id(token, user_id):
-        return jsonify({"error": "invalid user id"}), 400
     token_resp = requests.post("https://api.instagram.com/oauth/access_token",data={"client_id": IG_APP_ID,"client_secret": IG_APP_SECRET,"grant_type": "authorization_code","redirect_uri": IG_REDIRECT_URI,"code": code,},).json()
     short_token = token_resp.get("access_token")
     if not short_token:
@@ -234,7 +222,7 @@ def instagram_callback():
     resp = requests.post(f"{BASE_URL}/instagram/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/instagram/auth/callbackshi", methods=["POST"])
+@app.route("/auth/callbackshi", methods=["POST"])
 def dataget():
     raw = request.get_json(silent=True) or {}
     try:
@@ -262,7 +250,7 @@ def dataget():
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
 
-@app.route("/instagram/posts/")
+@app.route("/posts/")
 def get_instagram_posts():
     body = request.get_json(silent=True) or {}
     username = body.get("username")
@@ -284,7 +272,7 @@ def get_instagram_posts():
         params = None
     return jsonify({"count": len(posts), "posts": posts}), 200
 
-@app.route("/instagram/stories/")
+@app.route("/stories/")
 def get_instagram_stories():
     body = request.get_json(silent=True) or {}
     username = body.get("username")
@@ -315,7 +303,7 @@ def get_instagram_stories():
             story["thumbnail_url"] = None
     return jsonify({"count": len(stories), "stories": stories}), 200
 
-@app.route("/instagram/upload/story", methods=["POST"])
+@app.route("/upload/story", methods=["POST"])
 def story():
     data = request.get_json(silent=True) or {}
     is_video = data.get("is_video")
@@ -386,7 +374,7 @@ def story():
     status_code = 200 if overall_success else 500
     return jsonify({"success": overall_success, "results": results}), status_code
 
-@app.route("/instagram/upload/photo", methods=["POST"])
+@app.route("/upload/photo", methods=["POST"])
 def photo():
     data = request.get_json(silent=True) or {}
     media_size = data.get("media_size")
@@ -456,7 +444,7 @@ def photo():
         overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
-@app.route("/instagram/upload/reel", methods=["POST"])
+@app.route("/upload/reel", methods=["POST"])
 def video():
     data = request.get_json(silent=True) or {}
     media_size = data.get("media_size")
@@ -530,7 +518,7 @@ def video():
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
-@app.route("/instagram/upload/carousel", methods=["POST"])
+@app.route("/upload/carousel", methods=["POST"])
 def carousel():
     data = request.get_json(silent=True) or {}
     publish = data.get("publish")
@@ -604,7 +592,7 @@ def carousel():
     overall_success = any(r["success"] for r in results)
     return jsonify({"success": overall_success, "results": results}), (200 if overall_success else 500)
 
-@app.route("/instagram/insight", methods=["POST"])
+@app.route("/insight", methods=["POST"])
 def insight():
     body = request.get_json(silent=True) or {}
     is_story = body.get("is_story")

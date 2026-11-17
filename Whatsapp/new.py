@@ -169,10 +169,6 @@ def get_user_for_phone_number_id(incoming_id: str):
     rows = dbimp.select_rows_web(TABLE_NAME, select="id,access_token", filters={"account_id": incoming_id})
     return rows[0] if rows else None
 
-def check_user_id(token,user_id):
-    exist = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})
-    return bool(exist)
-
 def refresh_token(token,Account_id, access_token):
     resp = requests.get( f"https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token", params={"grant_type": "fb_exchange_token", "client_id": WA_APP_ID,"client_secret": APP_SECRET,"fb_exchange_token": access_token,},).json()
     new_token = resp.get("access_token")

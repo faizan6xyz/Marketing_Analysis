@@ -31,8 +31,6 @@ def whatsapp_login():
     user_id = tokench['user_id']
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    if not check_user_id(tokench["token"],user_id):
-        return jsonify({"error": "invalid user id"}), 400
     state = serializer.dumps(user_id)
     params = {"client_id": WA_APP_ID,"redirect_uri": WA_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
     auth_url = f"https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth?" + urlencode(params)

@@ -104,13 +104,6 @@ def get_video_duration(file_path):
     with VideoFileClip(file_path) as video:
         return video.duration
 
-def check_user_id(token, uuser_id):
-    rows = dbimp.select_rows(token, TABLE_NAME, select="id", filters={"id": uuser_id})
-    exist = rows[0] if rows else None
-    if not exist:
-        return False
-    return True
-
 def create_tweet_with_media(access_token, text, media_ids):
     resp = requests.post( "https://api.twitter.com/2/tweets", headers={ "Authorization": f"Bearer {access_token}", "Content-Type": "application/json", }, json={ "text": text or "", "media": {"media_ids": media_ids}, }, )
     if resp.status_code not in (200, 201):
@@ -282,8 +275,6 @@ def x_login():
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
     user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return jsonify({"error": "invalid user id"}), 401
     code_verifier = secrets.token_urlsafe(64)[:128]
     code_challenge = base64.urlsafe_b64encode( hashlib.sha256(code_verifier.encode()).digest()).decode().rstrip("=")
     state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
@@ -314,8 +305,6 @@ def x_callback():
         return jsonify({"error": "invalid state payload"}), 400
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    if not check_user_id(token, user_id):
-        return jsonify({"error": "invalid user id"}), 400
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
     token_resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={ "grant_type": "authorization_code", "code": code, "redirect_uri": X_REDIRECT_URI, "code_verifier": code_verifier, "client_id": X_CLIENT_ID,  }, ).json()
     access_token = token_resp.get("access_token")

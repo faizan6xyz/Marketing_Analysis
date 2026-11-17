@@ -34,13 +34,6 @@ THREADS_API_BASE = "https://graph.threads.net/v1.0"
 THREADS_REFRESH_URL = "https://graph.threads.net/refresh_access_token"
 THREADS_ME_URL = "https://graph.threads.net/v1.0/me"
 
-def check_user_id(token, uuser_id):
-    rows = dbimp.select_rows(token, THREADS_TABLE_NAME, select="id", filters={"id": uuser_id})
-    exist = rows[0] if rows else None
-    if not exist:
-        return False
-    return True
-
 def refresh_threads_token(expire, access, token, user_id, username):
     expire = datetime.fromisoformat(expire)
     if expire - datetime.now(timezone.utc) < timedelta(days=1):
@@ -357,8 +350,6 @@ def threads_login():
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
     user_id = tokench["user_id"]
-    if not check_user_id(tokench["token"], user_id):
-        return jsonify({"error": "invalid user id"}), 401
     state = serializer.dumps({"user_id": user_id})
     params = { "response_type": "code", "client_id": THREADS_APP_ID, "redirect_uri": THREADS_REDIRECT_URI, "scope": THREADS_SCOPES, "state": state, }
     auth_url = THREADS_AUTH_URL + "?" + urlencode(params)
@@ -386,8 +377,6 @@ def threads_callback():
         return jsonify({"error": "invalid state payload"}), 400
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    if not check_user_id(token, user_id):
-        return jsonify({"error": "invalid user id"}), 400
     short_resp = requests.post(THREADS_TOKEN_URL, data={ "client_id": THREADS_APP_ID, "client_secret": THREADS_APP_SECRET, "grant_type": "authorization_code", "redirect_uri": THREADS_REDIRECT_URI, "code": code, },).json()
     short_lived_token = short_resp.get("access_token")
     threads_user_id = short_resp.get("user_id")
