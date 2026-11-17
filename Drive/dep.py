@@ -482,7 +482,7 @@ def authenticate_request(token):
         return None, (jsonify({"error": "user_id required"}), 400)
     return user_id, None
 
-@app.route("/drive/connect-drive")
+@app.route("/auth/login")
 def connect_drive():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -493,7 +493,7 @@ def connect_drive():
     auth_url, _ = flow.authorization_url( access_type="offline", prompt="consent", state=signed_state )
     return redirect(auth_url)
 
-@app.route("/drive/auth/drivecallback")
+@app.route("/auth/drivecallback")
 def oauth_callback():
     signed_state = request.args.get("state")
     try:
@@ -518,7 +518,7 @@ def oauth_callback():
     resp = requests.post(f"{BASE_URL}/drive/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/drive/auth/drive/callbackshi", methods=["POST"])
+@app.route("/auth/drive/callbackshi", methods=["POST"])
 def oauth_callbac():
     raw = request.get_json(silent=True) or {}
     try:

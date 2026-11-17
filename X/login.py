@@ -274,7 +274,7 @@ def refresh_x_token(token,user_id, account_id, refresh_token):
     dbimp.update_rows(token, TABLE_NAME, {"access_token": new_access, "refresh_token": new_refresh, "token_expire": expire_time}, filters={"account_id": account_id,"id":user_id})
     return new_access
 
-@app.route("/x/auth/login")
+@app.route("/auth/login")
 def x_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -291,7 +291,7 @@ def x_login():
     auth_url = AUTH_URL + "?" + urlencode(params)
     return redirect(auth_url)
 
-@app.route("/x/auth/callback")
+@app.route("/auth/callback")
 def x_callback():
     error = request.args.get("error")
     if error:
@@ -337,7 +337,7 @@ def x_callback():
     resp = requests.post(f"{BASE_URL}/x/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/x/auth/callbackshi", methods=["POST"])
+@app.route("/auth/callbackshi", methods=["POST"])
 def x_dataget():
     raw = request.get_json(silent=True) or {}
     try:
@@ -366,7 +366,7 @@ def x_dataget():
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
 
-@app.route("/x/post/text", methods=["POST"])
+@app.route("/post/text", methods=["POST"])
 def post_to_x_text():
     data = request.get_json(silent = True) or {}
     token = data.get("token")
@@ -403,7 +403,7 @@ def post_to_x_text():
             xcccc(acccount, acesss, tweet_id, "tweet")
     return jsonify({"success": True, "post_id": tweet_id}), 200
 
-@app.route("/x/post/photo", methods=["POST"])
+@app.route("/post/photo", methods=["POST"])
 def post_to_x_photo():
     data = request.get_json(silent=True) or {}
     token = data.get("token")
@@ -481,7 +481,7 @@ def post_to_x_photo():
         results.append({"account": acccount, "success": True, "post_id": tweet_id})
     return jsonify({"success": True, "results": results, "media_ids": media_ids}), 200
 
-@app.route("/x/post/video", methods=["POST"])
+@app.route("/post/video", methods=["POST"])
 def post_to_x_video():
     data = request.get_json(silent=True) or {}
     token = data.get("token")
@@ -550,7 +550,7 @@ def post_to_x_video():
         results.append({"account": acccount, "success": True, "post_id": tweet_id})
     return jsonify({"success": True, "results": results, "media_ids": [media_id]}), 200
 
-@app.route("/x/analytics/posts", methods=["GET"])
+@app.route("/analytics/posts", methods=["GET"])
 @limiter.limit("10 per minute")
 def fetch_x_post_analytics():
     data = request.get_json(silent=True) or {}

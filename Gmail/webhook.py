@@ -33,7 +33,7 @@ def start_gmail_watch(service):
     response = service.users().watch(userId='me', body=request_body).execute()   # this reutrns the historId and the expiretion in milliseconds
     return response
 
-@app.route('/webhook/gmail', methods=['POST'])
+@app.route('/', methods=['POST'])
 def gmail_webhook():
     if not verify_pubsub_jwt(request):
         return jsonify({'error': 'unauthorized'}), 401

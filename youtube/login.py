@@ -304,7 +304,7 @@ def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, descriptio
     request_ = youtube_service.videos().insert(part="snippet,status", body=body, media_body=media)
     return _upload_resumable_with_retry(request_)
 
-@app.route("/youtube/connect-youtube")
+@app.route("/connect-youtube")
 def connect_youtube():
     token = request.args.get("token")
     if not token:
@@ -318,7 +318,7 @@ def connect_youtube():
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
     return redirect(auth_url)
 
-@app.route("/youtube/oauth/callback")
+@app.route("/oauth/callback")
 def youtube_oauth_callback():
     state = request.args.get("state")
     code = request.args.get("code")
@@ -350,7 +350,7 @@ def youtube_oauth_callback():
     resp = requests.post(f"{BASE_URL}/youtube/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/youtube/auth/callbackshi", methods=["POST"])
+@app.route("/auth/callbackshi", methods=["POST"])
 def youtube_callback_internal():
     raw = request.get_json(silent=True) or {}
     try:
@@ -371,7 +371,7 @@ def youtube_callback_internal():
         return jsonify({"status": False, "error": str(e)}), 403
     return jsonify({"status": True}), 200
 
-@app.route("/youtube/accounts", methods=["POST"])
+@app.route("/accounts", methods=["POST"])
 @limiter.limit("10 per minute")
 def list_youtube_accounts():
     token = request.get_json(silent=True) or {}
@@ -384,7 +384,7 @@ def list_youtube_accounts():
     rows = dbimp.select_rows(token, TABLE_NAME, select="account_id,channel_title", filters={"id": user_id})
     return jsonify({"accounts": rows or []})
 
-@app.route("/youtube/upload/short", methods=["POST"])
+@app.route("/upload/short", methods=["POST"])
 @limiter.limit("5 per minute")
 def upload():
     data = request.get_json(silent=True) or {}
@@ -440,7 +440,7 @@ def upload():
         if upload_tmp_path and os.path.exists(upload_tmp_path):
             os.remove(upload_tmp_path)
 
-@app.route("/youtube/shorts", methods=["GET"])
+@app.route("/shorts", methods=["GET"])
 @limiter.limit("10 per minute")
 def fetch_shorts():
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token")

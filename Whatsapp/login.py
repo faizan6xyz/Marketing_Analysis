@@ -21,7 +21,7 @@ app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
 serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds
 
-@app.route("/whatsapp/auth/login")
+@app.route("/auth/login")
 def whatsapp_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -38,7 +38,7 @@ def whatsapp_login():
     auth_url = f"https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth?" + urlencode(params)
     return redirect(auth_url)
 
-@app.route("/whatsapp/auth/callback")
+@app.route("/auth/callback")
 def whatsapp_callback():
     code = request.args.get("code")
     state = request.args.get("state")
@@ -90,7 +90,7 @@ def whatsapp_callback():
     resp = requests.post(f"{BASE_URL}/whatsapp/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/whatsapp/auth/callbackshi", methods=["POST"])
+@app.route("/auth/callbackshi", methods=["POST"])
 def oauth_callbac():
     raw = request.get_json(silent=True) or {}
     try:

@@ -52,7 +52,7 @@ def is_allowed_file(filename):
     ext = os.path.splitext(filename)[1].lower()
     return ext in ALLOWED_EXTENSIONS
 
-@app.route("/connect-gmail")
+@app.route("/auth/login")
 def connect_gmail():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -67,7 +67,7 @@ def connect_gmail():
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
     return redirect(auth_url)
 
-@app.route("/gmail/oauth/callback")
+@app.route("/oauth/callback")
 def gmail_oauth_callback():
     state = request.args.get("state")
     code = request.args.get("code")
@@ -97,7 +97,7 @@ def gmail_oauth_callback():
     resp = requests.post(f"{BASE_URL}/auth/gmail/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/gmail/auth/callbackshi", methods=["POST"])
+@app.route("/auth/callbackshi", methods=["POST"])
 def oauth_callbac():
     raw = request.get_json(silent=True) or {}
     try:

@@ -20,7 +20,7 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds
 
 
-@app.route("/webhook/whatsapp", methods=["GET"])
+@app.route("/", methods=["GET"])
 def verify_webhook():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
@@ -30,7 +30,7 @@ def verify_webhook():
     log.warning("Webhook verification attempt failed (bad mode/verify token).")
     return "Verification failed", 403
 
-@app.route("/webhook/whatsapp", methods=["POST"])  # add a reply to message for every incoming message
+@app.route("/", methods=["POST"])  # add a reply to message for every incoming message
 def receive_webhook_message():
     if not is_valid_signature(request):
         log.error("Rejected webhook POST: invalid or missing signature.")

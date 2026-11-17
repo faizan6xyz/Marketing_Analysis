@@ -349,7 +349,7 @@ def _authenticate(data):
         threads_user_ids.append(threads_user_id)    
     return access_tokens, threads_user_ids , text, None
 
-@app.route("/threads/auth/login")
+@app.route("/auth/login")
 def threads_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -364,7 +364,7 @@ def threads_login():
     auth_url = THREADS_AUTH_URL + "?" + urlencode(params)
     return redirect(auth_url)
 
-@app.route("/threads/auth/callback")
+@app.route("/auth/callback")
 def threads_callback():
     error = request.args.get("error")
     if error:
@@ -411,7 +411,7 @@ def threads_callback():
     resp = requests.post(f"{BASE_URL}/threads/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/threads/auth/callbackshi", methods=["POST"])
+@app.route("/auth/callbackshi", methods=["POST"])
 def threads_dataget():
     raw = request.get_json(silent=True) or {}
     try:
@@ -439,7 +439,7 @@ def threads_dataget():
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
 
-@app.route("/threads/posts-with-metrics", methods=["GET"])
+@app.route("/posts-with-metrics", methods=["GET"])
 def posts_with_metrics():
     data = request.get_json(silent=True) or {}
     username = data.get("username")
@@ -467,7 +467,7 @@ def posts_with_metrics():
     except requests.HTTPError as e:
         return jsonify({"error": str(e), "response": e.response.text}), e.response.status_code
 
-@app.route("/threads/post/text", methods=["POST"])
+@app.route("/post/text", methods=["POST"])
 def post_threads_text():
     data = request.get_json(silent=True) or {}
     publish = data.get("publish")
@@ -497,7 +497,7 @@ def post_threads_text():
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
 
-@app.route("/threads/post/image", methods=["POST"])
+@app.route("/post/image", methods=["POST"])
 def post_threads_image():
     data = request.get_json(silent=True) or {}
     access_tokens, threads_user_ids, text, err = _authenticate(data)
@@ -530,7 +530,7 @@ def post_threads_image():
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
 
-@app.route("/threads/post/video", methods=["POST"])
+@app.route("/post/video", methods=["POST"])
 def post_threads_video():
     data = request.get_json(silent=True) or {}
     access_tokens, threads_user_ids, text, err = _authenticate(data)
@@ -563,7 +563,7 @@ def post_threads_video():
         return jsonify({"error": "thread post failed", "detail": str(e)}), 400
     return jsonify({"success": True, "thread_id": thread_ids}), 200
 
-@app.route("/threads/post/carousel", methods=["POST"])
+@app.route("/post/carousel", methods=["POST"])
 def post_threads_carousel():
     data = request.get_json(silent=True) or {}
     access_tokens, threads_user_ids, text, err = _authenticate(data)

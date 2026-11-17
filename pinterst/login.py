@@ -348,7 +348,7 @@ def get_video_duration(file_path):
     with VideoFileClip(file_path) as video:
         return video.duration
 
-@app.route("/pinterest/auth/login", methods=["GET", "POST"])
+@app.route("/auth/login", methods=["GET", "POST"])
 def pinterest_login():
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token")
     tokench = au.process(token=token)
@@ -363,7 +363,7 @@ def pinterest_login():
     auth_url = PINTEREST_AUTH_URL + "?" + urlencode(params)
     return redirect(auth_url)
 
-@app.route("/pinterest/auth/callback")
+@app.route("/auth/callback")
 def pinterest_callback():
     error = request.args.get("error")
     if error:
@@ -408,7 +408,7 @@ def pinterest_callback():
     resp = requests.post(f"{BASE_URL}/pinterest/auth/callbackshi", json={"data": signed_payload}, timeout=5)
     return (resp.content, resp.status_code, resp.headers.items())
 
-@app.route("/pinterest/auth/callbackshi", methods=["POST"])
+@app.route("/auth/callbackshi", methods=["POST"])
 def pinterest_dataget():
     raw = request.get_json(silent=True) or {}
     try:
@@ -437,7 +437,7 @@ def pinterest_dataget():
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
     
-@app.route("/pinterest/pins-with-metrics", methods=["GET"])
+@app.route("/pins-with-metrics", methods=["GET"])
 def pins_with_metrics():
     data = request.get_json(silent=True) or {}
     username = data.get("username")
@@ -465,7 +465,7 @@ def pins_with_metrics():
     except requests.HTTPError as e:
         return jsonify({"error": str(e), "response": e.response.text}), e.response.status_code
 
-@app.route("/pinterest/post/photo", methods=["POST"])
+@app.route("/post/photo", methods=["POST"])
 def post_to_pinterest_photo():
     data = request.get_json(silent=True) or {}
     access_tokens ,err , account_ids , user_id = _authenticate(data)
@@ -516,7 +516,7 @@ def post_to_pinterest_photo():
             os.remove(tmp_path)
     return jsonify({"success": True, "pin_id": pin.get("id")}), 200
 
-@app.route("/pinterest/post/video", methods=["POST"])
+@app.route("/post/video", methods=["POST"])
 def post_to_pinterest_video():
     data = request.get_json(silent=True) or {}
     access_tokens ,err , account_ids , user_id = _authenticate(data)

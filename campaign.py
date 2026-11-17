@@ -122,7 +122,7 @@ def upload_lategmail(account_id , text1, text2, text3, file_id,reply = "" , subj
         sccc.inert_workflow(campaign_name,reply,subject)
         dpp.append_to_file(user_id=account_id, platform="gmail", filename="campaigns.txt", data_to_append=content)
 
-@app.route('/campaign', methods=['POST'])
+@app.route('/', methods=['POST'])
 @limiter.limit("5 per minute")
 def campaign():
     data = request.get_json(silent=True) or {}
