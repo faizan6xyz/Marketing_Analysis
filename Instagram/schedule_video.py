@@ -5,7 +5,7 @@ import time
 import campaign as campp
 import json
 import logging
-import pinterst.login as pin 
+import pinterst.login as pin
 import Drive.dep as dpp
 import youtube.login as you
 from dotenv import load_dotenv
@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from psycopg2 import sql
 from psycopg2.extras import execute_values
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-from database.UserDB import pool_read , pool_write 
+from database.UserDB import pool_read, pool_write
 
 @contextmanager
 def get_conn_write():
@@ -41,6 +41,10 @@ def get_conn_read():
     finally:
         pool_read.putconn(conn)
 
+def _rows_as_lists(cur, rows):
+    cols = [d[0] for d in cur.description]
+    return [[r[c] for c in cols] for r in rows]
+
 def is_valid_iso_format(value: str) -> bool:
     if not isinstance(value, str):
         return False
@@ -61,28 +65,28 @@ def inert_workflow(id_, message, comment):
         cur.execute("INSERT INTO workflow ( id , comment , message, time) values (%s,%s,%s,%s) ", (id_, comment, message, now))
 
 def workflow_data_change(id_, message, comment):
-    with get_conn_read() as conn,conn.cursor() as cur:
+    with get_conn_write() as conn, conn.cursor() as cur:      # writes must use the write pool
         cur.execute("SELECT message, comment FROM workflow WHERE id = %s", (id_,))
-        rows = dict(cur.fetchall())
+        rows = _rows_as_lists(cur, cur.fetchall())
         if rows:
             cur.execute("UPDATE workflow SET message = %s, comment = %s WHERE id = %s", (message, comment, id_))
         else:
             cur.execute("INSERT INTO workflow (id, message, comment) VALUES (%s, %s, %s)", (id_, message, comment))
-        return rows
+        return rows                                            # old [message, comment] rows
 
-def workflow_10_days(time):
-    with get_conn_read() as conn,conn.cursor() as cur:
-        cur.execute("SELECT id FROM workflow WHERE time < %s", (time,))
-        return dict(cur.fetchall())
+def workflow_10_days(cutoff):
+    with get_conn_read() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id FROM workflow WHERE time < %s", (cutoff,))
+        return _rows_as_lists(cur, cur.fetchall())             # [[id], [id], ...]
 
-def delete_by_10days(row_id):        
+def delete_by_10days(row_id):
     _delete_by("workflow", "id", row_id)
 
 def workflow_data(id_):
-    with get_conn_read() as conn,conn.cursor() as cur:
-        cur.execute("SELECT message , comment FROM workflow WHERE id = %s ", (id_,))   # for the whatsapp theres no comment but for the gmail comment is the subject
-        return dict(cur.fetchall())
-    
+    with get_conn_read() as conn, conn.cursor() as cur:
+        cur.execute("SELECT message, comment FROM workflow WHERE id = %s", (id_,))   # for the whatsapp theres no comment but for the gmail comment is the subject
+        return _rows_as_lists(cur, cur.fetchall())             # [[message, comment], ...]
+
 def insert_time(user_id, container_id, scheduled_time, access_token):    # time should be give in the isoformat iniitally as argument
     if not is_valid_iso_format(scheduled_time):
         return
@@ -100,7 +104,7 @@ def insert_posts_bulk(posts):
     if not rows:
         return
     with get_conn_write() as conn, conn.cursor() as cur:
-        execute_values(cur , "INSERT INTO schedule (user_id, time, access_token, type, text1, text2, text3, media_id) VALUES %s",rows,)
+        execute_values(cur, "INSERT INTO schedule (user_id, time, access_token, type, text1, text2, text3, media_id) VALUES %s", rows,)
 
 def insert__story(user_id, scheduled_time, access_token, media_id, hour, typee):    # time should be give in the isoformat iniitally as argument
     if not is_valid_iso_format(scheduled_time):
@@ -115,18 +119,16 @@ def insert__story1(user_id, scheduled_time, access_token, media_id, typee):    #
         cur.execute("INSERT INTO schedule (user_id, time, access_token, type,media_id) VALUES (%s, %s, %s, %s, %s)", (user_id, scheduled_time, access_token, typee, media_id))
 
 def get_containers_due(now):
-    with get_conn_read() as conn,conn.cursor() as cur:
-        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s", (now,0))
-        rows =  dict(cur.fetchall())
-    return rows
+    with get_conn_read() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, container_id, access_token, user_id, type, media_id, hour, text1, text2, text3 FROM schedule WHERE time < %s AND taken = %s", (now, 0))
+        return _rows_as_lists(cur, cur.fetchall())
 
 def get_failed_one(now):
     tim = datetime.fromisoformat(now) - timedelta(minutes=30)
-    with get_conn_read() as conn,conn.cursor() as cur:
-        cur.execute("SELECT id, container_id, access_token, user_id , type,media_id,hour,text1,text2,text3 FROM schedule WHERE time < %s and taken = %s ", (tim,1))
-        rows = dict(cur.fetchall())
-    return rows
-    
+    with get_conn_read() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, container_id, access_token, user_id, type, media_id, hour, text1, text2, text3 FROM schedule WHERE time < %s AND taken = %s", (tim, 1))
+        return _rows_as_lists(cur, cur.fetchall())
+
 def update_container_schedule(container_id, sctime):
     if not is_valid_iso_format(sctime):
         return
@@ -143,12 +145,20 @@ def set_taken_to(ids):
         cur.execute("UPDATE schedule SET taken = 1 WHERE id = ANY(%s)", (list(ids),))
         return cur.rowcount
 
+def reschedule_failed(row_id, minutes=30):
+    try:
+        new_time = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
+        with get_conn_write() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE schedule SET taken = 0, time = %s WHERE id = %s", (new_time, row_id))
+    except Exception:
+        logging.exception("could not reschedule row %s", row_id)
+
 if __name__ == "__main__":
     while True:
         now = datetime.now(timezone.utc).isoformat()
         try:
             due = get_containers_due(now)
-            fail = get_failed_one(now)
+            fail = get_failed_one(now)                    
             seen = {row[0] for row in due}
             due.extend(row for row in fail if row[0] not in seen)    # no row can be processed twice
             set_taken_to([row[0] for row in due])
@@ -156,104 +166,109 @@ if __name__ == "__main__":
             logging.exception("could not claim due rows")
             time.sleep(5)
             continue
-        for row_id, container_id, access_tok, username_id , typess,media_id,hourss,text1,text2,text3 in due:
+        for row_id, container_id, access_tok, username_id, typess, media_id, hourss, text1, text2, text3 in due:
             try:
                 if typess == "container":
                     aaaa.publish_container(user_id=username_id, access_token=access_tok, creation_id=container_id)
                 elif typess == "Story_later":
                     access_token = aaaa.access_tokenvali(username_id)
-                    if not access_token :
+                    if not access_token:
+                        reschedule_failed(row_id)
                         continue
-                    aaaa.post_story(now,access_token, username_id, 0, media_id, text1, True, text2)
+                    aaaa.post_story(now, access_token, username_id, 0, media_id, text1, True, text2)
                 elif typess == "Photo_later":
                     access_token = aaaa.access_tokenvali(username_id)
-                    if not access_token :
+                    if not access_token:
+                        reschedule_failed(row_id)
                         continue
-                    aaaa.post_photo(now,access_token, username_id,media_id, text3, 0, True)
+                    aaaa.post_photo(now, access_token, username_id, media_id, text3, 0, True)
                 elif typess in ("Reel_later", "Video_later"):
                     access_token = aaaa.access_tokenvali(username_id)
-                    if not access_token :
+                    if not access_token:
+                        reschedule_failed(row_id)
                         continue
                     cover_url, media_duration = text2.rsplit(",", 1)
-                    aaaa.post_video(now,access_token, username_id, media_id, 0 , text3, text1, cover_url,True, media_duration )
+                    aaaa.post_video(now, access_token, username_id, media_id, 0, text3, text1, cover_url, True, media_duration)
                 elif typess == "Carousel_later":
                     access_token = aaaa.access_tokenvali(username_id)
-                    if not access_token :
+                    if not access_token:
+                        reschedule_failed(row_id)
                         continue
                     combi = json.loads(text2)
                     if len(combi) % 2 != 0:
+                        logging.warning("row %s has malformed carousel data", row_id)
+                        reschedule_failed(row_id)
                         continue
                     lengthof = len(combi) // 2
                     media_size = combi[:lengthof]
                     media_duration = combi[lengthof:]
-                    aaaa.post_carousel(now,access_token, username_id,  media_size, media_duration, media_id, text1, text3, True)
+                    aaaa.post_carousel(now, access_token, username_id, media_size, media_duration, media_id, text1, text3, True)
                 elif typess == "container1":
                     thhh.publish_threads_container_sc(user_id=username_id, access_token=access_tok, creation_id=container_id)
                 elif typess == "carousal_later1":
-                    expire  = datetime.now(timezone.utc)
-                    access_token = thhh.refresh_threads_token11(expire,access_tok,username_id)
-                    comment , message = text1.split(",1234,+++x")
+                    expire = datetime.now(timezone.utc)
+                    access_token = thhh.refresh_threads_token11(expire, access_tok, username_id)
+                    comment, message = text1.split(",1234,+++x")
                     thhh.process_threads_carousel(access_token, username_id, media_id, text3, True, now, comment, message, text2)
                 elif typess == "photo_later1":
-                    expire  = datetime.now(timezone.utc)
-                    access_token = thhh.refresh_threads_token11(expire,access_tok,username_id)
-                    comment , message = text1.split(",1234,+++x")
-                    thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"photo",image_url=media_id )
+                    expire = datetime.now(timezone.utc)
+                    access_token = thhh.refresh_threads_token11(expire, access_tok, username_id)
+                    comment, message = text1.split(",1234,+++x")
+                    thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2, "photo", image_url=media_id)
                 elif typess == "text_later1":
-                    expire  = datetime.now(timezone.utc)
-                    access_token = thhh.refresh_threads_token11(expire,access_tok,username_id)
-                    comment , message = text1.split(",1234,+++x")
-                    thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"text" )
+                    expire = datetime.now(timezone.utc)
+                    access_token = thhh.refresh_threads_token11(expire, access_tok, username_id)
+                    comment, message = text1.split(",1234,+++x")
+                    thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2, "text")
                 elif typess == "video_later1":
-                    expire  = datetime.now(timezone.utc)
-                    access_token = thhh.refresh_threads_token11(expire,access_tok,username_id)
-                    comment , message = text1.split(",1234,+++x")
-                    thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2,"video",video_url=media_id )
-                elif typess == "story" :
-                    content = aaaa.story_schedule(username_id,hourss,media_id,access_tok)
+                    expire = datetime.now(timezone.utc)
+                    access_token = thhh.refresh_threads_token11(expire, access_tok, username_id)
+                    comment, message = text1.split(",1234,+++x")
+                    thhh.process_threads_text_posts(access_token, username_id, True, now, text3, comment, message, text2, "video", video_url=media_id)
+                elif typess == "story":
+                    content = aaaa.story_schedule(username_id, hourss, media_id, access_tok)
                     dpp.append_to_file(user_id=username_id, platform="Instagram", filename="reachanalysis.txt", data_to_append=content)
                 elif typess in ("photo", "carousel", "video"):
-                    content = aaaa.get_media_analytics(username_id,media_id,access_tok)
+                    content = aaaa.get_media_analytics(username_id, media_id, access_tok)
                     dpp.append_to_file(user_id=username_id, platform="Instagram", filename="postanalysis.txt", data_to_append=content)
                 elif typess in ("text1", "photo1", "video1", "carousel1"):
-                    content = thhh.get_thread_metrics_csv(username_id , media_id, access_tok)
+                    content = thhh.get_thread_metrics_csv(username_id, media_id, access_tok)
                     dpp.append_to_file(user_id=username_id, platform="Threads", filename="postanalysis.txt", data_to_append=content)
-                elif typess == "shorts": 
+                elif typess == "shorts":
                     content = you.shorts_schedule(username_id, media_id, access_tok)
                     dpp.append_to_file(user_id=username_id, platform="Youtube", filename="postanalysis.txt", data_to_append=content)
                 elif typess in ("tweet", "photo_tweet", "video_tweet"):
-                    content = x.get_tweet_metrics(username_id ,media_id, access_tok)
+                    content = x.get_tweet_metrics(username_id, media_id, access_tok)
                     dpp.append_to_file(user_id=username_id, platform="X", filename="postanalysis.txt", data_to_append=content)
                 elif typess in ("tweet_later", "photo_tweet_later", "video_tweet_later"):
-                    x.post_later(typess, username_id,text1 )
-                elif typess in ("pin_photo", "pin_video"): 
-                    content = pin.get_pinterest_pin_analytics_csv(username_id,media_id, access_tok)
+                    x.post_later(typess, username_id, text1)
+                elif typess in ("pin_photo", "pin_video"):
+                    content = pin.get_pinterest_pin_analytics_csv(username_id, media_id, access_tok)
                     dpp.append_to_file(user_id=username_id, platform="Pinterst", filename="postanalysis.txt", data_to_append=content)
                 elif typess == "Shorts_later":
-                    you.post_later(username_id, media_id, text1, text2, text3) 
+                    you.post_later(username_id, media_id, text1, text2, text3)
                 elif typess == "Pin_photo_later":
-                    pin.post_late(username_id , access_tok , text1, text2, text3, "photo" ,media_id)
+                    pin.post_late(username_id, access_tok, text1, text2, text3, "photo", media_id)
                 elif typess == "Pin_video_later":
-                    pin.post_late(username_id , access_tok , text1, text2, text3, "video" ,media_id)
+                    pin.post_late(username_id, access_tok, text1, text2, text3, "video", media_id)
                 elif typess == "email_later":
-                    text1 , reply , subject = text1.split(",1234,+++x")
-                    campp.upload_lategmail(username_id , text1, text2, text3,media_id, reply , subject)
+                    text1, reply, subject = text1.split(",1234,+++x")
+                    campp.upload_lategmail(username_id, text1, text2, text3, media_id, reply, subject)
                 elif typess == "message_later":
-                    text1 , reply , subject = text1.split(",1234,+++x")
-                    campp.upload_latewhat(username_id , text1, text2, text3, media_id, reply , subject)
+                    text1, reply, subject = text1.split(",1234,+++x")
+                    campp.upload_latewhat(username_id, text1, text2, text3, media_id, reply, subject)
                 else:
-                    logging.warning("row %s has unknown type %r, left in table", row_id, typess)
+                    logging.warning("row %s has unknown type %r, rescheduled", row_id, typess)
+                    reschedule_failed(row_id)
                     continue
                 delete_by_id(row_id)
             except Exception:
                 logging.exception("row %s (%s) failed, will be retried after 30 min", row_id, typess)
+                reschedule_failed(row_id)
         try:
             rows = workflow_10_days(now)
-            for (row_id,) in rows :
+            for (row_id,) in rows:
                 delete_by_10days(row_id)
         except Exception:
             logging.exception("workflow cleanup failed")
         time.sleep(5)
-
-
-# the fetch return the psycopg read dictionary not the python one , need to convert the fetch output to the python one for the use

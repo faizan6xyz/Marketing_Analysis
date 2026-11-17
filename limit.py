@@ -10,7 +10,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("rate_limit")
 from psycopg2 import sql
-from database.UserDB import pool_read , pool_write 
+from database.UserDB import pool_read, pool_write
 
 def _require(key):
     val = os.environ.get(key)
@@ -44,25 +44,31 @@ def get_conn_read():
     finally:
         pool_read.putconn(conn)
 
-# require the pool of the read 
+def _row_as_list(cur, row):
+    if row is None:
+        return None
+    cols = [d[0] for d in cur.description]
+    return [row[c] for c in cols]
+
 def get_or_create_window(user_id, now_ts):
-    with get_conn_read() as conn:
+    with get_conn_write() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (str(user_id),))
-            cur.execute( sql.SQL( "SELECT {}, {} FROM {} " "WHERE {} < %s AND {} > %s AND {} = %s").format(sql.Identifier("request_count"), sql.Identifier("id"), sql.Identifier("rate_limit"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("user_id")), (now_ts, now_ts, user_id), )
-            row = dict(cur.fetchone())
+            cur.execute(sql.SQL("SELECT {}, {} FROM {} WHERE {} < %s AND {} > %s AND {} = %s").format(sql.Identifier("request_count"),sql.Identifier("id"),sql.Identifier("rate_limit"),sql.Identifier("start_time"), sql.Identifier("end_time"),sql.Identifier("user_id"),),(now_ts, now_ts, user_id),)
+            row = _row_as_list(cur, cur.fetchone())          # [request_count, id] or None
             if row:
                 return row[0], row[1]
             start = datetime.now(timezone.utc)
             end = start + timedelta(days=30)
-            cur.execute( sql.SQL( "INSERT INTO {} ({}, {}, {}, {}) " "VALUES (%s, %s, %s, %s) RETURNING {}" ).format(sql.Identifier("rate_limit"), sql.Identifier("user_id"), sql.Identifier("start_time"), sql.Identifier("end_time"), sql.Identifier("request_count"), sql.Identifier("id")), (user_id, start, end, 0), )
-            row = dict(cur.fetchone())
+            cur.execute(sql.SQL("INSERT INTO {} ({}, {}, {}, {}) VALUES (%s, %s, %s, %s) RETURNING {}").format(sql.Identifier("rate_limit"),sql.Identifier("user_id"),sql.Identifier("start_time"),sql.Identifier("end_time"),sql.Identifier("request_count"),sql.Identifier("id"),),(user_id, start, end, 0),)
+            row = _row_as_list(cur, cur.fetchone())          # [id]
             return 0, row[0]
 
 def try_increment(row_id, amount, limit):
     with get_conn_write() as conn:
         with conn.cursor() as cur:
-            cur.execute( sql.SQL( "UPDATE {} SET {} = {} + %s " "WHERE {} = %s AND {} + %s <= %s" ).format(sql.Identifier("rate_limit"), sql.Identifier("request_count"), sql.Identifier("id")), (amount, row_id, amount, limit),)
+            cur.execute(
+                sql.SQL("UPDATE {} SET {} = {} + %s WHERE {} = %s AND {} + %s <= %s").format(sql.Identifier("rate_limit"),sql.Identifier("request_count"),sql.Identifier("request_count"),sql.Identifier("id"),sql.Identifier("request_count"),),(amount, row_id, amount, limit),)
             return cur.rowcount > 0
 
 def checkk(token, user_id, now_ts, requestss: int):
@@ -83,7 +89,7 @@ def checkk(token, user_id, now_ts, requestss: int):
 def delete_by_time(timee):
     with get_conn_write() as conn:
         with conn.cursor() as cur:
-            cur.execute( sql.SQL("DELETE FROM {} WHERE {} < %s").format(sql.Identifier("rate_limit"), sql.Identifier("end_time")),(timee,), )
+            cur.execute(sql.SQL("DELETE FROM {} WHERE {} < %s").format(sql.Identifier("rate_limit"), sql.Identifier("end_time")),(timee,),)
 
 if __name__ == "__main__":
     while True:
@@ -93,6 +99,3 @@ if __name__ == "__main__":
         except Exception:
             logger.exception("rate_limit cleanup failed")
         time.sleep(300)
-
-
-# the fetch return the psycopg read dictionary not the python one , need to convert the fetch output to the python one for the use
