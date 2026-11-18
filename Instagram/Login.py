@@ -180,7 +180,7 @@ def instagram_login():
     token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
-        return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
     state = serializer.dumps(user_id)
     # params = {"client_id": IG_APP_ID,"redirect_uri": IG_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
@@ -188,7 +188,7 @@ def instagram_login():
     # return redirect(auth_url)
     params = {"client_id": IG_APP_ID,"redirect_uri": IG_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
     auth_url = INSTAGRAM_AUTH_URL + "?" + urlencode(params)
-    return jsonify({"auth_url": auth_url})
+    return jsonify({"auth_url": auth_url}) , 200
 
 @app.route("/auth/callback", methods=["POST"])
 def instagram_callback():
