@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gmail_api")
 MAX_ATTACHMENTS = 10

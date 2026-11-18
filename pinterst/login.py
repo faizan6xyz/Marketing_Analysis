@@ -21,7 +21,7 @@ import authnew as au
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
@@ -350,7 +350,7 @@ def pinterest_login():
     state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
     params = { "response_type": "code", "client_id": PINTEREST_APP_ID, "redirect_uri": PINTEREST_REDIRECT_URI, "scope": PINTEREST_SCOPES, "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256",}
     auth_url = PINTEREST_AUTH_URL + "?" + urlencode(params)
-    return redirect(auth_url)
+    return jsonify({"auth_url": auth_url})
 
 @app.route("/auth/callback")
 def pinterest_callback():

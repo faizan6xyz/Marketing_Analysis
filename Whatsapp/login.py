@@ -1,21 +1,19 @@
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 import os
-import Instagram.schedule_video as sccc
 import requests
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request, jsonify
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from Whatsapp.new import ( WA_APP_ID, WA_REDIRECT_URI, GRAPH_VERSION, SCOPE, APP_SECRET, VERIFY_TOKEN, TABLE_NAME , log,  is_valid_signature,  get_user_for_phone_number_id, check_user_id, send_whatsapp_message )
 import database.UserDB as dbimp
 import authnew as au
-import Drive.dep as dp
 from flask_cors import CORS
 from dotenv import load_dotenv
 load_dotenv()
 BASE_URL = ""
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
 serializer = URLSafeTimedSerializer(app.secret_key)
@@ -34,7 +32,7 @@ def whatsapp_login():
     state = serializer.dumps(user_id)
     params = {"client_id": WA_APP_ID,"redirect_uri": WA_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
     auth_url = f"https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth?" + urlencode(params)
-    return redirect(auth_url)
+    return jsonify({"auth_url": auth_url})
 
 @app.route("/auth/callback")
 def whatsapp_callback():

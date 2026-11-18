@@ -7,7 +7,7 @@ import database.UserDB as dbimp
 import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 import limit as lmmm
 import Drive.dep as dpp
@@ -19,12 +19,13 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 IG_APP_ID = os.getenv("IG_APP_ID")
 IG_APP_SECRET = os.getenv("IG_APP_SECRET")
 IG_REDIRECT_URI = os.getenv("IG_REDIRECT_URI")
+INSTAGRAM_AUTH_URL = "https://www.instagram.com/oauth/authorize"
 STATE_MAX_AGE = 600  # seconds
 TABLE_NAME = "instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
@@ -173,7 +174,7 @@ def get_authenticated_access_token(user_id,token,account_id):
         access_token = uploadd.refresh_token(token, user_id, access_token)
     return access_token, None
 
-@app.route("/auth/login")
+@app.route("/auth/login", methods=["POST"])
 def instagram_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -182,11 +183,14 @@ def instagram_login():
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
     user_id = tokench["user_id"]
     state = serializer.dumps(user_id)
+    # params = {"client_id": IG_APP_ID,"redirect_uri": IG_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
+    # auth_url = "https://www.instagram.com/oauth/authorize?" + urlencode(params)
+    # return redirect(auth_url)
     params = {"client_id": IG_APP_ID,"redirect_uri": IG_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
-    auth_url = "https://www.instagram.com/oauth/authorize?" + urlencode(params)
-    return redirect(auth_url)
+    auth_url = INSTAGRAM_AUTH_URL + "?" + urlencode(params)
+    return jsonify({"auth_url": auth_url})
 
-@app.route("/auth/callback")
+@app.route("/auth/callback", methods=["POST"])
 def instagram_callback():
     code = request.args.get("code")
     state = request.args.get("state")

@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from moviepy import VideoFileClip
 import tempfile
 from flask_cors import CORS
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request,  jsonify
 import Drive.dep as dpp
 from datetime import datetime, timezone, timedelta
 from flask_limiter import Limiter
@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
@@ -280,7 +280,7 @@ def x_login():
     state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
     params = {"response_type": "code", "client_id": X_CLIENT_ID, "redirect_uri": X_REDIRECT_URI, "scope": SCOPE, "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256",    }
     auth_url = AUTH_URL + "?" + urlencode(params)
-    return redirect(auth_url)
+    return jsonify({"auth_url": auth_url})
 
 @app.route("/auth/callback")
 def x_callback():

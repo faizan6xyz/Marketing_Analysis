@@ -42,7 +42,7 @@ Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
 api_key = os.environ.get("api_key")
 frontend = os.environ.get("front_end")
-CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],allow_headers=["Content-Type", "Authorization", "Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 TABLE_NAME = "youtube"
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)

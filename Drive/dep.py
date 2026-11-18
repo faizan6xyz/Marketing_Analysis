@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 SECRET_KEY = os.environ.get("SECRET_KEY_HMAC", "").encode("utf-8")
 CLIENT_ID = os.environ.get("client_id")

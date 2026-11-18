@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from flask_cors import CORS
 import limit as lmmm
 import json
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request, jsonify
 from datetime import datetime, timezone, timedelta
 import Instagram.schedule_video as sccc
 import Drive.dep as dpp
@@ -16,7 +16,7 @@ import authnew as au
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-CORS(app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
@@ -351,9 +351,12 @@ def threads_login():
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
     user_id = tokench["user_id"]
     state = serializer.dumps({"user_id": user_id})
-    params = { "response_type": "code", "client_id": THREADS_APP_ID, "redirect_uri": THREADS_REDIRECT_URI, "scope": THREADS_SCOPES, "state": state, }
+    # params = { "response_type": "code", "client_id": THREADS_APP_ID, "redirect_uri": THREADS_REDIRECT_URI, "scope": THREADS_SCOPES, "state": state, }
+    # auth_url = THREADS_AUTH_URL + "?" + urlencode(params)
+    # return redirect(auth_url)
+    params = {"response_type": "code","client_id": THREADS_APP_ID,"redirect_uri": THREADS_REDIRECT_URI,"scope": THREADS_SCOPES,"state": state, }
     auth_url = THREADS_AUTH_URL + "?" + urlencode(params)
-    return redirect(auth_url)
+    return jsonify({"auth_url": auth_url})
 
 @app.route("/auth/callback")
 def threads_callback():

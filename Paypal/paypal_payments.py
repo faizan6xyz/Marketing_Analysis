@@ -46,7 +46,7 @@ ACTIVE_ORDER_STATUSES = ("CREATED", "COMPLETED")
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET_KEY
 frontend = os.environ.get("front_end")
-CORS( app, origins=[frontend], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  allow_headers=["Content-Type", "Authorization","Request-ID"])
+CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 
 class PayPalError(Exception):
     pass
