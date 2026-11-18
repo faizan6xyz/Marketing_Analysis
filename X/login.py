@@ -273,14 +273,14 @@ def x_login():
     token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
-        return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
     code_verifier = secrets.token_urlsafe(64)[:128]
     code_challenge = base64.urlsafe_b64encode( hashlib.sha256(code_verifier.encode()).digest()).decode().rstrip("=")
     state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
     params = {"response_type": "code", "client_id": X_CLIENT_ID, "redirect_uri": X_REDIRECT_URI, "scope": SCOPE, "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256",    }
     auth_url = AUTH_URL + "?" + urlencode(params)
-    return jsonify({"auth_url": auth_url})
+    return jsonify({"auth_url": auth_url}) , 200
 
 @app.route("/auth/callback")
 def x_callback():

@@ -344,13 +344,13 @@ def pinterest_login():
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
-        return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
     code_verifier, code_challenge = generate_pkce_pair()
     state = serializer.dumps({"user_id": user_id, "code_verifier": code_verifier})
     params = { "response_type": "code", "client_id": PINTEREST_APP_ID, "redirect_uri": PINTEREST_REDIRECT_URI, "scope": PINTEREST_SCOPES, "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256",}
     auth_url = PINTEREST_AUTH_URL + "?" + urlencode(params)
-    return jsonify({"auth_url": auth_url})
+    return jsonify({"auth_url": auth_url}) , 200
 
 @app.route("/auth/callback")
 def pinterest_callback():

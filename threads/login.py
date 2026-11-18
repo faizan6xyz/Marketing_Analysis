@@ -348,7 +348,7 @@ def threads_login():
     token = body.get("token")
     tokench = au.process(token=token)
     if not tokench["status"]:
-        return jsonify({"status": "failed", "reason": tokench["reason"]}), 200
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
     state = serializer.dumps({"user_id": user_id})
     # params = { "response_type": "code", "client_id": THREADS_APP_ID, "redirect_uri": THREADS_REDIRECT_URI, "scope": THREADS_SCOPES, "state": state, }
@@ -356,7 +356,7 @@ def threads_login():
     # return redirect(auth_url)
     params = {"response_type": "code","client_id": THREADS_APP_ID,"redirect_uri": THREADS_REDIRECT_URI,"scope": THREADS_SCOPES,"state": state, }
     auth_url = THREADS_AUTH_URL + "?" + urlencode(params)
-    return jsonify({"auth_url": auth_url})
+    return jsonify({"auth_url": auth_url}) , 200
 
 @app.route("/auth/callback")
 def threads_callback():
