@@ -21,7 +21,7 @@ oauth.register( name="google", client_id=os.environ.get("GOOGLE_CLIENT_ID"), cli
 def all_values(rows, key):
     if not rows:
         return []
-    return [row.get(key) for row in rows]
+    return [{"name": row.get(key),"account_id": str(row["account_id"]) if row.get("account_id") is not None else None}for row in rows]
 
 def set_auth_cookie(resp, token):
     resp.set_cookie("authToken",token,httponly=False,secure=IS_PROD,samesite="None" if IS_PROD else "Lax",max_age=int(TOKEN_TTL.total_seconds()),path="/",) # httponly=False means the browser hides the cookies from the js (document.cookie) but send it in every request , secure=IS_PROD (True) means the browser only stores and sends the cookie over HTTPS , samesite="None" means This decides whether the cookie is sent on cross-site requests, which is a defense against CSRF attacks.    
@@ -167,26 +167,26 @@ def check_accounts():
     data0 = data1 = data2 = data3 = data4 = data5 = data6 = data7 = None
     try:
         if rows[0]["instagram"]:
-            data0 = dbimp.select_rows(tokench["token"], "instagram", select="username", filters={"id": user_id})
+            data0 = dbimp.select_rows(tokench["token"], "instagram", select="username,account_id", filters={"id": user_id})
         if rows[0]["gmail"]:
-            data1 = dbimp.select_rows(tokench["token"], "gmail", select="email", filters={"id": user_id})
+            data1 = dbimp.select_rows(tokench["token"], "gmail", select="email,account_id", filters={"id": user_id})
         if rows[0]["gdrive"]:
-            data2 = dbimp.select_rows(tokench["token"], "drive", select="email", filters={"id": user_id})
+            data2 = dbimp.select_rows(tokench["token"], "drive", select="email,account_id", filters={"id": user_id})
         if rows[0]["whatsapp"]:
-            data3 = dbimp.select_rows(tokench["token"], "whatsapp", select="phone_no", filters={"id": user_id})
+            data3 = dbimp.select_rows(tokench["token"], "whatsapp", select="phone_no,account_id", filters={"id": user_id})
         if rows[0]["threads"]:
-            data4 = dbimp.select_rows(tokench["token"], "threads", select="username", filters={"id": user_id})
+            data4 = dbimp.select_rows(tokench["token"], "threads", select="username,account_id", filters={"id": user_id})
         if rows[0]["youtube"]:
-            data5 = dbimp.select_rows(tokench["token"], "youtube", select="channel_title", filters={"id": user_id})
+            data5 = dbimp.select_rows(tokench["token"], "youtube", select="channel_title,account_id", filters={"id": user_id})
         if rows[0]["pinterst"]:
-            data6 = dbimp.select_rows(tokench["token"], "pinterst", select="username", filters={"id": user_id})
+            data6 = dbimp.select_rows(tokench["token"], "pinterst", select="username,account_id", filters={"id": user_id})
         if rows[0]["x"]:
-            data7 = dbimp.select_rows(tokench["token"], "x", select="username", filters={"id": user_id})
+            data7 = dbimp.select_rows(tokench["token"], "x", select="username,account_id", filters={"id": user_id})
     except Exception:
         app.logger.exception("Failed to fetch account data for user %s", user_id)
         return jsonify({"status": False, "reason": "unable to check db"}), 500
     merged = {"instagram": all_values(data0, "username"),"gmail": all_values(data1, "email"),"drive": all_values(data2, "email"),"whatsapp": all_values(data3, "phone_no"),"threads": all_values(data4, "username"),"youtube": all_values(data5, "channel_title"),"pinterest": all_values(data6, "username"),"x": all_values(data7, "username"),}
-    return jsonify({"status": True, "data": merged}), 200
+    return jsonify({"status": True, "data": merged}), 200   
 
 @app.route("/limit", methods=["POST"])
 def limit():
