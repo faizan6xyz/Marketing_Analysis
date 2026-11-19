@@ -1,16 +1,17 @@
 CREATE TABLE IF NOT EXISTS drive (
-    email TEXT PRIMARY KEY,
+    account_id TEXT PRIMARY KEY,
+    email TEXT ,
     id UUID,
     access_token TEXT,
     refresh_token TEXT,
-    scopes JSONB DEFAULT '{}'::jsonb,
     token_expire TIMESTAMP,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     connected SMALLINT DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS gmail (
-    email TEXT PRIMARY KEY,
+    account_id TEXT PRIMARY KEY,
+    email TEXT ,
     id UUID,
     token_expire TIMESTAMP,
     access_token TEXT,
@@ -27,7 +28,6 @@ CREATE TABLE IF NOT EXISTS instagram (
     access_token TEXT,
     timestamp TIMESTAMPTZ,
     token_expire TIMESTAMPTZ,
-    scopes JSONB DEFAULT '{}'::jsonb,
     username TEXT,
     file BIGINT,
     hash_file TEXT
@@ -97,7 +97,6 @@ CREATE TABLE IF NOT EXISTS whatsapp (
     id UUID,
     access_token TEXT,
     token_expire TIMESTAMP,
-    scopes JSONB DEFAULT '{}'::jsonb,
     timestamp TIMESTAMPTZ,
     phone_no BIGINT,
     file BIGINT,
