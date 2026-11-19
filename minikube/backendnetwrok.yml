@@ -23,7 +23,7 @@ spec:
           port: 5000
           endPort: 5015
   egress:
-    # backend -> primary postgres
+    # backend -> postgres (primary and replicas)
     - to:
         - podSelector:
             matchLabels:
@@ -49,3 +49,15 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Internet egress over HTTPS (Instagram, Razorpay, Supabase, Google APIs, etc.)
+    # Private ranges excluded so this doesn't open access to other in-cluster/internal services
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
