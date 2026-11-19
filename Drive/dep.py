@@ -61,7 +61,7 @@ filesss = {"gmail": {"campains.txt": campaigns_content, "workflowmessage.json": 
 
 def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
-    dbimp.insert_rows(token,table_name, {"id" : user_id , "timestamp":timestamp ,"access_token" : access_token, "refresh_token" : refresh_token, "token_expire": expiry, "connected" : 1 , "scopes" : SCOPES,"email":mail})
+    dbimp.insert_rows(token,table_name, {"id" : user_id , "timestamp":timestamp ,"access_token" : access_token, "refresh_token" : refresh_token, "token_expire": expiry, "connected" : 1 , "email":mail})
     dbimp.update_rows(token,"users",{"gdrive":True},{"user_id":user_id})
 
 def Update_token(token , user_id, access_token, refresh_token, expiry):

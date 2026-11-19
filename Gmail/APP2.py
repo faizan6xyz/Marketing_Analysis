@@ -19,7 +19,7 @@ CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST",
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gmail_api")
 MAX_ATTACHMENTS = 10
-MAX_ATTACHMENT_MB = 15
+MAX_ATTACHMENT_MB = 15  
 app.config['MAX_CONTENT_LENGTH'] = MAX_ATTACHMENT_MB * MAX_ATTACHMENTS * 1024 * 1024
 ALLOWED_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.xlsx', '.csv', '.txt', '.zip'}
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
