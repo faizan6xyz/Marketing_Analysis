@@ -29,7 +29,7 @@ INSTAGRAM_AUTH_URL = "https://www.instagram.com/oauth/authorize"
 STATE_MAX_AGE = 600  # seconds
 TABLE_NAME = "instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
-BASE_URL = ""
+# BASE_URL = os.getenv("BASE_URL")
 MAX_SIZE = 400 * 1024 * 1024
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv", ".webm")
 reel_duraltion = 300
@@ -158,16 +158,19 @@ def deleteFile(service ,file_id):
         return False
     return True
 
-def get_authenticated_access_token(user_id,token,account_id):
-    rows = dbimp.select_rows(token, TABLE_NAME, select="access_token,token_expire", filters={"account_id": account_id,"id":user_id})
+def get_authenticated_access_token(user_id, token, account_id):
+    rows = dbimp.select_rows(token,TABLE_NAME,select="access_token,token_expire",filters={"account_id": account_id, "id": user_id})
     if not rows:
-        return None, (jsonify({"error": "no instagram account linked"}), 404)
+        return None, (jsonify({"error": "no instagram account linked"}),404)
     row = rows[0]
     access_token = row["access_token"]
     raw_expiry = row["token_expire"]
     if not access_token or not raw_expiry:
-        return None, (jsonify({"error": "missing access_token"}), 400)
-    token_expiry = datetime.fromisoformat(raw_expiry)
+        return None, (jsonify({"error": "missing access_token"}),400)
+    if isinstance(raw_expiry, str):
+        token_expiry = datetime.fromisoformat(raw_expiry)
+    else:
+        token_expiry = raw_expiry
     if token_expiry.tzinfo is None:
         token_expiry = token_expiry.replace(tzinfo=timezone.utc)
     if token_expiry - datetime.now(timezone.utc) < timedelta(days=2):
@@ -183,78 +186,51 @@ def instagram_login():
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
     state = serializer.dumps(user_id)
-    # params = {"client_id": IG_APP_ID,"redirect_uri": IG_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
-    # auth_url = "https://www.instagram.com/oauth/authorize?" + urlencode(params)
-    # return redirect(auth_url)
     params = {"client_id": IG_APP_ID,"redirect_uri": IG_REDIRECT_URI,"scope": SCOPE,"response_type": "code","state": state,}
     auth_url = INSTAGRAM_AUTH_URL + "?" + urlencode(params)
     return jsonify({"auth_url": auth_url}) , 200
 
-@app.route("/auth/callback", methods=["POST"])
+def store_instagram_account(token, user_id, access_token, username, account_id, timestamp, expire):
+    dbimp.insert_rows(token, TABLE_NAME,{"access_token": access_token, "timestamp": timestamp, "token_expire": expire,"username": username, "account_id": account_id,"id": user_id},)
+    dbimp.update_rows(token, "users", {"instagram": True}, {"user_id": user_id})
+
+def clean(value):
+    return (value or "").split("#", 1)[0].strip()
+
+@app.route("/auth/callback", methods=["GET"])
 def instagram_callback():
-    code = request.args.get("code")
-    state = request.args.get("state")
-    if not code:
-        return jsonify({"error": "missing code"}), 400
-    if not state:
-        return jsonify({"error": "missing state"}), 400
+    code = clean(request.args.get("code"))
+    state = clean(request.args.get("state"))
+    if not code or not state:
+        return jsonify({"error": "missing code or state"}), 400
     try:
         user_id = serializer.loads(state, max_age=STATE_MAX_AGE)
     except SignatureExpired:
         return jsonify({"error": "state expired, please reconnect"}), 400
-    except BadSignature:
+    except BadSignature as e:
         return jsonify({"error": "invalid state"}), 400
-    expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-    token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    token_resp = requests.post("https://api.instagram.com/oauth/access_token",data={"client_id": IG_APP_ID,"client_secret": IG_APP_SECRET,"grant_type": "authorization_code","redirect_uri": IG_REDIRECT_URI,"code": code,},).json()
-    short_token = token_resp.get("access_token")
-    if not short_token:
-        return jsonify({"error": "token exchange failed", "details": token_resp}), 400
-    long_resp = requests.get("https://graph.instagram.com/access_token",params={"grant_type": "ig_exchange_token","client_secret": IG_APP_SECRET,"access_token": short_token,},).json()
-    long_token = long_resp.get("access_token")
-    seconds = long_resp.get("expires_in")
-    if not long_token or not seconds:
-        return jsonify({"error": "token exchange failed", "details": long_resp}), 400
-    expire_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-    about = requests.get("https://graph.instagram.com/me",params={"fields": "id,username,account_type,media_count", "access_token": long_token},).json()
-    account = about.get("username")
-    account_id = about.get("id")
-    timestamp = datetime.now(timezone.utc).isoformat()
-    expire = expire_time.isoformat()
-    payload = {"user_id": user_id,"account_id": account_id,"username": account,"expire": expire,"timestamp": timestamp,"token": token,"access": long_token,}
-    signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/instagram/auth/callbackshi", json={"data": signed_payload}, timeout=5)
-    return (resp.content, resp.status_code, resp.headers.items())
-
-@app.route("/auth/callbackshi", methods=["POST"])
-def dataget():
-    raw = request.get_json(silent=True) or {}
     try:
-        data = serializer.loads(raw.get("data"), max_age=STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return jsonify({"status": False, "error": "invalid or expired payload"}), 403
-    token = data.get("token")
-    access_token = data.get("access")
-    user_id = data.get("user_id")
-    timestamp = data.get("timestamp")
-    expirey = data.get("expire")
-    username = data.get("username")
-    account_id = data.get("account_id")
-    if not all([token, access_token, user_id, timestamp, expirey, username, account_id]):
-        return jsonify({"error": "missing required fields"}), 400
+        token_resp = requests.post("https://api.instagram.com/oauth/access_token",data={"client_id": IG_APP_ID, "client_secret": IG_APP_SECRET,"grant_type": "authorization_code","redirect_uri": IG_REDIRECT_URI, "code": code},timeout=10,).json()
+        short_token = token_resp.get("access_token")
+        if not short_token:
+            return jsonify({"error": "token exchange failed", "details": token_resp}), 400
+        long_resp = requests.get("https://graph.instagram.com/access_token",params={"grant_type": "ig_exchange_token", "client_secret": IG_APP_SECRET,"access_token": short_token},timeout=10,).json()
+        long_token = long_resp.get("access_token")
+        seconds = long_resp.get("expires_in")
+        if not long_token or not seconds:
+            return jsonify({"error": "long token exchange failed", "details": long_resp}), 400
+        about = requests.get("https://graph.instagram.com/me",params={"fields": "id,username,account_type,media_count", "access_token": long_token},timeout=10,).json()
+    except requests.RequestException as e:
+        return jsonify({"error": "instagram request failed", "details": str(e)}), 502
+    now = datetime.now(timezone.utc)
+    db_token = au.jsonspoof(user_id=user_id, timestamp=now + timedelta(hours=1))
     try:
-        datetime.fromisoformat(timestamp)
-        datetime.fromisoformat(expirey)
-    except ValueError:
-        return jsonify({"error": "invalid timestamp/expire format"}), 400
-    try:
-        dbimp.update_rows(token,TABLE_NAME,{"access_token": access_token,"Timestamp": timestamp,"token_expire": expirey,"username": username,"account_id": account_id},filters={"id": user_id},)
-        dbimp.update_rows(token,"users",{"Instagram":True},{"user_id":user_id})
+        store_instagram_account(db_token, user_id, long_token, about.get("username"), about.get("id"),now.isoformat(), (now + timedelta(seconds=seconds)).isoformat(),)
     except Exception as e:
-        return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
-    return jsonify({"status": "ok"}), 200
+        return jsonify({"error": "failed to save token", "details": str(e)}), 500
+    return jsonify({"status": True}), 200
 
-@app.route("/posts/")
+@app.route("/posts/", methods=["POST"])
 def get_instagram_posts():
     body = request.get_json(silent=True) or {}
     username = body.get("username")
@@ -276,13 +252,13 @@ def get_instagram_posts():
         params = None
     return jsonify({"count": len(posts), "posts": posts}), 200
 
-@app.route("/stories/")
+@app.route("/stories/", methods=["POST"])
 def get_instagram_stories():
     body = request.get_json(silent=True) or {}
-    username = body.get("username")
+    account_id = body.get("account_id")
     token = body.get("token")
     tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],account_id)
     if err: return err
     fields = "id,media_type,media_url,timestamp"
     url = "https://graph.instagram.com/me/stories"

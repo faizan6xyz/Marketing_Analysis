@@ -4,7 +4,7 @@ import os
 import requests
 from flask import Flask, request, jsonify
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from Whatsapp.new import ( WA_APP_ID, WA_REDIRECT_URI, GRAPH_VERSION, SCOPE, APP_SECRET, VERIFY_TOKEN, TABLE_NAME , log,  is_valid_signature,  get_user_for_phone_number_id, check_user_id, send_whatsapp_message )
+from Whatsapp.new import ( WA_APP_ID, WA_REDIRECT_URI, GRAPH_VERSION, SCOPE, APP_SECRET,  TABLE_NAME , log )
 import database.UserDB as dbimp
 import authnew as au
 from flask_cors import CORS
@@ -19,7 +19,7 @@ app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
 serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  # seconds
 
-@app.route("/auth/login")
+@app.route("/auth/login",methods=["POST"])
 def whatsapp_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -34,14 +34,20 @@ def whatsapp_login():
     auth_url = f"https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth?" + urlencode(params)
     return jsonify({"auth_url": auth_url}) , 200
 
-@app.route("/auth/callback")
-def whatsapp_callback():
-    code = request.args.get("code")
-    state = request.args.get("state")
-    if not code:
-        return jsonify({"error": "missing code"}), 400
-    if not state:
-        return jsonify({"error": "missing state"}), 400
+
+def clean(value):
+    return (value or "").split("#", 1)[0].strip()
+
+def store_whatsapp_account(token, user_id, access_token, phone_no, account_id, timestamp, expire):
+    dbimp.update_rows(token,TABLE_NAME,{"access_token": access_token,"timestamp": timestamp ,"token_expire": expire ,"account_id": account_id ,"phone_no": phone_no,},filters={"id": user_id},)
+    dbimp.update_rows(token, "users", {"whatsapp": True}, {"user_id": user_id})
+
+@app.route("/auth/callback", methods=["GET"])
+def instagram_callback():
+    code = clean(request.args.get("code"))
+    state = clean(request.args.get("state"))
+    if not code or not state:
+        return jsonify({"error": "missing code or state"}), 400
     try:
         user_id = serializer.loads(state, max_age=STATE_MAX_AGE)
     except SignatureExpired:
@@ -81,34 +87,8 @@ def whatsapp_callback():
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     expp = expire_time.isoformat()
-    payload = {"user_id": user_id,"access": long_token,"timestamp": times , "token":token , "account_id":phone_number_id,"phone_no":display_number,"expire":expp}
-    signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/whatsapp/auth/callbackshi", json={"data": signed_payload}, timeout=5)
-    return (resp.content, resp.status_code, resp.headers.items())
-
-@app.route("/auth/callbackshi", methods=["POST"])
-def oauth_callbac():
-    raw = request.get_json(silent=True) or {}
     try:
-        data = serializer.loads(raw.get("data"), max_age=STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return jsonify({"status": False, "error": "invalid or expired payload"}), 403
-    token = data.get("token")
-    user_id = data.get("user_id")
-    access = data.get("access")
-    account_id = data.get("account_id")
-    phone_no = data.get("phone_no")
-    expire = data.get("expire")
-    timestamp = data.get("timestamp")
-    if not token or not user_id or not access or not account_id or not phone_no or not expire or not timestamp :
-        return jsonify({"error": "missing required fields"}), 400
-    try:
-        datetime.fromisoformat(timestamp)
-        datetime.fromisoformat(expire)
-    except ValueError:
-        return jsonify({"error": "invalid timestamp/expire format"}), 400
-    try:
-        dbimp.update_rows(token,TABLE_NAME,{"access_token": access,"timestamp": timestamp ,"token_expire": expire ,"account_id": account_id ,"phone_no": phone_no,},filters={"id": user_id},)
+        store_whatsapp_account(token, user_id, long_token, display_number, phone_number_id, times, expp)
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200

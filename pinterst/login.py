@@ -339,7 +339,7 @@ def get_video_duration(file_path):
     with VideoFileClip(file_path) as video:
         return video.duration
 
-@app.route("/auth/login", methods=["GET", "POST"])
+@app.route("/auth/login", methods=["POST"])
 def pinterest_login():
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token")
     tokench = au.process(token=token)
@@ -352,17 +352,19 @@ def pinterest_login():
     auth_url = PINTEREST_AUTH_URL + "?" + urlencode(params)
     return jsonify({"auth_url": auth_url}) , 200
 
-@app.route("/auth/callback")
-def pinterest_callback():
-    error = request.args.get("error")
-    if error:
-        return jsonify({"error": error, "description": request.args.get("error_description")}), 400
-    code = request.args.get("code")
-    state = request.args.get("state")
-    if not code:
-        return jsonify({"error": "missing code"}), 400
-    if not state:
-        return jsonify({"error": "missing state"}), 400
+def clean(value):
+    return (value or "").split("#", 1)[0].strip()
+
+def store_pinterest_account(token, user_id, access_token, username, account_id, timestamp, expire,refresh_token):
+    dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "access_token": access_token, "refresh_token": refresh_token, "timestamp": timestamp, "token_expire": expire, "username": username, "account_id": account_id, }, filters={"id": user_id}, ) 
+    dbimp.update_rows(token,"users",{"pinterst":True},{"user_id":user_id})
+
+@app.route("/auth/callback", methods=["GET"])
+def instagram_callback():
+    code = clean(request.args.get("code"))
+    state = clean(request.args.get("state"))
+    if not code or not state:
+        return jsonify({"error": "missing code or state"}), 400
     try:
         state_data = serializer.loads(state, max_age=STATE_MAX_AGE)
     except SignatureExpired:
@@ -390,36 +392,8 @@ def pinterest_callback():
         return jsonify({"error": "failed to fetch profile", "details": about}), 400
     timestamp = datetime.now(timezone.utc).isoformat()
     expire = expire_time.isoformat()
-    payload = { "user_id": user_id, "account_id": account_id, "username": username, "expire": expire, "timestamp": timestamp, "token": token, "access": access_token, "refresh": refresh_token, }
-    signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/pinterest/auth/callbackshi", json={"data": signed_payload}, timeout=5)
-    return (resp.content, resp.status_code, resp.headers.items())
-
-@app.route("/auth/callbackshi", methods=["POST"])
-def pinterest_dataget():
-    raw = request.get_json(silent=True) or {}
     try:
-        data = serializer.loads(raw.get("data"), max_age=STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return jsonify({"status": False, "error": "invalid or expired payload"}), 403
-    token = data.get("token")
-    access_token = data.get("access")
-    refresh_token = data.get("refresh")
-    user_id = data.get("user_id")
-    timestamp = data.get("timestamp")
-    expirey = data.get("expire")
-    username = data.get("username")
-    account_id = data.get("account_id")
-    if not all([token, access_token, user_id, timestamp, expirey, account_id]):
-        return jsonify({"error": "missing required fields"}), 400
-    try:
-        datetime.fromisoformat(timestamp)
-        datetime.fromisoformat(expirey)
-    except ValueError:
-        return jsonify({"error": "invalid timestamp/expire format"}), 400
-    try:
-        dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "access_token": access_token, "refresh_token": refresh_token, "timestamp": timestamp, "token_expire": expirey, "username": username, "account_id": account_id, }, filters={"id": user_id}, ) 
-        dbimp.update_rows(token,"users",{"Pinterst":True},{"user_id":user_id})
+        store_pinterest_account(token, user_id, access_token, username, account_id, timestamp, expire,refresh_token)
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return jsonify({"status": "ok"}), 200
