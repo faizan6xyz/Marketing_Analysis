@@ -16,6 +16,8 @@ from psycopg2 import sql
 from psycopg2.extras import execute_values
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 from database.UserDB import pool_read, pool_write
+messagelimit = 50
+commentlimit = 15
 
 @contextmanager
 def get_conn_write():
@@ -40,10 +42,10 @@ def get_conn_read():
         raise
     finally:
         pool_read.putconn(conn)
-
+        
 def _rows_as_lists(cur, rows):
     cols = [d[0] for d in cur.description]
-    return [[r[c] for c in cols] for r in rows]
+    return [[r[c] for c in cols] if isinstance(r, dict) else list(r) for r in rows]
 
 def is_valid_iso_format(value: str) -> bool:
     if not isinstance(value, str):
@@ -61,18 +63,28 @@ def _delete_by(table, column, value):
 
 def inert_workflow(id_, message, comment):
     now = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
-    with get_conn_write() as conn, conn.cursor() as cur:
-        cur.execute("INSERT INTO workflow ( id , comment , message, time) values (%s,%s,%s,%s) ", (id_, comment, message, now))
+    if len(message) < messagelimit and len(comment) < commentlimit :
+        with get_conn_write() as conn, conn.cursor() as cur:
+            cur.execute("INSERT INTO workflow ( id , comment , message, time) values (%s,%s,%s,%s) ", (id_, comment, message, now))
+
+def get_workflows(ids):
+    if not ids:
+        return {}
+    with get_conn_read() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, comment, message FROM workflow WHERE id = ANY(%s)",(list(ids),),)
+        rows = _rows_as_lists(cur, cur.fetchall())
+    return {row[0]: row for row in rows}
 
 def workflow_data_change(id_, message, comment):
-    with get_conn_write() as conn, conn.cursor() as cur:      # writes must use the write pool
-        cur.execute("SELECT message, comment FROM workflow WHERE id = %s", (id_,))
-        rows = _rows_as_lists(cur, cur.fetchall())
-        if rows:
-            cur.execute("UPDATE workflow SET message = %s, comment = %s WHERE id = %s", (message, comment, id_))
-        else:
-            cur.execute("INSERT INTO workflow (id, message, comment) VALUES (%s, %s, %s)", (id_, message, comment))
-        return rows                                            # old [message, comment] rows
+    if message is None or comment is None:
+        raise ValueError("message and comment are required")
+    if len(message) >= messagelimit or len(comment) >= commentlimit:
+        raise ValueError("message or comment too long")
+    run_at = datetime.now(timezone.utc) + timedelta(days=10)
+    query = (
+        "INSERT INTO workflow (id, comment, message, time) VALUES (%s, %s, %s, %s)  ON CONFLICT (id) DO UPDATE  SET message = EXCLUDED.message, comment = EXCLUDED.comment" )
+    with get_conn_write() as conn, conn.cursor() as cur:
+        cur.execute(query, (id_, comment, message, run_at))
 
 def workflow_10_days(cutoff):
     with get_conn_read() as conn, conn.cursor() as cur:
