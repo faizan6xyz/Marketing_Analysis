@@ -16,7 +16,7 @@ load_dotenv()
 SECRET_KEY = os.environ["SECRET_KEY"].encode("utf-8")
 pool_write = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST_write", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="read-write",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
 pool_read = ThreadedConnectionPool( 1, 10, host=os.environ.get("DB_HOST_read", "localhost"),port=int(os.environ.get("DB_PORT", 5432)), dbname=os.environ.get("DB_NAME", "myapp_db"), user=os.environ.get("DB_USER", "myapp"), password=os.environ.get("DB_PASSWORD"), target_session_attrs="prefer-standby",connect_timeout=3,) # 1 minimum connection and the 10 as maximum connection
-ALLOWED_TABLES = { "drive", "gmail", "instagram", "paypal", "paypal_verify", "pinterest", "razorpay", "razorpay_verify", "threads", "whatsapp", "x", "youtube", "users",}
+ALLOWED_TABLES = { "drive", "gmail", "instagram", "paypal", "paypal_verify", "pinterest", "razorpay", "razorpay_verify", "threads", "whatsapp", "x", "youtube", "users","tableverify"}
 _SIMPLE_OPS = { "eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=","like": "LIKE", "ilike": "ILIKE", "contains": "@>",}
 
 def _prehash(password: str) -> bytes:
@@ -202,8 +202,8 @@ def select_rows( token, table_name: str, filters: Optional[dict[str, Any]] = Non
         params.append(limit)
     with _cursor_read() as cur:
         cur.execute(query, params)
-        return [dict(r) for r in cur.fetchall()]
-    
+        return [dict(r) for r in cur.fetchall()]   # returns the list of the dictionary . [{'id': '1234', 'username': 'uswe1'}]
+        
 def insert_rows_web(table_name: str, data: dict | list[dict]) -> list[dict]:
     table_name = _check(table_name)
     rows = [data] if isinstance(data, dict) else data

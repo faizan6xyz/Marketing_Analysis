@@ -39,7 +39,7 @@ retry() {
 for cmd in minikube kubectl podman base64 sed; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "Missing required command: $cmd" >&2; exit 1; }
 done
-required_files=( .env schema.sql pg_hba.conf minikube/namespace.yml minikube/db_read_service.yml minikube/db_write_service.yml  minikube/pv.yml minikube/db1_state.yml minikube/db2_state.yml minikube/db3_state.yml minikube/backend_service.yml minikube/hpa.yml minikube/stateful_backend.yml minikube/backendnetwrok.yml minikube/ingress.yaml minikube/ingresswebhook.yml )
+required_files=( .env schema.sql pg_hba.conf minikube/namespace.yml minikube/db_read_service.yml minikube/db_write_service.yml  minikube/pv.yml minikube/db1_state.yml minikube/db2_state.yml minikube/db3_state.yml minikube/backend_service.yml minikube/hpa_backend.yml minikube/stateful_backend.yml minikube/backendnetwrok.yml minikube/ingress.yaml minikube/ingresswebhook.yml )
 for f in "${required_files[@]}"; do
   [[ -f "$f" ]] || { echo "Missing required file: $f" >&2; exit 1; }
 done
@@ -88,13 +88,12 @@ wait_for_pod "$DB2_POD" 180
 wait_for_pod "$DB3_POD" 180
 echo "Replicas are ready"
 kubectl apply -f minikube/backend_service.yml
-kubectl apply -f minikube/hpa.yml
+kubectl apply -f minikube/hpa_backend.yml
 kubectl apply -f minikube/stateful_backend.yml
 kubectl apply -f minikube/backendnetwrok.yml
 echo "Waiting for backend..."
 kubectl rollout status statefulset/backend -n "$NAMESPACE" --timeout=180s
 retry 5 kubectl apply -f minikube/ingress.yaml
-retry 5 kubectl apply -f minikube/ingresswebhook.yml
 echo
 echo "Deployment completed!"
 kubectl get pods -n "$NAMESPACE" -o wide

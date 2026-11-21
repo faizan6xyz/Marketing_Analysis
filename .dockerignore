@@ -3,6 +3,7 @@ __pycache__
 .gitignore
 .env
 .vscode/
+.github/
 deploy-example/
 Compose.yml
 schema.sql
