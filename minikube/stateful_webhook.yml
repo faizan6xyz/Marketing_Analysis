@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: leo-social
+  name: webhook-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: webhook
+  namespace: leo-social
+spec:
+  serviceName: webhook-headless
+  # Replicas are managed by the HPA
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app: webhook
+  template:
+    metadata:
+      labels:
+        app: webhook
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: ghcr-secret
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: webhool-data
+      containers:
+        - name: webhook-container
+          image: ghcr.io/faizan6xyz/shitttt:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: env-shit
+          ports:
+            - name: main
+              containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 300Mi
+            limits:
+              cpu: 250m
+              memory: 600Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data  

@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webhook-allow-only-ingress-controller
+  namespace: leo-social
+spec:
+  podSelector:
+    matchLabels:
+      app: webhook
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 5000
+          endPort: 5015
+  egress:
+    # webhook -> postgres (primary and replicas)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+              primary: "true"
+        - podSelector:
+            matchLabels:
+              app: postgres
+              primary: "false"
+      ports:
+        - protocol: TCP
+          port: 5432
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Internet egress over HTTPS (Instagram, Razorpay, Supabase, Google APIs, etc.)
+    # Private ranges excluded so this doesn't open access to other in-cluster/internal services
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
