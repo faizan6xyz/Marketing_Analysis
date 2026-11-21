@@ -19,7 +19,7 @@ logger = logging.getLogger("gmail_client")
 BASE_URL = os.environ.get("BASE_URL")
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
-SCOPES =  ["https://www.googleapis.com/auth/gmail.modify"]
+SCOPES = ["openid","https://www.googleapis.com/auth/userinfo.email","https://www.googleapis.com/auth/userinfo.profile","https://www.googleapis.com/auth/gmail.modify",]
 if not SCOPES:
     raise EnvironmentError("GMAIL_SCOPES did not contain any valid scopes.")
 MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
@@ -34,7 +34,7 @@ RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503}
 ALLOWED_ATTACHMENT_EXTENSIONS = { '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.ppt', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mp3', }
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/gmail/auth/callback"], }}, scopes=SCOPES, redirect_uri=f"{BASE_URL}/gmail/auth/callback",)
+    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/gmail/auth/callback"], }}, scopes=SCOPES, redirect_uri=f"{BASE_URL}/gmail/auth/callback",autogenerate_code_verifier=True)
 
 def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
     payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}

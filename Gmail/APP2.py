@@ -3,7 +3,6 @@ import re
 import logging
 from flask import Flask, request, jsonify 
 import database.UserDB as dbimp
-from datetime import datetime, timezone, timedelta
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import Gmail.Read_mails as gc  # rename to match your actual module filename
@@ -106,21 +105,18 @@ def gmail_oauth_callback():
         logger.exception("token exchange failed")
         return jsonify({"error": "token exchange failed, please reconnect"}), 401
     creds = flow.credentials
-    creds_json = creds.to_json()
     gmail_service = build('gmail', 'v1', credentials=creds)
     oauth2_service = build('oauth2', 'v2', credentials=creds)
     email_addr = gmail_service.users().getProfile(userId='me').execute()['emailAddress']
     userinfo = oauth2_service.userinfo().get().execute()
     google_account_id = userinfo['id']  # stable, permanent per Google Account
-    expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-    token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     try:
-        gc.save_tokens(token, user_id, creds_json, google_account_id,email_addr)
+        gc.save_tokens_web( user_id, creds, google_account_id,email_addr)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 401
     return jsonify({"status": True}), 200
 
-@app.route('/gmail/messages', methods=['GET'])
+@app.route('/gmail/messages', methods=['POST'])
 @limiter.limit("30 per minute")
 def list_messages():
     body = request.get_json(silent=True) or {}
@@ -146,7 +142,7 @@ def list_messages():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/gmail/filters', methods=['GET'])
+@app.route('/gmail/filters', methods=['POST'])
 @limiter.limit("30 per minute")
 def list_filters():
     body = request.get_json(silent=True) or {}
@@ -192,7 +188,7 @@ def create_filter():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/gmail/labels', methods=['GET'])
+@app.route('/gmail/labels', methods=['POST'])
 @limiter.limit("30 per minute")
 def list_labels():
     body = request.get_json(silent=True) or {}
@@ -334,7 +330,7 @@ def delete_filter():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/gmail/labels/count', methods=['GET'])
+@app.route('/gmail/labels/count', methods=['POST'])
 @limiter.limit("30 per minute")
 def get_label_count():
     body = request.get_json(silent=True) or {}
@@ -363,7 +359,7 @@ def get_label_count():
     except Exception as e:
         return safe_error(e)
 
-@app.route('/gmail/labels/messages', methods=['GET'])
+@app.route('/gmail/labels/messages', methods=['POST'])
 @limiter.limit("30 per minute")
 def get_label_messages():
     body = request.get_json(silent=True) or {}
@@ -407,5 +403,3 @@ def get_label_messages():
     except Exception as e:
         return safe_error(e)
 
-if __name__ == '__main__':
-    app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
