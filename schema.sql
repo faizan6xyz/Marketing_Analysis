@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS gmail (
     last_history_id TEXT
 );
 
+CREATE TABLE IF NOT EXISTS tableverify (
+    id UUID,
+    platform TEXT,
+    code TEXT
+);
+
 CREATE TABLE IF NOT EXISTS instagram (
     account_id BIGINT PRIMARY KEY,
     id UUID,

@@ -1,7 +1,8 @@
 import io
 import pandas as pd
 import os
-from flask import Flask, request, redirect, jsonify
+import logging
+from flask import Flask, request, jsonify
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.http import MediaIoBaseDownload , MediaIoBaseUpload ,MediaFileUpload
 from googleapiclient.errors import HttpError
@@ -24,6 +25,8 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("drive_api")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 SECRET_KEY = os.environ.get("SECRET_KEY_HMAC", "").encode("utf-8")
@@ -373,28 +376,54 @@ def connect_drive():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
     user_id, err = authenticate_request(token)
-    if err: return err
+    if err:
+        return err
     flow = build_flow()
     signed_state = serializer.dumps(user_id)
-    auth_url, _ = flow.authorization_url( access_type="offline", prompt="consent", state=signed_state )
-    return jsonify({"status": True,"auth_url": auth_url}) , 200
+    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=signed_state)
+    try:
+        try:
+            dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "drive"})
+        except Exception:
+            pass
+        dbimp.insert_rows(token, "tableverify",{"id": user_id, "platform": "drive", "code": flow.code_verifier})
+    except Exception:
+        logger.exception("failed to store pkce verifier")
+        return jsonify({"status": False, "error": "could not start login"}), 500
+    return jsonify({"status": True, "auth_url": auth_url}), 200
+
 
 @app.route("/auth/callback", methods=['GET'])
 def oauth_callback():
     signed_state = request.args.get("state")
+    code = request.args.get("code")
+    if not signed_state:
+        return jsonify({"error": "missing state"}), 400
+    if not code:
+        return jsonify({"error": "missing code", "details": request.args.get("error")}), 400
     try:
         user_id = serializer.loads(signed_state, max_age=STATE_MAX_AGE)
     except SignatureExpired:
         return jsonify({"error": "state expired, please reconnect"}), 400
     except BadSignature:
         return jsonify({"error": "invalid state"}), 400
-    flow = build_flow()
-    code = request.args.get("code")
-    if not code:
-        return jsonify({"error": "missing code", "details": request.args.get("error")}), 400
-    flow.fetch_token(code=code)
+    rows = dbimp.select_rows_web("tableverify", select="code", filters={"id": user_id, "platform": "drive"})
+    if not rows:
+        return jsonify({"error": "no login in progress, please reconnect"}), 400
+    verifier = rows[0]["code"]
+    try:  
+        dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "drive"})
+    except Exception:
+        logger.warning(f"unable to delete verifier for {user_id} drive")
+    try:
+        flow = build_flow()
+        flow.code_verifier = verifier
+        flow.fetch_token(code=code)
+    except Exception:
+        logger.exception("token exchange failed")
+        return jsonify({"error": "token exchange failed, please reconnect"}), 401
     creds = flow.credentials
-    expire = creds.expiry.isoformat()
+    expire = creds.expiry.isoformat() if creds.expiry else None
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     service = build('gmail', 'v1', credentials=creds)

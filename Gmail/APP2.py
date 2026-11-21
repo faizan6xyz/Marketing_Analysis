@@ -1,14 +1,14 @@
 import os
 import re
 import logging
-from flask import Flask, request, jsonify ,redirect
+from flask import Flask, request, jsonify 
+import database.UserDB as dbimp
 from datetime import datetime, timezone, timedelta
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import Gmail.Read_mails as gc  # rename to match your actual module filename
 import authnew as au
 from googleapiclient.discovery import build
-import requests
 from flask_cors import CORS
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from dotenv import load_dotenv
@@ -55,16 +55,26 @@ def is_allowed_file(filename):
 def connect_gmail():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
-    if not token :
-        return jsonify({"status":False}) , 403
+    if not token:
+        return jsonify({"status": False}), 401
     tokench = au.process(token=token)
-    if not tokench["status"] :
-        return jsonify({"status": "failed" , "reason": tokench["reason"]})
+    if not tokench["status"]:
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 401
     user_id = tokench['user_id']
+
     state = serializer.dumps(user_id)
     flow = gc.build_flow()
-    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
-    return jsonify({"status": True,"auth_url": auth_url}) , 200
+    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)  
+    try:
+        try:
+            dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "gmail"})
+        except Exception:
+            pass
+        dbimp.insert_rows(token, "tableverify",{"id": user_id, "platform": "gmail", "code": flow.code_verifier})
+    except Exception:
+        logger.exception("failed to store pkce verifier")
+        return jsonify({"status": False, "error": "could not start login"}), 500
+    return jsonify({"status": True, "auth_url": auth_url}), 200
 
 @app.route("/auth/callback", methods=['GET'])
 def gmail_oauth_callback():
@@ -80,8 +90,21 @@ def gmail_oauth_callback():
         return jsonify({"error": "state expired, please reconnect"}), 400
     except BadSignature:
         return jsonify({"error": "invalid state"}), 400
-    flow = gc.build_flow()
-    flow.fetch_token(code=code)
+    rows = dbimp.select_rows_web("tableverify", select="code",filters={"id": user_id, "platform": "gmail"})
+    if not rows:
+        return jsonify({"error": "no login in progress, please reconnect"}), 400
+    verifier = rows[0]["code"]
+    try:  
+        dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "gmail"})
+    except Exception:
+        logger.warning(f"unable to delete verifier for {user_id} gmail")
+    try:
+        flow = gc.build_flow()
+        flow.code_verifier = verifier
+        flow.fetch_token(code=code)
+    except Exception:
+        logger.exception("token exchange failed")
+        return jsonify({"error": "token exchange failed, please reconnect"}), 401
     creds = flow.credentials
     creds_json = creds.to_json()
     gmail_service = build('gmail', 'v1', credentials=creds)
@@ -94,7 +117,7 @@ def gmail_oauth_callback():
     try:
         gc.save_tokens(token, user_id, creds_json, google_account_id,email_addr)
     except Exception as e:
-        return jsonify({"status": False, "error": str(e)}), 403
+        return jsonify({"status": False, "error": str(e)}), 401
     return jsonify({"status": True}), 200
 
 @app.route('/gmail/messages', methods=['GET'])
@@ -106,7 +129,7 @@ def list_messages():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
-        return jsonify({"status":False}) , 403
+        return jsonify({"status":False}) , 401
     query = body.get('q', 'is:unread')[:200]
     try:
         max_results = int(body.get('max_results', 10))
@@ -133,7 +156,7 @@ def list_filters():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
-        return jsonify({"status":False}) , 403
+        return jsonify({"status":False}) , 401
     try:
         service = gc.get_service(token=token,user_id=user_id)
         if not service:
@@ -152,7 +175,7 @@ def create_filter():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
-        return jsonify({"status":False}) , 403
+        return jsonify({"status":False}) , 401
     data = request.get_json(silent=True) or {}
     criteria = data.get('criteria')
     action = data.get('action')
@@ -178,7 +201,7 @@ def list_labels():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
-        return jsonify({"status":False}) , 403
+        return jsonify({"status":False}) , 401
     try:
         service = gc.get_service(token=token,user_id=user_id)
         if not service:
@@ -197,7 +220,7 @@ def create_label():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
-        return jsonify({"status":False}) , 403
+        return jsonify({"status":False}) , 401
     data = request.get_json(silent=True) or {}
     name = data.get('name')
     if not name or not LABEL_NAME_RE.match(name):
@@ -227,7 +250,7 @@ def mark_as_read():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
-        return jsonify({"status": False}), 403
+        return jsonify({"status": False}), 401
     if not message_ids:
         return jsonify({"error": "at least one valid 'message_id' is required"}), 400
     invalid = [m for m in message_ids if not MESSAGE_ID_RE.match(m)]
@@ -258,7 +281,7 @@ def mark_as_unread():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
-        return jsonify({"status": False}), 403
+        return jsonify({"status": False}), 401
     if not message_ids:
         return jsonify({"error": "at least one valid 'message_id' is required"}), 400
     invalid = [m for m in message_ids if not MESSAGE_ID_RE.match(m)]
@@ -289,7 +312,7 @@ def delete_filter():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
-        return jsonify({"status": False}), 403
+        return jsonify({"status": False}), 401
     if not filter_ids:
         return jsonify({"error": "at least one valid 'filter_id' is required"}), 400
     invalid = [f for f in filter_ids if not MESSAGE_ID_RE.match(f)]
@@ -321,7 +344,7 @@ def get_label_count():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
-        return jsonify({"status": False}), 403
+        return jsonify({"status": False}), 401
     if not label_ids:
         return jsonify({"error": "at least one valid 'label_id' is required"}), 400
     try:
@@ -350,7 +373,7 @@ def get_label_messages():
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
-        return jsonify({"status": False}), 403
+        return jsonify({"status": False}), 401
     if not label_ids:
         return jsonify({"error": "at least one valid 'label_id' is required"}), 400
     max_results = body.get("max_results", default=20, type=int)

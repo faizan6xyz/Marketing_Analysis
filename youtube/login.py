@@ -23,6 +23,7 @@ from google_auth_oauthlib.flow import Flow
 import database.UserDB as dbimp
 import authnew as au
 import Drive.dep as dpp
+import logging
 from dotenv import load_dotenv
 load_dotenv()
 YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/drive.readonly",]
@@ -36,6 +37,8 @@ MAX_UPLOAD_WORKERS = 4
 YOUTUBE_API_KEY = os.getenv("Youtube_api_key")
 YOUTUBE_DATA_URL = "https://www.googleapis.com/youtube/v3"
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("drive_api")
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 Clientid = os.environ.get("client_id")
@@ -305,7 +308,8 @@ def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, descriptio
 
 @app.route("/auth/login", methods=['POST'])
 def connect_youtube():
-    token = request.args.get("token")
+    body = request.get_json(silent=True) or {}
+    token = body.get("token") or request.args.get("token")
     if not token:
         return jsonify({"status": False}), 403
     tokench = au.process(token=token)
@@ -315,14 +319,24 @@ def connect_youtube():
     state = serializer.dumps(user_id)
     flow = build_flow()
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
-    return jsonify({"status": True,"auth_url": auth_url}) , 200
+    try:
+        try:
+            dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "youtube"})
+        except Exception:
+            pass
+        dbimp.insert_rows(token, "tableverify",{"id": user_id, "platform": "youtube", "code": flow.code_verifier})
+    except Exception:
+        logger.exception("failed to store pkce verifier")
+        return jsonify({"status": False, "error": "could not start login"}), 500
+    return jsonify({"status": True, "auth_url": auth_url}), 200
+
 
 @app.route("/auth/callback", methods=['GET'])
 def youtube_oauth_callback():
     state = request.args.get("state")
     code = request.args.get("code")
     if not code:
-        return jsonify({"error": "missing code"}), 400
+        return jsonify({"error": "missing code", "details": request.args.get("error")}), 400
     if not state:
         return jsonify({"error": "missing state"}), 400
     try:
@@ -331,14 +345,31 @@ def youtube_oauth_callback():
         return jsonify({"error": "state expired, please reconnect"}), 400
     except BadSignature:
         return jsonify({"error": "invalid state"}), 400
-    flow = build_flow()
-    flow.fetch_token(code=code)
+    rows = dbimp.select_rows_web("tableverify", select="code", filters={"id": user_id, "platform": "youtube"})
+    if not rows:
+        return jsonify({"error": "no login in progress, please reconnect"}), 400
+    verifier = rows[0]["code"]
+    try:  
+        dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "youtube"})
+    except Exception:
+        logger.warning(f"unable to delete verifier for {user_id} youtube")
+    try:
+        flow = build_flow()
+        flow.code_verifier = verifier
+        flow.fetch_token(code=code)
+    except Exception:
+        logger.exception("token exchange failed")
+        return jsonify({"error": "token exchange failed, please reconnect"}), 401
     creds = flow.credentials
-    youtube = build("youtube", "v3", credentials=creds)
-    channel = youtube.channels().list(part="snippet", mine=True).execute()
+    try:
+        youtube = build("youtube", "v3", credentials=creds)
+        channel = youtube.channels().list(part="snippet", mine=True).execute()
+    except Exception:
+        logger.exception("youtube channel lookup failed")
+        return jsonify({"error": "youtube error"}), 502
     items = channel.get("items", [])
     if not items:
-        return jsonify({"error": "no_youtube_channel", "detail": "authenticated Google account has no YouTube channel"}), 400
+        return jsonify({"error": "no_youtube_channel","detail": "authenticated Google account has no YouTube channel"}), 400
     channel_title = items[0]["snippet"]["title"]
     channel_id = items[0]["id"]
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -346,7 +377,8 @@ def youtube_oauth_callback():
     try:
         save_youtube_account(internal_token, user_id, channel_id, channel_title, creds)
     except Exception as e:
-        return jsonify({"status": False, "error": str(e)}), 403
+        logger.exception("save_youtube_account failed")
+        return jsonify({"status": False, "error": "could not save account"}), 403
     return jsonify({"status": True}), 200
 
 @app.route("/accounts", methods=["POST"])
