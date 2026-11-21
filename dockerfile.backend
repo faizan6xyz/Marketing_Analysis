@@ -9,8 +9,32 @@ RUN useradd -m appuser
 RUN usermod -aG project_m appuser
 COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt
-COPY . .
-ENV PYTHONDONTWRITEBYTECODE=1
+COPY database/UserDB.py ./database/UserDB.py
+COPY Drive/ ./Drive/
+COPY Gmail/Read_mails.py ./Gmail/Read_mails.py
+COPY Gmail/APP2.py ./Gmail/APP2.py
+COPY Gmail/webhook.py ./Gmail/webhook.py
+COPY Instagram/Login.py ./Instagram/Login.py
+COPY Instagram/upload.py ./Instagram/upload.py
+COPY Instagram/schedule_video.py ./Instagram/schedule_video.py
+COPY Instagram/webhook.py ./Instagram/webhook.py
+COPY Paypal/ ./Paypal/
+COPY pinterst/ ./pinterst/
+COPY Razorpay/ ./Razorpay/
+COPY threads/login.py ./threads/login.py
+COPY threads/webhook.py ./threads/webhook.py
+COPY Whatsapp/login.py ./Whatsapp/login.py
+COPY Whatsapp/new.py ./Whatsapp/new.py
+COPY Whatsapp/webhook.py ./Whatsapp/webhook.py
+COPY X/ ./X/
+COPY youtube/ ./youtube/
+COPY authnew.py ./authnew.py
+COPY campaign.py ./campaign.py
+COPY combined.py ./combined.py
+COPY limit.py ./limit.py
+COPY login.py ./login.py 
+COPY start.sh ./start.sh
+ENV PYTHONDONTWRITEBYTECODE=1   
 ENV PYTHONUNBUFFERED=1
 EXPOSE 5000/tcp
 STOPSIGNAL SIGTERM
