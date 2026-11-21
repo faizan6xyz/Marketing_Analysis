@@ -37,10 +37,9 @@ YOUTUBE_API_KEY = os.getenv("Youtube_api_key")
 YOUTUBE_DATA_URL = "https://www.googleapis.com/youtube/v3"
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
-api_key = os.environ.get("api_key")
 frontend = os.environ.get("front_end")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 TABLE_NAME = "youtube"
@@ -103,7 +102,7 @@ def _iso_to_aware_utc(iso_str: str | None) -> datetime | None:
     return _to_aware_utc(datetime.fromisoformat(iso_str))
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token",   "redirect_uris": [f"{BASE_URL}/oauth/youtube/callback"],}}, scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/oauth/youtube/callback",)
+    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token",   "redirect_uris": [f"{BASE_URL}/youtube/auth/callback"],}}, scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/youtube/auth/callback",)
 
 def credentials_from_json(creds_json: str) -> Credentials:
     data = json.loads(creds_json)
@@ -304,7 +303,7 @@ def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, descriptio
     request_ = youtube_service.videos().insert(part="snippet,status", body=body, media_body=media)
     return _upload_resumable_with_retry(request_)
 
-@app.route("/auth/login")
+@app.route("/auth/login", methods=['POST'])
 def connect_youtube():
     token = request.args.get("token")
     if not token:
@@ -316,9 +315,9 @@ def connect_youtube():
     state = serializer.dumps(user_id)
     flow = build_flow()
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
-    return redirect(auth_url)
+    return jsonify({"status": True,"auth_url": auth_url}) , 200
 
-@app.route("/oauth/callback")
+@app.route("/auth/callback", methods=['GET'])
 def youtube_oauth_callback():
     state = request.args.get("state")
     code = request.args.get("code")
@@ -335,7 +334,6 @@ def youtube_oauth_callback():
     flow = build_flow()
     flow.fetch_token(code=code)
     creds = flow.credentials
-    creds_json = creds.to_json()
     youtube = build("youtube", "v3", credentials=creds)
     channel = youtube.channels().list(part="snippet", mine=True).execute()
     items = channel.get("items", [])
@@ -345,28 +343,8 @@ def youtube_oauth_callback():
     channel_id = items[0]["id"]
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     internal_token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    payload = {"id": user_id, "account_id": channel_id, "channel_title": channel_title, "creds": creds_json, "token": internal_token}
-    signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/youtube/auth/callbackshi", json={"data": signed_payload}, timeout=5)
-    return (resp.content, resp.status_code, resp.headers.items())
-
-@app.route("/auth/callbackshi", methods=["POST"])
-def youtube_callback_internal():
-    raw = request.get_json(silent=True) or {}
     try:
-        data = serializer.loads(raw.get("data"), max_age=STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return jsonify({"status": False, "error": "invalid or expired payload"}), 403
-    token = data.get("token")
-    user_id = data.get("id")
-    channel_id = data.get("account_id")
-    channel_title = data.get("channel_title")
-    creds_json = data.get("creds")
-    if not token or not user_id or not channel_id or not creds_json:
-        return jsonify({"status": False}), 403
-    try:
-        creds = credentials_from_json(creds_json)
-        save_youtube_account(token, user_id, channel_id, channel_title, creds)
+        save_youtube_account(internal_token, user_id, channel_id, channel_title, creds)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
     return jsonify({"status": True}), 200

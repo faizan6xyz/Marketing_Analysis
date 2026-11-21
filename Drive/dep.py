@@ -13,7 +13,6 @@ from google.auth.exceptions import RefreshError, TransportError, GoogleAuthError
 from googleapiclient.discovery import build
 import json
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-import requests
 import database.UserDB as dbimp
 from io import BytesIO
 import hashlib
@@ -115,7 +114,7 @@ def upload_path_to_drive(service, file_path, filename, mimetype):
         return None, str(e)
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/drive/auth/drivecallback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/drive/auth/drivecallback",)
+    return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/drive/auth/callback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/drive/auth/callback",)
 
 def get_drive_service(user_id):
     tokens = load_tokens(user_id)
@@ -369,7 +368,7 @@ def authenticate_request(token):
         return None, (jsonify({"error": "user_id required"}), 400)
     return user_id, None
 
-@app.route("/auth/login")
+@app.route("/auth/login", methods=['POST'])
 def connect_drive():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -378,9 +377,9 @@ def connect_drive():
     flow = build_flow()
     signed_state = serializer.dumps(user_id)
     auth_url, _ = flow.authorization_url( access_type="offline", prompt="consent", state=signed_state )
-    return redirect(auth_url)
+    return jsonify({"status": True,"auth_url": auth_url}) , 200
 
-@app.route("/auth/drivecallback")
+@app.route("/auth/callback", methods=['GET'])
 def oauth_callback():
     signed_state = request.args.get("state")
     try:
@@ -400,35 +399,8 @@ def oauth_callback():
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     service = build('gmail', 'v1', credentials=creds)
     email_addr = service.users().getProfile(userId='me').execute()['emailAddress']
-    payload = {"user_id": user_id,"access": creds.token,"expire": expire,"refresh": creds.refresh_token ,"token":token,"email":email_addr}
-    signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/drive/auth/callbackshi", json={"data": signed_payload}, timeout=5)
-    return (resp.content, resp.status_code, resp.headers.items())
-
-@app.route("/auth/drive/callbackshi", methods=["POST"])
-def oauth_callbac():
-    raw = request.get_json(silent=True) or {}
     try:
-        data = serializer.loads(raw.get("data"), max_age=STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return jsonify({"status": False, "error": "invalid or expired payload"}), 403
-    token = data.get("token")
-    user_id = data.get("user_id")
-    expire = data.get("expire")
-    mail = data.get("email")
-    refresh = data.get("refresh")
-    access = data.get("access")
-    if not token or not user_id or not expire or not access or not refresh :
-        return jsonify({"status":False}),403
-    tokench = au.process(token=token)
-    service, err = authenticate_and_get_service(tokench["user_id"])
-    if err: return err
-    try:
-        datetime.fromisoformat(expire)
-    except ValueError:
-        return jsonify({"status": False, "error": "invalid expire format"}), 400
-    try:
-        save_tokens(token, user_id, access, refresh, expire , mail)
+        save_tokens(token, user_id, creds.token, creds.refresh_token, expire , email_addr)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
     try:

@@ -27,7 +27,6 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 STATE_MAX_AGE = 600  
 MESSAGE_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{5,50}$')
 USER_ID_RE = re.compile(r'^[a-zA-Z0-9_.@-]{1,100}$')
-PUBSUB_VERIFICATION_TOKEN = os.environ.get("PUBSUB_VERIFICATION_TOKEN") 
 LABEL_NAME_RE = re.compile(r'^[\w\s/.-]{1,100}$')
 BASE_URL = os.environ.get("BASE_URL")
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
@@ -52,7 +51,7 @@ def is_allowed_file(filename):
     ext = os.path.splitext(filename)[1].lower()
     return ext in ALLOWED_EXTENSIONS
 
-@app.route("/auth/login")
+@app.route("/auth/login", methods=['POST'])
 def connect_gmail():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -65,9 +64,9 @@ def connect_gmail():
     state = serializer.dumps(user_id)
     flow = gc.build_flow()
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
-    return redirect(auth_url)
+    return jsonify({"status": True,"auth_url": auth_url}) , 200
 
-@app.route("/oauth/callback")
+@app.route("/auth/callback", methods=['GET'])
 def gmail_oauth_callback():
     state = request.args.get("state")
     code = request.args.get("code")
@@ -92,27 +91,8 @@ def gmail_oauth_callback():
     google_account_id = userinfo['id']  # stable, permanent per Google Account
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
-    payload = { "user_id": user_id, "creds": creds_json, "email": email_addr, "google_account_id": google_account_id, "token": token,}
-    signed_payload = serializer.dumps(payload)
-    resp = requests.post(f"{BASE_URL}/auth/gmail/callbackshi", json={"data": signed_payload}, timeout=5)
-    return (resp.content, resp.status_code, resp.headers.items())
-
-@app.route("/auth/callbackshi", methods=["POST"])
-def oauth_callbac():
-    raw = request.get_json(silent=True) or {}
     try:
-        data = serializer.loads(raw.get("data"), max_age=STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return jsonify({"status": False, "error": "invalid or expired payload"}), 403
-    token = data.get("token")
-    user_id = data.get("user_id")
-    creds = data.get("creds")
-    email = data.get("email")
-    google_account_id = data.get("google_account_id")
-    if not token or not user_id or not email or not creds or not google_account_id:
-        return jsonify({"status": False}), 403
-    try:
-        gc.save_tokens(token, user_id, creds, google_account_id,email)
+        gc.save_tokens(token, user_id, creds_json, google_account_id,email_addr)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
     return jsonify({"status": True}), 200
