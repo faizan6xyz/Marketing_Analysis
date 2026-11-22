@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS tableverify (
     code TEXT
 );
 
-CREATE TABLE IF NOT EXISTS instagram (
+CREATE TABLE IF NOT EXISTS filesystem (
     id UUID ,
     instagrampostanalysis BIGINT,
     instagrampostanalysis_hash TEXT , 
