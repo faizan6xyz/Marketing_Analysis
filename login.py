@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, make_response , url_for
+from flask import Flask, request, jsonify , url_for
 from flask_cors import CORS
 import csv
 import limit as lmmmm
@@ -9,10 +9,12 @@ from datetime import datetime, timezone, timedelta
 import database.UserDB as dbimp
 import authnew as au
 from authlib.integrations.flask_client import OAuth
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("drive_api")
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
-IS_PROD = os.environ.get("IS_PROD").lower() == "true"
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 TOKEN_TTL = timedelta(hours=2)
 oauth = OAuth(app)
@@ -22,26 +24,6 @@ def all_values(rows, key):
     if not rows:
         return []
     return [{"name": row.get(key),"account_id": str(row["account_id"]) if row.get("account_id") is not None else None}for row in rows]
-
-def set_auth_cookie(resp, token):
-    resp.set_cookie("authToken",token,httponly=False,secure=IS_PROD,samesite="None" if IS_PROD else "Lax",max_age=int(TOKEN_TTL.total_seconds()),path="/",) # httponly=False means the browser hides the cookies from the js (document.cookie) but send it in every request , secure=IS_PROD (True) means the browser only stores and sends the cookie over HTTPS , samesite="None" means This decides whether the cookie is sent on cross-site requests, which is a defense against CSRF attacks.    
-    return resp
-
-@app.route("/refresh", methods=["POST"])
-def logi():
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
-    if not token:
-        return jsonify({"success": False, "message": "token_missing"}), 400
-    try:
-        tokench = au.process(token=token)
-    except Exception as e:
-        return jsonify({"success": False, "message": "token_invalid", "detail": str(e)}), 400
-    if not tokench.get("status"):
-        return jsonify({"success": False, "message": "token_invalid"}), 400
-    new_token = tokench["token"]
-    resp = make_response(jsonify({"Token": new_token}), 200)
-    return set_auth_cookie(resp, new_token)
 
 @app.route("/oauth/google")
 def login_google():
@@ -61,18 +43,10 @@ def google_callback():
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
-        insert = dbimp.insert_rows(token, "users", { "user_id": user_id, "email": user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(), })
+        dbimp.insert_rows_web(  "users", { "user_id": user_id, "email": user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(), })
     except Exception as e:
-        insert = None
-        insert_error = str(e)
-    if not insert:
-        resp_body = {"Statusdb": False, "detail": "Could not save details"}
-        status = 202
-    else:
-        resp_body = {"Statusdb": True, "next": "/details"}
-        status = 200
-    resp = make_response(jsonify(resp_body), status)
-    return set_auth_cookie(resp, token)
+        logger.exception("failed to store set userd details")
+    return jsonify({"Token": token}), 200
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -89,8 +63,7 @@ def login():
         return jsonify({"error": "invalid credentials"}), 401
     created_at = datetime.now(timezone.utc) + TOKEN_TTL
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
-    resp = make_response(jsonify({"user_id": user_id, "Token": token}), 200)
-    return set_auth_cookie(resp, token)
+    return jsonify({"Token": token}), 200
 
 @app.route("/signup", methods=["POST"])
 def signup():
@@ -109,10 +82,7 @@ def signup():
         return jsonify({"error": "User Already exist "}), 401
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
-    resp_body = {"Statusdb": True}
-    status = 200
-    resp = make_response(jsonify(resp_body), status)
-    return set_auth_cookie(resp, token)
+    return jsonify({"Token": token}), 200
 
 @app.route("/details", methods=["POST"])
 def details():
@@ -144,12 +114,12 @@ def check_status():
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     try:
-        data = dbimp.select_rows(tokench["token"], "users", select="user_id", filters={"user_id": user_id})
+        data = dbimp.select_rows(token, "users", select="user_id", filters={"user_id": user_id})
     except Exception:
         return jsonify({"status": False, "reason": "unable to check db"}), 401
     if not data:
         return jsonify({"status": False, "reason": "user not found"}), 404
-    return jsonify({"status": True, "reason": "verified"}), 200
+    return jsonify({"status": True, "reason": "verified","token":tokench["token"]}), 200
 
 @app.route("/vrify", methods=["POST"])
 def check_accounts():
