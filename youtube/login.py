@@ -26,7 +26,7 @@ import Drive.dep as dpp
 import logging
 from dotenv import load_dotenv
 load_dotenv()
-YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/drive.readonly",]
+YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/youtube.readonly","https://www.googleapis.com/auth/drive.readonly",]
 CLIENT_SECRETS_FILE = "client_secret.json"
 BASE_URL = os.environ.get("BASE_URL")
 STATE_MAX_AGE = 600  # seconds
@@ -105,7 +105,7 @@ def _iso_to_aware_utc(iso_str: str | None) -> datetime | None:
     return _to_aware_utc(datetime.fromisoformat(iso_str))
 
 def build_flow():
-    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token",   "redirect_uris": [f"{BASE_URL}/youtube/auth/callback"],}}, scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/youtube/auth/callback",)
+    return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token",   "redirect_uris": [f"{BASE_URL}/youtube/auth/callback"],}}, scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/youtube/auth/callback",autogenerate_code_verifier=True)
 
 def credentials_from_json(creds_json: str) -> Credentials:
     data = json.loads(creds_json)
@@ -114,14 +114,14 @@ def credentials_from_json(creds_json: str) -> Credentials:
         creds.expiry = datetime.fromisoformat(data["expiry"])
     return creds
 
-def save_youtube_account(token, user_id, channel_id, channel_title, creds: Credentials):
+def save_youtube_account_web( user_id, channel_id, channel_title, creds: Credentials):
     payload = { "id": user_id, "account_id": channel_id, "channel_title": channel_title, "access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": _expiry_to_iso(creds.expiry), "timestamp": datetime.now(timezone.utc).isoformat(), }
-    dbimp.update_rows(token,"users",{"youtube":True},{"user_id":user_id})
-    rows = dbimp.select_rows( token, TABLE_NAME, select="account_id", filters={"id": user_id, "account_id": channel_id},    )
+    dbimp.update_rows_web("users",{"youtube":True},{"user_id":user_id})
+    rows = dbimp.select_rows_web( TABLE_NAME, select="account_id", filters={"id": user_id, "account_id": channel_id},    )
     if rows:
-        dbimp.update_rows(token, TABLE_NAME, payload, filters={"id": user_id, "account_id": channel_id})
+        dbimp.update_rows_web(TABLE_NAME, payload, filters={"id": user_id, "account_id": channel_id})
     else:
-        dbimp.insert_rows(token, TABLE_NAME, payload)
+        dbimp.insert_rows_web( TABLE_NAME, payload)
 
 def get_youtube_credentials_for_account(token, user_id, channel_id):
     rows = dbimp.select_rows(token, TABLE_NAME, select="access_token,refresh_token,token_expire",filters={"id": user_id, "account_id": channel_id},)
@@ -372,10 +372,8 @@ def youtube_oauth_callback():
         return jsonify({"error": "no_youtube_channel","detail": "authenticated Google account has no YouTube channel"}), 400
     channel_title = items[0]["snippet"]["title"]
     channel_id = items[0]["id"]
-    expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-    internal_token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     try:
-        save_youtube_account(internal_token, user_id, channel_id, channel_title, creds)
+        save_youtube_account_web(user_id, channel_id, channel_title, creds)
     except Exception as e:
         logger.exception("save_youtube_account failed")
         return jsonify({"status": False, "error": "could not save account"}), 403
@@ -450,7 +448,7 @@ def upload():
         if upload_tmp_path and os.path.exists(upload_tmp_path):
             os.remove(upload_tmp_path)
 
-@app.route("/shorts", methods=["GET"])
+@app.route("/shorts", methods=["POST'"])
 @limiter.limit("10 per minute")
 def fetch_shorts():
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token")
