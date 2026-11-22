@@ -16,8 +16,6 @@ CREATE TABLE IF NOT EXISTS gmail (
     access_token TEXT,
     refresh_token TEXT,
     timestamp TIMESTAMPTZ,
-    campains.txt BIGINT,
-    campains.txt_file TEXT,
     last_history_id TEXT
 );
 
@@ -28,16 +26,32 @@ CREATE TABLE IF NOT EXISTS tableverify (
 );
 
 CREATE TABLE IF NOT EXISTS instagram (
+    id UUID ,
+    instagrampostanalysis BIGINT,
+    instagrampostanalysis_hash TEXT , 
+    instagramreachanalysis BIGINT,
+    instagramreachanalysis_hash TEXT,
+    gmailcampains BIGINT,
+    gmailcampains_hash TEXT,
+    pinterstpostanalysis BIGINT,
+    pinterstpostanalysis_hash TEXT,
+    threadspostanalysis BIGINT,
+    threadspostanalysis_hash TEXT,
+    whatsappcampains BIGINT,
+    whatsappcampains_hash TEXT,
+    xpostanalysis BIGINT,
+    xpostanalysis_hash TEXT,
+    youtubepostanalysis BIGINT,
+    youtubepostanalysis_hash TEXT
+);
+
+CREATE TABLE IF NOT EXISTS instagram (
     account_id BIGINT PRIMARY KEY,
     id UUID,
     access_token TEXT,
     timestamp TIMESTAMPTZ,
     token_expire TIMESTAMPTZ,
-    username TEXT,
-    postanalysis.txt BIGINT,
-    postanalysis.txt_file TEXT , 
-    reachanalysis.txt BIGINT,
-    reachanalysis.txt_file TEXT
+    username TEXT
 );
 
 CREATE TABLE IF NOT EXISTS paypal (
@@ -66,8 +80,6 @@ CREATE TABLE IF NOT EXISTS pinterst (
     username TEXT,
     access_token TEXT,
     token_expire TIMESTAMPTZ,
-    postanalysis.txt BIGINT,
-    postanalysis.txt_file TEXT,
     refresh_token TEXT
 );
 
@@ -93,8 +105,6 @@ CREATE TABLE IF NOT EXISTS threads (
     access_token TEXT,
     token_expire TIMESTAMPTZ,
     username TEXT,
-    postanalysis.txt BIGINT,
-    postanalysis.txt_file TEXT,
     refresh_token TEXT,
     timestamp TIMESTAMPTZ
 );
@@ -105,9 +115,7 @@ CREATE TABLE IF NOT EXISTS whatsapp (
     access_token TEXT,
     token_expire TIMESTAMP,
     timestamp TIMESTAMPTZ,
-    phone_no BIGINT,
-    campains.txt BIGINT,
-    campains.txt_file TEXT
+    phone_no BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS x (
@@ -117,8 +125,6 @@ CREATE TABLE IF NOT EXISTS x (
     access_token TEXT,
     token_expire TIMESTAMPTZ,
     username TEXT,
-    postanalysis.txt BIGINT,
-    postanalysis.txt_file TEXT,
     timestamp TIMESTAMPTZ
 );
 
@@ -128,8 +134,6 @@ CREATE TABLE IF NOT EXISTS youtube (
     channel_title TEXT,
     access_token TEXT,
     refresh_token TEXT,
-    postanalysis.txt BIGINT,
-    postanalysis.txt_file TEXT,
     token_expire TIMESTAMPTZ,
     timestamp TIMESTAMPTZ
 );
