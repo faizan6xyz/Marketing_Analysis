@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS drive (
-    account_id TEXT PRIMARY KEY,
-    email TEXT ,
+    email TEXT PRIMARY KEY,
     id UUID,
     access_token TEXT,
     refresh_token TEXT,
@@ -17,8 +16,8 @@ CREATE TABLE IF NOT EXISTS gmail (
     access_token TEXT,
     refresh_token TEXT,
     timestamp TIMESTAMPTZ,
-    file BIGINT,
-    hash_file TEXT,
+    campains.txt BIGINT,
+    campains.txt_file TEXT,
     last_history_id TEXT
 );
 
@@ -35,8 +34,10 @@ CREATE TABLE IF NOT EXISTS instagram (
     timestamp TIMESTAMPTZ,
     token_expire TIMESTAMPTZ,
     username TEXT,
-    file BIGINT,
-    hash_file TEXT
+    postanalysis.txt BIGINT,
+    postanalysis.txt_file TEXT , 
+    reachanalysis.txt BIGINT,
+    reachanalysis.txt_file TEXT
 );
 
 CREATE TABLE IF NOT EXISTS paypal (
@@ -65,8 +66,8 @@ CREATE TABLE IF NOT EXISTS pinterst (
     username TEXT,
     access_token TEXT,
     token_expire TIMESTAMPTZ,
-    file BIGINT,
-    hash_file TEXT,
+    postanalysis.txt BIGINT,
+    postanalysis.txt_file TEXT,
     refresh_token TEXT
 );
 
@@ -92,8 +93,8 @@ CREATE TABLE IF NOT EXISTS threads (
     access_token TEXT,
     token_expire TIMESTAMPTZ,
     username TEXT,
-    file BIGINT,
-    hash_file TEXT,
+    postanalysis.txt BIGINT,
+    postanalysis.txt_file TEXT,
     refresh_token TEXT,
     timestamp TIMESTAMPTZ
 );
@@ -105,8 +106,8 @@ CREATE TABLE IF NOT EXISTS whatsapp (
     token_expire TIMESTAMP,
     timestamp TIMESTAMPTZ,
     phone_no BIGINT,
-    file BIGINT,
-    hash_file TEXT
+    campains.txt BIGINT,
+    campains.txt_file TEXT
 );
 
 CREATE TABLE IF NOT EXISTS x (
@@ -116,8 +117,8 @@ CREATE TABLE IF NOT EXISTS x (
     access_token TEXT,
     token_expire TIMESTAMPTZ,
     username TEXT,
-    file BIGINT,
-    hash_file TEXT,
+    postanalysis.txt BIGINT,
+    postanalysis.txt_file TEXT,
     timestamp TIMESTAMPTZ
 );
 
@@ -127,8 +128,8 @@ CREATE TABLE IF NOT EXISTS youtube (
     channel_title TEXT,
     access_token TEXT,
     refresh_token TEXT,
-    file BIGINT,
-    hash_file TEXT,
+    postanalysis.txt BIGINT,
+    postanalysis.txt_file TEXT,
     token_expire TIMESTAMPTZ,
     timestamp TIMESTAMPTZ
 );
