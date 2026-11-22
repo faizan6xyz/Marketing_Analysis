@@ -250,7 +250,12 @@ def get_instagram_posts():
         posts.extend(resp.get("data", []))
         url = resp.get("paging", {}).get("next")
         params = None
-    return jsonify({"count": len(posts), "posts": posts}), 200
+        post_ids = [p["id"] for p in posts]
+    workflows = sccc.get_workflows(post_ids)
+    for p in posts:
+        wf = workflows.get(p["id"])
+        p["workflow"] = {"comment": wf[1], "message": wf[2]} if wf else None
+    return jsonify({"count": len(posts), "post_ids": post_ids, "posts": posts}), 200
 
 @app.route("/stories/", methods=["POST"])
 def get_instagram_stories():

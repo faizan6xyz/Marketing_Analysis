@@ -39,7 +39,7 @@ def process(token):
         return {"status" : False, "reason" : "invalid signature"}
     now = datetime.now(timezone.utc)
     token_time = datetime.fromisoformat(time)
-    if now > token_time and now - token_time < timedelta(hours=2):
+    if now > token_time and now - token_time < timedelta(hours=1):
         time = datetime.now(timezone.utc) + timedelta(minutes=20)
         token_new = jsonspoof(user_id=user_id , timestamp=time)
         return {"status" : True , "token" : token_new , "user_id":user_id }

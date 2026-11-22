@@ -141,7 +141,7 @@ def check_accounts():
         if rows[0]["gmail"]:
             data1 = dbimp.select_rows(tokench["token"], "gmail", select="email,account_id", filters={"id": user_id})
         if rows[0]["gdrive"]:
-            data2 = dbimp.select_rows(tokench["token"], "drive", select="email,account_id", filters={"id": user_id})
+            data2 = dbimp.select_rows(tokench["token"], "drive", select="email", filters={"id": user_id})
         if rows[0]["whatsapp"]:
             data3 = dbimp.select_rows(tokench["token"], "whatsapp", select="phone_no,account_id", filters={"id": user_id})
         if rows[0]["threads"]:
