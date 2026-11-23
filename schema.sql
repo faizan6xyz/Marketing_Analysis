@@ -27,26 +27,26 @@ CREATE TABLE IF NOT EXISTS tableverify (
 
 CREATE TABLE IF NOT EXISTS filesystem (
     id UUID ,
-    instagrampostanalysis BIGINT,
+    instagrampostanalysis TEXT,
     instagrampostanalysis_hash TEXT , 
-    instagramreachanalysis BIGINT,
+    instagramreachanalysis TEXT,
     instagramreachanalysis_hash TEXT,
-    gmailcampains BIGINT,
+    gmailcampains TEXT,
     gmailcampains_hash TEXT,
-    pinterstpostanalysis BIGINT,
+    pinterstpostanalysis TEXT,
     pinterstpostanalysis_hash TEXT,
-    threadspostanalysis BIGINT,
+    threadspostanalysis TEXT,
     threadspostanalysis_hash TEXT,
-    whatsappcampains BIGINT,
+    whatsappcampains TEXT,
     whatsappcampains_hash TEXT,
-    xpostanalysis BIGINT,
+    xpostanalysis TEXT,
     xpostanalysis_hash TEXT,
-    youtubepostanalysis BIGINT,
+    youtubepostanalysis TEXT,
     youtubepostanalysis_hash TEXT
 );
 
 CREATE TABLE IF NOT EXISTS instagram (
-    account_id BIGINT PRIMARY KEY,
+    account_id TEXT PRIMARY KEY,
     id UUID,
     access_token TEXT,
     timestamp TIMESTAMPTZ,
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS threads (
 );
 
 CREATE TABLE IF NOT EXISTS whatsapp (
-    account_id BIGINT PRIMARY KEY,
+    account_id TEXT PRIMARY KEY,
     id UUID,
     access_token TEXT,
     token_expire TIMESTAMP,
