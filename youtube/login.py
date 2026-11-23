@@ -116,15 +116,15 @@ def credentials_from_json(creds_json: str) -> Credentials:
 
 def save_youtube_account_web( user_id, channel_id, channel_title, creds: Credentials):
     payload = { "id": user_id, "account_id": channel_id, "channel_title": channel_title, "access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": _expiry_to_iso(creds.expiry), "timestamp": datetime.now(timezone.utc).isoformat(), }
-    dbimp.update_rows_web("users",{"youtube":True},{"user_id":user_id})
-    rows = dbimp.select_rows_web( TABLE_NAME, select="account_id", filters={"id": user_id, "account_id": channel_id},    )
+    dbimp.update_rows("users",{"youtube":True},{"user_id":user_id})
+    rows = dbimp.select_rows( TABLE_NAME, select="account_id", filters={"id": user_id, "account_id": channel_id},    )
     if rows:
-        dbimp.update_rows_web(TABLE_NAME, payload, filters={"id": user_id, "account_id": channel_id})
+        dbimp.update_rows(TABLE_NAME, payload, filters={"id": user_id, "account_id": channel_id})
     else:
-        dbimp.insert_rows_web( TABLE_NAME, payload)
+        dbimp.insert_rows( TABLE_NAME, payload)
 
 def get_youtube_credentials_for_account(token, user_id, channel_id):
-    rows = dbimp.select_rows(token, TABLE_NAME, select="access_token,refresh_token,token_expire",filters={"id": user_id, "account_id": channel_id},)
+    rows = dbimp.select_rows( TABLE_NAME, select="access_token,refresh_token,token_expire",filters={"id": user_id, "account_id": channel_id},)
     row = rows[0] if rows else None
     if not row:
         return None
@@ -133,11 +133,11 @@ def get_youtube_credentials_for_account(token, user_id, channel_id):
     needs_refresh = expiry is None or (expiry - datetime.now(timezone.utc) < timedelta(minutes=5))
     if needs_refresh and creds.refresh_token:
         creds.refresh(google.auth.transport.requests.Request())
-        dbimp.update_rows( token, TABLE_NAME, {"access_token": creds.token, "token_expire": _expiry_to_iso(creds.expiry)},filters={"id": user_id, "account_id": channel_id},        )
+        dbimp.update_rows( TABLE_NAME, {"access_token": creds.token, "token_expire": _expiry_to_iso(creds.expiry)},filters={"id": user_id, "account_id": channel_id},        )
     return creds
 
 def get_youtube_credentials_for_account_web(channel_id):
-    rows = dbimp.select_rows_web( TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"account_id": channel_id}, )
+    rows = dbimp.select_rows( TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"account_id": channel_id}, )
     row = rows[0] if rows else None
     if not row:
         return None
@@ -146,7 +146,7 @@ def get_youtube_credentials_for_account_web(channel_id):
     needs_refresh = expiry is None or (expiry - datetime.now(timezone.utc) < timedelta(minutes=5))
     if needs_refresh and creds.refresh_token:
         creds.refresh(google.auth.transport.requests.Request())
-        dbimp.update_rows_web( TABLE_NAME, {"access_token": creds.token, "token_expire": _expiry_to_iso(creds.expiry)}, filters={"account_id": channel_id},)
+        dbimp.update_rows( TABLE_NAME, {"access_token": creds.token, "token_expire": _expiry_to_iso(creds.expiry)}, filters={"account_id": channel_id},)
     return creds
 
 def xcccc(user_id, access_token, media_id, typee):
@@ -165,7 +165,7 @@ def get_valid_access_token(channel_id, token, client_id, client_secret, refresh_
     new_access_token = token_data["access_token"]
     new_expiry_iso = (now + timedelta(seconds=token_data.get("expires_in", 3600))).isoformat()
     try:
-        dbimp.update_rows( token, TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
+        dbimp.update_rows( TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
     except Exception as e:
         print(f"token update failed for channel {channel_id}: {e}")
         return False
@@ -182,7 +182,7 @@ def get_valid_access_token11(channel_id,client_id, client_secret, refresh_token,
     new_access_token = token_data["access_token"]
     new_expiry_iso = (now + timedelta(seconds=token_data.get("expires_in", 3600))).isoformat()
     try:
-        dbimp.update_rows_web(TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
+        dbimp.update_rows(TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
     except Exception as e:
         print(f"token update failed for channel {channel_id}: {e}")
         return False
@@ -190,7 +190,7 @@ def get_valid_access_token11(channel_id,client_id, client_secret, refresh_token,
 
 def shorts_schedule(channel_id, video_id, access_token):
     start_date = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    rows = dbimp.select_rows_web( TABLE_NAME, select="refresh_token,token_expire", filters={"account_id": channel_id})
+    rows = dbimp.select_rows( TABLE_NAME, select="refresh_token,token_expire", filters={"account_id": channel_id})
     row = rows[0] if rows else None
     if not row:
         return False
@@ -237,7 +237,7 @@ def _upload_resumable_with_retry(request_):
 def post_later(channel_id, file_id, text1, text2, text3):
     channel_ids = json.loads(channel_id[0])
     chann = channel_ids[0]
-    rows = dbimp.select_rows_web(TABLE_NAME,select="id",filters={"account_id":chann})
+    rows = dbimp.select_rows(TABLE_NAME,select="id",filters={"account_id":chann})
     if not rows :
         return False
     user_id = rows[0]["id"]
@@ -266,7 +266,7 @@ def post_later(channel_id, file_id, text1, text2, text3):
 def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
     account_ids = []
     for account_title in account_channel_title :
-        rows = dbimp.select_rows( token, TABLE_NAME, select="account_id", filters={"id": user_id, "channel_title": account_title},)
+        rows = dbimp.select_rows( TABLE_NAME, select="account_id", filters={"id": user_id, "channel_title": account_title},)
         if not rows:
             return False
         channel_id = rows[0]["account_id"]
@@ -321,10 +321,10 @@ def connect_youtube():
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)
     try:
         try:
-            dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "youtube"})
+            dbimp.delete_rows("tableverify", {"id": user_id, "platform": "youtube"})
         except Exception:
             pass
-        dbimp.insert_rows(token, "tableverify",{"id": user_id, "platform": "youtube", "code": flow.code_verifier})
+        dbimp.insert_rows( "tableverify",{"id": user_id, "platform": "youtube", "code": flow.code_verifier})
     except Exception:
         logger.exception("failed to store pkce verifier")
         return jsonify({"status": False, "error": "could not start login"}), 500
@@ -345,12 +345,12 @@ def youtube_oauth_callback():
         return jsonify({"error": "state expired, please reconnect"}), 400
     except BadSignature:
         return jsonify({"error": "invalid state"}), 400
-    rows = dbimp.select_rows_web("tableverify", select="code", filters={"id": user_id, "platform": "youtube"})
+    rows = dbimp.select_rows("tableverify", select="code", filters={"id": user_id, "platform": "youtube"})
     if not rows:
         return jsonify({"error": "no login in progress, please reconnect"}), 400
     verifier = rows[0]["code"]
     try:  
-        dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "youtube"})
+        dbimp.delete_rows("tableverify", {"id": user_id, "platform": "youtube"})
     except Exception:
         logger.warning(f"unable to delete verifier for {user_id} youtube")
     try:
@@ -389,7 +389,7 @@ def list_youtube_accounts():
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
-    rows = dbimp.select_rows(token, TABLE_NAME, select="account_id,channel_title", filters={"id": user_id})
+    rows = dbimp.select_rows( TABLE_NAME, select="account_id,channel_title", filters={"id": user_id})
     return jsonify({"accounts": rows or []})
 
 @app.route("/upload/short", methods=["POST"])
@@ -458,7 +458,7 @@ def fetch_shorts():
     tokench = au.process(token=token)
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
-    rows = dbimp.select_rows(token, TABLE_NAME, select="account_id", filters={"id": tokench["user_id"], "channel_title": account_name},    )
+    rows = dbimp.select_rows( TABLE_NAME, select="account_id", filters={"id": tokench["user_id"], "channel_title": account_name},    )
     if not rows:
         return jsonify({"error": "account not found"}), 404
     channel_id = rows[0]["account_id"]

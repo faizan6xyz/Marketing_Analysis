@@ -59,7 +59,7 @@ def get_all_pins(access_token, page_size=100):
     return pins
 
 def refresh_pinterest_token11(access, username_id):
-    rows = dbimp.select_rows_web(PINTEREST_TABLE_NAME , select="refresh_token,token_expire" , filters={"account_id":username_id})
+    rows = dbimp.select_rows(PINTEREST_TABLE_NAME , select="refresh_token,token_expire" , filters={"account_id":username_id})
     if not rows:
         raise ValueError(f"No Pinterest token record found for user {username_id}")
     row = rows[0]
@@ -77,7 +77,7 @@ def refresh_pinterest_token11(access, username_id):
         data = resp.json()
         new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
         try:
-            dbimp.update_rows_web(PINTEREST_TABLE_NAME, { "access_token": data["access_token"], "refresh_token": data.get("refresh_token", refresh_token), "token_expire": new_expiry.isoformat(), }, filters={"account_id": username_id}, )
+            dbimp.update_rows(PINTEREST_TABLE_NAME, { "access_token": data["access_token"], "refresh_token": data.get("refresh_token", refresh_token), "token_expire": new_expiry.isoformat(), }, filters={"account_id": username_id}, )
         except Exception as e:
             print(f"Failed to persist refreshed Pinterest token for user_i {e}")
         return data["access_token"]
@@ -141,7 +141,7 @@ def _authenticate(data):
     return access_tokens,  None, account_ids , user_id
 
 def get_access_token_by_username(token, user_id, username):
-    rows = dbimp.select_rows( token, PINTEREST_TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
+    rows = dbimp.select_rows( PINTEREST_TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
     if not rows:
         return None, (jsonify({"error": "no x account linked for this username"}), 404) , None
     row = rows[0]
@@ -181,7 +181,7 @@ def refresh_pinterest_token(refresh_token, expire, access, token, user_id, usern
         data = resp.json()
         new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
         try:
-            dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "access_token": data["access_token"], "refresh_token": data.get("refresh_token", refresh_token), "token_expire": new_expiry.isoformat(), }, filters={"username": username, "id": user_id}, )
+            dbimp.update_rows( PINTEREST_TABLE_NAME, { "access_token": data["access_token"], "refresh_token": data.get("refresh_token", refresh_token), "token_expire": new_expiry.isoformat(), }, filters={"username": username, "id": user_id}, )
         except Exception as e:
             print(f"Failed to persist refreshed Pinterest token for user_id={user_id}: {e}")
         return data["access_token"]
@@ -192,7 +192,7 @@ def post_late(account_id , access_token , title, description, board_id,  typee ,
     account_ids = json.loads(account_id[0])
     account_id = account_ids[0]
     access_tokens = json.load(access_token[0])
-    rows = dbimp.select_rows_web(PINTEREST_TABLE_NAME,select="id",filters={"account_id":account_id})
+    rows = dbimp.select_rows(PINTEREST_TABLE_NAME,select="id",filters={"account_id":account_id})
     if not rows :
         return False
     user_id = rows[0]["id"]
@@ -356,8 +356,8 @@ def clean(value):
     return (value or "").split("#", 1)[0].strip()
 
 def store_pinterest_account(token, user_id, access_token, username, account_id, timestamp, expire,refresh_token):
-    dbimp.update_rows( token, PINTEREST_TABLE_NAME, { "access_token": access_token, "refresh_token": refresh_token, "timestamp": timestamp, "token_expire": expire, "username": username, "account_id": account_id, }, filters={"id": user_id}, ) 
-    dbimp.update_rows(token,"users",{"pinterst":True},{"user_id":user_id})
+    dbimp.update_rows( PINTEREST_TABLE_NAME, { "access_token": access_token, "refresh_token": refresh_token, "timestamp": timestamp, "token_expire": expire, "username": username, "account_id": account_id, }, filters={"id": user_id}, ) 
+    dbimp.update_rows("users",{"pinterst":True},{"user_id":user_id})
 
 @app.route("/auth/callback", methods=["GET"])
 def instagram_callback():
@@ -406,7 +406,7 @@ def pins_with_metrics():
     if not username or not token :
         return jsonify({"status":"failed"}) , 400
     tokench = au.process(token=token)
-    rows = dbimp.select_rows(tokench["token"],PINTEREST_TABLE_NAME,select="access_token,refresh_token,token_expire",filters={"username":username,"id":tokench["user_id"]})
+    rows = dbimp.select_rows(PINTEREST_TABLE_NAME,select="access_token,refresh_token,token_expire",filters={"username":username,"id":tokench["user_id"]})
     if not rows :
         return jsonify({"status":"failed"}) , 400
     row = rows[0]

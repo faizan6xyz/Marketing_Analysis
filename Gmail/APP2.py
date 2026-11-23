@@ -27,7 +27,6 @@ STATE_MAX_AGE = 600
 MESSAGE_ID_RE = re.compile(r'^[a-zA-Z0-9_-]{5,50}$')
 USER_ID_RE = re.compile(r'^[a-zA-Z0-9_.@-]{1,100}$')
 LABEL_NAME_RE = re.compile(r'^[\w\s/.-]{1,100}$')
-BASE_URL = os.environ.get("BASE_URL")
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 
 def get_valid_user_id(token):
@@ -46,10 +45,6 @@ def safe_error(e, status=400):
     logger.exception("request failed")
     return jsonify({"error": "request failed"}), status
 
-def is_allowed_file(filename):
-    ext = os.path.splitext(filename)[1].lower()
-    return ext in ALLOWED_EXTENSIONS
-
 @app.route("/auth/login", methods=['POST'])
 def connect_gmail():
     body = request.get_json(silent=True) or {}
@@ -66,10 +61,10 @@ def connect_gmail():
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state)  
     try:
         try:
-            dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "gmail"})
+            dbimp.delete_rows("tableverify", {"id": user_id, "platform": "gmail"})
         except Exception:
             pass
-        dbimp.insert_rows(token, "tableverify",{"id": user_id, "platform": "gmail", "code": flow.code_verifier})
+        dbimp.insert_rows( "tableverify",{"id": user_id, "platform": "gmail", "code": flow.code_verifier})
     except Exception:
         logger.exception("failed to store pkce verifier")
         return jsonify({"status": False, "error": "could not start login"}), 500
@@ -89,12 +84,12 @@ def gmail_oauth_callback():
         return jsonify({"error": "state expired, please reconnect"}), 400
     except BadSignature:
         return jsonify({"error": "invalid state"}), 400
-    rows = dbimp.select_rows_web("tableverify", select="code",filters={"id": user_id, "platform": "gmail"})
+    rows = dbimp.select_rows("tableverify", select="code",filters={"id": user_id, "platform": "gmail"})
     if not rows:
         return jsonify({"error": "no login in progress, please reconnect"}), 400
     verifier = rows[0]["code"]
     try:  
-        dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "gmail"})
+        dbimp.delete_rows("tableverify", {"id": user_id, "platform": "gmail"})
     except Exception:
         logger.warning(f"unable to delete verifier for {user_id} gmail")
     try:

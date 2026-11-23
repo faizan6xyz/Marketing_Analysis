@@ -43,9 +43,9 @@ def get_conn_read():
     finally:
         pool_read.putconn(conn)
         
-def _rows_as_lists(cur, rows):
+def _rows_as_lists(cur, rows):    # get the fetchall result which is the list of tuples . [('18087452588331119', 'hi', 'new')]
     cols = [d[0] for d in cur.description]
-    return [[r[c] for c in cols] if isinstance(r, dict) else list(r) for r in rows]
+    return [[r[c] for c in cols] if isinstance(r, dict) else list(r) for r in rows] # give the dictory with values in the list . {'18087452588331119': ['18087452588331119', 'hi', 'new']}
 
 def is_valid_iso_format(value: str) -> bool:
     if not isinstance(value, str):
@@ -81,8 +81,7 @@ def workflow_data_change(id_, message, comment):
     if len(message) >= messagelimit or len(comment) >= commentlimit:
         raise ValueError("message or comment too long")
     run_at = datetime.now(timezone.utc) + timedelta(days=10)
-    query = (
-        "INSERT INTO workflow (id, comment, message, time) VALUES (%s, %s, %s, %s)  ON CONFLICT (id) DO UPDATE  SET message = EXCLUDED.message, comment = EXCLUDED.comment" )
+    query = ( "INSERT INTO workflow (id, comment, message, time) VALUES (%s, %s, %s, %s)  ON CONFLICT (id) DO UPDATE  SET message = EXCLUDED.message, comment = EXCLUDED.comment" )
     with get_conn_write() as conn, conn.cursor() as cur:
         cur.execute(query, (id_, comment, message, run_at))
 

@@ -67,7 +67,7 @@ def receive_webhook():
             media_id = value.get("media", {}).get("id")
         if not from_user_id or not media_id:
             continue  # nothing usable in this entry, move to next
-        access_rows = dbimp.select_rows_web( table, select="id,access_token,", filters={"account_id": th_account_id} )
+        access_rows = dbimp.select_rows( table, select="id,access_token,", filters={"account_id": th_account_id} )
         access = access_rows[0] if access_rows else None
         if not access:
             results.append({"entry": th_account_id, "error": "no access record found for account"})

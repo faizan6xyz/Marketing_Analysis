@@ -23,7 +23,6 @@ SCOPES = ["openid","https://www.googleapis.com/auth/userinfo.email","https://www
 if not SCOPES:
     raise EnvironmentError("GMAIL_SCOPES did not contain any valid scopes.")
 MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
-MAX_TOTAL_SEND_BYTES = 25 * 1024 * 1024
 MAX_RESULTS_CAP = 500
 MAX_QUERY_LENGTH = 2048
 EMAIL_ADDR_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -38,17 +37,17 @@ def build_flow():
 
 def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
     payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
-    dbimp.update_rows(token,"users",{"gmail":True},{"user_id":user_id})
+    dbimp.update_rows("users",{"gmail":True},{"user_id":user_id})
     if email_addr:
         payload["email"] = email_addr
-    rows = dbimp.select_rows(token,TABLE_NAME, select="id", filters={"id": user_id})
+    rows = dbimp.select_rows(TABLE_NAME, select="id", filters={"id": user_id})
     if rows:
-        dbimp.update_rows(token,TABLE_NAME, payload, filters={"id": user_id})
+        dbimp.update_rows(TABLE_NAME, payload, filters={"id": user_id})
     else:
-        dbimp.insert_rows(token,TABLE_NAME, {"id": user_id, **payload})
+        dbimp.insert_rows(TABLE_NAME, {"id": user_id, **payload})
 
 def get_service(token,user_id):
-    rows = dbimp.select_rows(token,TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"id": user_id})
+    rows = dbimp.select_rows(TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"id": user_id})
     row = rows[0] if rows else None
     if not row or not row.get("access_token"):
         return None
@@ -75,14 +74,14 @@ def save_tokens_web(user_id, creds, google_account_id,email_addr=None):
     payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
     if email_addr:
         payload["email"] = email_addr
-    rows = dbimp.select_rows_web(TABLE_NAME, select="id", filters={"id": user_id})
+    rows = dbimp.select_rows(TABLE_NAME, select="id", filters={"id": user_id})
     if rows:
-        dbimp.update_rows_web(TABLE_NAME, payload, filters={"id": user_id})
+        dbimp.update_rows(TABLE_NAME, payload, filters={"id": user_id})
     else:
-        dbimp.insert_rows_web(TABLE_NAME, {"id": user_id, **payload})
+        dbimp.insert_rows(TABLE_NAME, {"id": user_id, **payload})
 
 def get_service_web(user_id,account_id):
-    rows = dbimp.select_rows_web(TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"id": user_id,"account_id":account_id})
+    rows = dbimp.select_rows(TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"id": user_id,"account_id":account_id})
     row = rows[0] if rows else None
     if not row or not row.get("access_token"):
         return None

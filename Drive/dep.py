@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.http import MediaIoBaseDownload , MediaIoBaseUpload ,MediaFileUpload
 from googleapiclient.errors import HttpError
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from google.oauth2.credentials import Credentials
 import csv
 from google.auth.transport.requests import Request as GoogleRequest
@@ -45,23 +45,22 @@ campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
 campaigns_content1 = "phone_no,capaign_name,send_time,recieve_time,interest"
 campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interaction,profile_activity,time,follows,thumbnail,media_id,posted"
 campaigns_content4 = "media_id,views,reach,replies,shares,navigation,follows,profile_activity,hour,thumbnail,time"
-campaigns_content5 = "Post_ID,Views,Likes,Replies,Reposts,Shares,Followers"
 campaigns_content6 = "Video_ID,Published_At,Views,Likes,Comments,Shares,Watch_Time,Average_View_Duration,Impressions,Click_Through_Rate,Subscribers_Gained"
 campaigns_content7 = "Tweet_ID,Published_At,Impressions,Likes,Retweets,Replies,Bookmarks"
 campaigns_content8 = "Pin_ID,Published_At,Impressions,Saves,Clicks,Outbound_Clicks,Engagements,Follower_Gained"
 
 filesss = {"gmail": {"campains.txt": campaigns_content,},"whatsapp": {"campains.txt": campaigns_content1,},"instagram": {"postanalysis.txt": campaigns_content2,"reachanalysis.txt": campaigns_content4},"threads" : {"postanalysis.txt": campaigns_content2,},"youtube" : { "postanalysis.txt":campaigns_content6 },"x": {"postanalysis.txt":campaigns_content7 } ,"pinterst": {"postanalysis.txt":campaigns_content8}}
 
-def save_tokens(token, user_id, access_token, refresh_token, expiry,mail):
+def save_tokens( user_id, access_token, refresh_token, expiry,mail):
     timestamp = datetime.now(timezone.utc).isoformat()
-    dbimp.insert_rows(token,table_name, {"id" : user_id , "timestamp":timestamp ,"access_token" : access_token, "refresh_token" : refresh_token, "token_expire": expiry, "connected" : 1 , "email":mail})
-    dbimp.update_rows(token,"users",{"gdrive":True},{"user_id":user_id})
+    dbimp.insert_rows(table_name, {"id" : user_id , "timestamp":timestamp ,"access_token" : access_token, "refresh_token" : refresh_token, "token_expire": expiry, "connected" : 1 , "email":mail})
+    dbimp.update_rows("users",{"gdrive":True},{"user_id":user_id})
 
 def Update_token( user_id, access_token, refresh_token, expiry):
-    dbimp.update_rows_web( table_name, {"access_token" : access_token, "refresh_token": refresh_token, "token_expire": expiry}, {"id" : user_id})
+    dbimp.update_rows( table_name, {"access_token" : access_token, "refresh_token": refresh_token, "token_expire": expiry}, {"id" : user_id})
 
 def load_tokens(user_id):
-    rows = dbimp.select_rows_web(table_name , select="access_token,refresh_token,token_expire,connected" , filters= {"id" : user_id})
+    rows = dbimp.select_rows(table_name , select="access_token,refresh_token,token_expire,connected" , filters= {"id" : user_id})
     row = rows[0] if rows else None
     if not row :    
         return None
@@ -72,7 +71,7 @@ def load_tokens(user_id):
     return {"access_token": access_token , "refresh_token": refresh_token, "token_expiry":expiry , "connected": bool(connected) }
 
 def mark_disconnected(user_id):
-    dbimp.update_rows_web(table_name , {"connected" : 0 } , {"id" : user_id} )
+    dbimp.update_rows(table_name , {"connected" : 0 } , {"id" : user_id} )
 
 def download_drive_file_to_temp(drive_service, file_id):
     meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
@@ -169,7 +168,7 @@ def create_platform_folder_structure(service):
         structure[APP_FOLDER][platform][SUBFOLDERS] = {"id": sub_id, "created": sub_created}
     return structure
 
-def create_files_in_folders(token, user_id, service, file_content, structure):
+def create_files_in_folders(user_id, service, file_content, structure):
     created_files = {}
     db_payload = {"id": user_id}  # one row, all columns
     for platform, files in file_content.items():
@@ -187,7 +186,7 @@ def create_files_in_folders(token, user_id, service, file_content, structure):
             file_hash = hmac.new(SECRET_KEY, content, hashlib.sha256).hexdigest()
             db_payload[f"{platform}{name}"] = created["id"]
             db_payload[f"{platform}{name}_hash"] = file_hash
-    dbimp.insert_rows(token, "filesystem", db_payload)
+    dbimp.insert_rows( "filesystem", db_payload)
     return created_files
 
 def _resolve_and_verify_file(user_idd, platform, filename):
@@ -195,7 +194,7 @@ def _resolve_and_verify_file(user_idd, platform, filename):
         raise ValueError("filename and platform are required")
     filename = filename.rsplit(".", 1)[0]
     col = f"{platform}{filename}"
-    rows = dbimp.select_rows_web(platform, select="id", filters={"account_id": user_idd})
+    rows = dbimp.select_rows(platform, select="id", filters={"account_id": user_idd})
     if not rows:
         raise ValueError("No account found for this user")
     user_id = rows[0]["id"]
@@ -203,7 +202,7 @@ def _resolve_and_verify_file(user_idd, platform, filename):
     if err:
         raise RuntimeError(f"Authentication failed: {err}")
     try:
-        filesss = dbimp.select_rows_web( "filesystem", select=f"{platform}{filename},{platform}{filename}_hash", filters={"id": user_id})
+        filesss = dbimp.select_rows( "filesystem", select=f"{platform}{filename},{platform}{filename}_hash", filters={"id": user_id})
     except Exception as e:
         raise RuntimeError(f"Failed to select file record: {e}")
     row = filesss[0] if filesss else None
@@ -290,7 +289,7 @@ def mark_status_done(user_id, platform, filename, sender_ids, status_col, id_col
             service.files().update(fileId=file_id, media_body=media).execute()
         except Exception as e:
             raise RuntimeError(f"Failed to write updated CSV to Google Drive: {e}")
-        dbimp.update_rows_web( "filesystem", {f"{col}_hash": new_hash}, {"id": fs_id})
+        dbimp.update_rows( "filesystem", {f"{col}_hash": new_hash}, {"id": fs_id})
     return {"status": "ok", "rows_updated": total_updated, "details": results}
 
 def append_to_file(user_id, platform, filename, data_to_append, as_json: bool = False,as_text: bool = True, add_newline=True):   # Adds new content to the end of a file without replacing what's there.
@@ -354,7 +353,7 @@ def append_to_file(user_id, platform, filename, data_to_append, as_json: bool = 
         service.files().update(fileId=file_id, media_body=media).execute()
     except Exception as e:
         raise RuntimeError(f"Failed to write updated file to Google Drive: {e}")
-    dbimp.update_rows_web( "filesystem", {f"{col}_hash": new_hash}, {"id": fs_id})
+    dbimp.update_rows( "filesystem", {f"{col}_hash": new_hash}, {"id": fs_id})
     return {"status": "ok", "as_text": as_text, "as_json": as_json, "bytes_appended": bytes_appended}
 
 def authenticate_request(token):
@@ -372,7 +371,7 @@ def authenticate_request(token):
 #     except HttpError as e:
 #         return jsonify({"error": "drive error", "detail": str(e)}), 400
 #     try :
-#         filename = create_files_in_folders(token=token,user_id=user_id,service=service,file_content=filesss,structure=structure) 
+#         filename = create_files_in_folders(user_id=user_id,service=service,file_content=filesss,structure=structure) 
 #     except HttpError as e:
 #         return jsonify({"error": "drive error", "detail": str(e)}), 400
 #     return True
@@ -389,10 +388,10 @@ def connect_drive():
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=signed_state)
     try:
         try:
-            dbimp.delete_rows_web("tableverify", {"id": user_id, "platform": "drive"})
+            dbimp.delete_rows("tableverify", {"id": user_id, "platform": "drive"})
         except Exception:
             pass
-        dbimp.insert_rows(token, "tableverify",{"id": user_id, "platform": "drive", "code": flow.code_verifier})
+        dbimp.insert_rows( "tableverify",{"id": user_id, "platform": "drive", "code": flow.code_verifier})
     except Exception:
         logger.exception("failed to store pkce verifier")
         return jsonify({"status": False, "error": "could not start login"}), 500
@@ -413,7 +412,7 @@ def oauth_callback():
         return jsonify({"error": "state expired, please reconnect"}), 400
     except BadSignature:
         return jsonify({"error": "invalid state"}), 400
-    rows = dbimp.select_rows_web("tableverify", select="code", filters={"id": user_id, "platform": "drive"})
+    rows = dbimp.select_rows("tableverify", select="code", filters={"id": user_id, "platform": "drive"})
     if not rows:
         return jsonify({"error": "no login in progress, please reconnect"}), 400
     verifier = rows[0]["code"]
@@ -426,12 +425,10 @@ def oauth_callback():
         return jsonify({"error": "token exchange failed, please reconnect"}), 401
     creds = flow.credentials
     expire = creds.expiry.isoformat() if creds.expiry else None
-    expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
-    token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     service = build('drive', 'v3', credentials=creds, cache_discovery=False)
     email_addr = service.about().get(fields="user(emailAddress)").execute()["user"]["emailAddress"]
     try:
-        save_tokens(token, user_id, creds.token, creds.refresh_token, expire , email_addr)
+        save_tokens( user_id, creds.token, creds.refresh_token, expire , email_addr)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
     try:
@@ -439,7 +436,7 @@ def oauth_callback():
     except HttpError as e:
         return jsonify({"error": "drive error", "detail": str(e)}), 400
     try :
-        create_files_in_folders(token=token,user_id=user_id,service=service,file_content=filesss,structure=structure) 
+        create_files_in_folders(user_id=user_id,service=service,file_content=filesss,structure=structure) 
     except HttpError as e:
         return jsonify({"error": "drive error", "detail": str(e)}), 400
     return jsonify({"status":True}),200

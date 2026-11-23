@@ -64,18 +64,18 @@ def _update_succeeded(resp) -> bool:
     return bool(resp)
 
 def seed_demo_cart(token,user_id, cart_id, plan_key):
-    rows = dbimp.select_rows(token,PAYPAL_TABLE, select="id", filters={"id": user_id})
+    rows = dbimp.select_rows(PAYPAL_TABLE, select="id", filters={"id": user_id})
     existing = rows[0] if rows else None
 
     data = {"cart_id": cart_id, "plan": plan_key, "status": "CREATED", "paid": 0}
     if existing:
-        dbimp.update_rows(token,PAYPAL_TABLE, data, {"id": user_id})
+        dbimp.update_rows(PAYPAL_TABLE, data, {"id": user_id})
     else:
         data["id"] = user_id
-        dbimp.insert_rows(token,PAYPAL_TABLE, data)
+        dbimp.insert_rows(PAYPAL_TABLE, data)
 
 def get_cart_for_user(token,user_id):
-    rows = dbimp.select_rows(token, PAYPAL_TABLE, select="id,cart_id,plan,status,paid,paypal_order_id", filters={"id": user_id}, )
+    rows = dbimp.select_rows( PAYPAL_TABLE, select="id,cart_id,plan,status,paid,paypal_order_id", filters={"id": user_id}, )
     row = rows[0] if rows else None
     return dict(row) if row else None
 
@@ -92,21 +92,21 @@ def get_order_for_user(token,user_id, paypal_order_id):
     return row
 
 def get_user_id_for_order(paypal_order_id):
-    rows = dbimp.select_rows_web(PAYPAL_TABLE, select="id", filters={"paypal_order_id": paypal_order_id})
+    rows = dbimp.select_rows(PAYPAL_TABLE, select="id", filters={"paypal_order_id": paypal_order_id})
     row = rows[0] if rows else None
     return row["id"] if row else None
 
 def save_order(token,user_id, paypal_order_id, cart_id, plan_key) -> bool:
-    resp = dbimp.update_rows(token, PAYPAL_TABLE, {"paypal_order_id": paypal_order_id,"cart_id": cart_id,"plan": plan_key,"status": "CREATED","updated_at": _now(),},{"id": user_id},)
+    resp = dbimp.update_rows( PAYPAL_TABLE, {"paypal_order_id": paypal_order_id,"cart_id": cart_id,"plan": plan_key,"status": "CREATED","updated_at": _now(),},{"id": user_id},)
     return _update_succeeded(resp)
 
 def mark_order_paid(user_id, paypal_order_id) -> bool:
-    rows = dbimp.select_rows_web(PAYPAL_TABLE , select="plan" , filters={"id": user_id, "paypal_order_id": paypal_order_id})
+    rows = dbimp.select_rows(PAYPAL_TABLE , select="plan" , filters={"id": user_id, "paypal_order_id": paypal_order_id})
     if not rows :
         return False
     plan_id = rows[0]["plan"]
-    dbimp.update_rows_web("users",{"paid": True,"plan":plan_id} , {"user_id" : user_id})
-    resp = dbimp.update_rows_web(PAYPAL_TABLE, {"paid": 1, "status": "COMPLETED", "updated_at": _now()}, {"id": user_id, "paypal_order_id": paypal_order_id, "paid": 0},)
+    dbimp.update_rows("users",{"paid": True,"plan":plan_id} , {"user_id" : user_id})
+    resp = dbimp.update_rows(PAYPAL_TABLE, {"paid": 1, "status": "COMPLETED", "updated_at": _now()}, {"id": user_id, "paypal_order_id": paypal_order_id, "paid": 0},)
     return _update_succeeded(resp)
 
 def _hash_request(payload):
@@ -114,7 +114,7 @@ def _hash_request(payload):
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 def get_idempotent_response(token,user_id, key, request_hash):
-    rows = dbimp.select_rows( token,VERIFY_TABLE, select="idempotency_key,request_hash,response", filters={"id": user_id})
+    rows = dbimp.select_rows(VERIFY_TABLE, select="idempotency_key,request_hash,response", filters={"id": user_id})
     row = rows[0] if rows else None
 
     if not row or row["idempotency_key"] != key:
@@ -125,17 +125,17 @@ def get_idempotent_response(token,user_id, key, request_hash):
     return (json.loads(resp) if isinstance(resp, str) else resp), False
 
 def save_idempotent_response(token,user_id, key, request_hash, response):
-    rows = dbimp.select_rows(token,VERIFY_TABLE, select="id", filters={"id": user_id})
+    rows = dbimp.select_rows(VERIFY_TABLE, select="id", filters={"id": user_id})
     existing = rows[0] if rows else None
     data = {"idempotency_key": key, "request_hash": request_hash, "response": response}
     if existing:
-        dbimp.update_rows(token,VERIFY_TABLE, data, {"id": user_id})
+        dbimp.update_rows(VERIFY_TABLE, data, {"id": user_id})
     else:
         data["id"] = user_id
-        dbimp.insert_rows(token,VERIFY_TABLE, data)
+        dbimp.insert_rows(VERIFY_TABLE, data)
 
 def is_duplicate_webhook_event(event_id) -> bool:
-    rows = dbimp.select_rows_web(VERIFY_TABLE, select="event_id", filters={"event_id": event_id})
+    rows = dbimp.select_rows(VERIFY_TABLE, select="event_id", filters={"event_id": event_id})
     row = rows[0] if rows else None
 
     return row is not None
@@ -143,14 +143,14 @@ def is_duplicate_webhook_event(event_id) -> bool:
 def record_webhook_event(event_id, user_id) -> bool:
     if not user_id:
         return False
-    rows = dbimp.select_rows_web(VERIFY_TABLE, select="id", filters={"id": user_id})
+    rows = dbimp.select_rows(VERIFY_TABLE, select="id", filters={"id": user_id})
     existing = rows[0] if rows else None
     data = {"event_id": event_id, "created_at": _now()}
     if existing:
-        dbimp.update_rows_web(VERIFY_TABLE, data, {"id": user_id})
+        dbimp.update_rows(VERIFY_TABLE, data, {"id": user_id})
     else:
         data["id"] = user_id
-        dbimp.insert_rows_web(VERIFY_TABLE, data)
+        dbimp.insert_rows(VERIFY_TABLE, data)
     return True
 
 _token_lock = threading.Lock()
@@ -247,7 +247,7 @@ def logincheck(token ,user_id):
     if not user_id:
         return {"logged_in": False}
     try:
-        rows = dbimp.select_rows(token,PAYPAL_TABLE, select="id", filters={"id": user_id})
+        rows = dbimp.select_rows(PAYPAL_TABLE, select="id", filters={"id": user_id})
         found = rows[0] if rows else None
     except Exception:
         return {"logged_in": False}
@@ -282,7 +282,7 @@ def create_payment():
         return jsonify({"status": "failed" , "reason": tokench["reason"]})
     user_id = tokench['user_id']
     check = logincheck(tokench['token'],user_id)
-    ro = dbimp.select_rows(tokench["token"],"users",select="paid",filters={"user_id":user_id})
+    ro = dbimp.select_rows("users",select="paid",filters={"user_id":user_id})
     if not ro :
         return jsonify({"error":"user_not_exist"}) , 400
     paid = ro[0]["Paid"]

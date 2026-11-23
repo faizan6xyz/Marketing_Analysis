@@ -74,7 +74,7 @@ def try_increment(row_id, amount, limit):
 def checkk(token, user_id, now_ts, requestss: int):
     if requestss < 0:
         return False
-    rows = dbimp.select_rows(token, "users", select="Paid,Plan", filters={"user_id": user_id})
+    rows = dbimp.select_rows("users", select="Paid,Plan", filters={"user_id": user_id})
     if not rows:
         return False
     if not rows[0]["Paid"]:

@@ -46,7 +46,7 @@ def refresh_token(token, user_id, access_token):
     seconds = resp.get("expires_in")
     if new_token and seconds:
         new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows(token,TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"id": user_id},)
+        dbimp.update_rows(TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"id": user_id},)
         return new_token
     return access_token
 
@@ -56,7 +56,7 @@ def refresh_token11( IG_user_id, access_token):
     seconds = resp.get("expires_in")
     if new_token and seconds:
         new_expire = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-        dbimp.update_rows_web(TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"account_id": IG_user_id},)
+        dbimp.update_rows(TABLE_NAME,{"access_token": new_token, "token_expire": new_expire.isoformat()},filters={"account_id": IG_user_id},)
         return new_token
     return access_token
 
@@ -88,7 +88,7 @@ def _request_with_retry(method: str, url: str, access_token: str = None, **kwarg
     raise RuntimeError(_redact(f"Request to '{url}' failed after {MAX_RETRIES} attempts: {last_exc}", access_token))
 
 def access_tokenvali(account_id):
-    rows = dbimp.select_rows_web(TABLE_NAME, select="access_token,token_expire", filters={"account_id": account_id})
+    rows = dbimp.select_rows(TABLE_NAME, select="access_token,token_expire", filters={"account_id": account_id})
     if not rows :
         return False
     row = rows[0]

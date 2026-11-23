@@ -39,8 +39,8 @@ def clean(value):
     return (value or "").split("#", 1)[0].strip()
 
 def store_whatsapp_account(token, user_id, access_token, phone_no, account_id, timestamp, expire):
-    dbimp.update_rows(token,TABLE_NAME,{"access_token": access_token,"timestamp": timestamp ,"token_expire": expire ,"account_id": account_id ,"phone_no": phone_no,},filters={"id": user_id},)
-    dbimp.update_rows(token, "users", {"whatsapp": True}, {"user_id": user_id})
+    dbimp.update_rows(TABLE_NAME,{"access_token": access_token,"timestamp": timestamp ,"token_expire": expire ,"account_id": account_id ,"phone_no": phone_no,},filters={"id": user_id},)
+    dbimp.update_rows( "users", {"whatsapp": True}, {"user_id": user_id})
 
 @app.route("/auth/callback", methods=["GET"])
 def instagram_callback():

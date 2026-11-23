@@ -159,7 +159,7 @@ def deleteFile(service ,file_id):
     return True
 
 def get_authenticated_access_token(user_id, token, account_id):
-    rows = dbimp.select_rows(token,TABLE_NAME,select="access_token,token_expire",filters={"account_id": account_id, "id": user_id})
+    rows = dbimp.select_rows(TABLE_NAME,select="access_token,token_expire",filters={"account_id": account_id, "id": user_id})
     if not rows:
         return None, (jsonify({"error": "no instagram account linked"}),404)
     row = rows[0]
@@ -191,8 +191,8 @@ def instagram_login():
     return jsonify({"auth_url": auth_url}) , 200
 
 def store_instagram_account(token, user_id, access_token, username, account_id, timestamp, expire):
-    dbimp.insert_rows(token, TABLE_NAME,{"access_token": access_token, "timestamp": timestamp, "token_expire": expire,"username": username, "account_id": account_id,"id": user_id},)
-    dbimp.update_rows(token, "users", {"instagram": True}, {"user_id": user_id})
+    dbimp.insert_rows( TABLE_NAME,{"access_token": access_token, "timestamp": timestamp, "token_expire": expire,"username": username, "account_id": account_id,"id": user_id},)
+    dbimp.update_rows( "users", {"instagram": True}, {"user_id": user_id})
 
 def clean(value):
     return (value or "").split("#", 1)[0].strip()
@@ -331,7 +331,7 @@ def story():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
     results = []
     service = dpp.authenticate_and_get_service(token)
@@ -405,7 +405,7 @@ def photo():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
     results = []
     for user in usernames:
@@ -479,7 +479,7 @@ def video():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
     results = []
     for user in usernames:
@@ -553,7 +553,7 @@ def carousel():
         timee = datetime.now(timezone.utc)
     if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
         return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows(token, TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
     results = []
     for user in usernames:

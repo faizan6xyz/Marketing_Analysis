@@ -43,7 +43,7 @@ def google_callback():
     created_at = datetime.now(timezone.utc) + TOKEN_TTL 
     token = au.jsonspoof(user_id=user_id, timestamp=created_at)
     try:
-        dbimp.insert_rows_web(  "users", { "user_id": user_id, "email": user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(), })
+        dbimp.insert_rows(  "users", { "user_id": user_id, "email": user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(), })
     except Exception as e:
         logger.exception("failed to store set userd details")
     return jsonify({"Token": token}), 200
@@ -98,7 +98,7 @@ def details():
     if not name or not gmail  or not phone:
         return jsonify({"status": False, "reason": "name, gmail, phone are all required"}), 400
     try:
-        dbimp.update_rows(tokench["token"], "users", {"name": name, "phone_number": phone, "gmail": gmail }, {"user_id": user_id})
+        dbimp.update_rows( "users", {"name": name, "phone_number": phone, "gmail": gmail }, {"user_id": user_id})
     except Exception as e:
         return jsonify({"status": True, "Statusdb": False, "detail": str(e)}), 500
     return jsonify({"status": True, "Statusdb": True}), 200
@@ -114,7 +114,7 @@ def check_status():
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     try:
-        data = dbimp.select_rows(token, "users", select="user_id", filters={"user_id": user_id})
+        data = dbimp.select_rows( "users", select="user_id", filters={"user_id": user_id})
     except Exception:
         return jsonify({"status": False, "reason": "unable to check db"}), 401
     if not data:
@@ -131,27 +131,27 @@ def check_accounts():
     user_id = tokench["user_id"]
     if not user_id:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
-    rows = dbimp.select_rows(tokench['token'],"users",select="gmail,gdrive,x,instagram,threads,pinterst,whatsapp,youtube",filters={"user_id":user_id})
+    rows = dbimp.select_rows("users",select="gmail,gdrive,x,instagram,threads,pinterst,whatsapp,youtube",filters={"user_id":user_id})
     if not rows:
         return jsonify({"status": False, "reason": "Invalid user_id"}), 401
     data0 = data1 = data2 = data3 = data4 = data5 = data6 = data7 = None
     try:
         if rows[0]["instagram"]:
-            data0 = dbimp.select_rows(tokench["token"], "instagram", select="username,account_id", filters={"id": user_id})
+            data0 = dbimp.select_rows( "instagram", select="username,account_id", filters={"id": user_id})
         if rows[0]["gmail"]:
-            data1 = dbimp.select_rows(tokench["token"], "gmail", select="email,account_id", filters={"id": user_id})
+            data1 = dbimp.select_rows( "gmail", select="email,account_id", filters={"id": user_id})
         if rows[0]["gdrive"]:
-            data2 = dbimp.select_rows(tokench["token"], "drive", select="email", filters={"id": user_id})
+            data2 = dbimp.select_rows( "drive", select="email", filters={"id": user_id})
         if rows[0]["whatsapp"]:
-            data3 = dbimp.select_rows(tokench["token"], "whatsapp", select="phone_no,account_id", filters={"id": user_id})
+            data3 = dbimp.select_rows( "whatsapp", select="phone_no,account_id", filters={"id": user_id})
         if rows[0]["threads"]:
-            data4 = dbimp.select_rows(tokench["token"], "threads", select="username,account_id", filters={"id": user_id})
+            data4 = dbimp.select_rows( "threads", select="username,account_id", filters={"id": user_id})
         if rows[0]["youtube"]:
-            data5 = dbimp.select_rows(tokench["token"], "youtube", select="channel_title,account_id", filters={"id": user_id})
+            data5 = dbimp.select_rows( "youtube", select="channel_title,account_id", filters={"id": user_id})
         if rows[0]["pinterst"]:
-            data6 = dbimp.select_rows(tokench["token"], "pinterst", select="username,account_id", filters={"id": user_id})
+            data6 = dbimp.select_rows( "pinterst", select="username,account_id", filters={"id": user_id})
         if rows[0]["x"]:
-            data7 = dbimp.select_rows(tokench["token"], "x", select="username,account_id", filters={"id": user_id})
+            data7 = dbimp.select_rows( "x", select="username,account_id", filters={"id": user_id})
     except Exception:
         app.logger.exception("Failed to fetch account data for user %s", user_id)
         return jsonify({"status": False, "reason": "unable to check db"}), 500

@@ -46,7 +46,7 @@ def upload_image(access_token, file_bytes):
     return resp.get("media_id_string")
 
 def refresh_x_token11( account_id):
-    rows = dbimp.select_rows_web(TABLE_NAME,select="refresh_token",filters={"account_id": account_id})
+    rows = dbimp.select_rows(TABLE_NAME,select="refresh_token",filters={"account_id": account_id})
     if not rows:
         return None
     refresh_token = rows[0]["refresh_token"]
@@ -58,7 +58,7 @@ def refresh_x_token11( account_id):
     if not new_access or not seconds:
         return None
     expire_time = (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
-    dbimp.update_rows_web( TABLE_NAME, {"access_token": new_access, "refresh_token": new_refresh, "token_expire": expire_time}, filters={"account_id": account_id})
+    dbimp.update_rows( TABLE_NAME, {"access_token": new_access, "refresh_token": new_refresh, "token_expire": expire_time}, filters={"account_id": account_id})
     return new_access
 
 def parse_aware_timestamp(timestamp: str) -> datetime:
@@ -143,7 +143,7 @@ def _post_tweet(access_token, text, media_ids=None):
 
 def post_later(tpyee, account_id, text, text2 ,file_ids=None):
     account_ids = json.loads(account_id[0])
-    rows = dbimp.select_rows_web(TABLE_NAME, select="id", filters={"account_id": account_ids})
+    rows = dbimp.select_rows(TABLE_NAME, select="id", filters={"account_id": account_ids})
     if not rows:
         return False
     user_id = rows[0]["id"]
@@ -199,7 +199,7 @@ def fetch_tweet_metrics(tweet_ids: list[str], access_token: str) -> list[dict]:
     return results
 
 def get_access_token_by_username(token, user_id, username):
-    rows = dbimp.select_rows( token, TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
+    rows = dbimp.select_rows( TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
     if not rows:
         return None, (jsonify({"error": "no x account linked for this username"}), 404), None
     row = rows[0]
@@ -264,7 +264,7 @@ def refresh_x_token(token,user_id, account_id, refresh_token):
     if not new_access or not seconds:
         return None
     expire_time = (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
-    dbimp.update_rows(token, TABLE_NAME, {"access_token": new_access, "refresh_token": new_refresh, "token_expire": expire_time}, filters={"account_id": account_id,"id":user_id})
+    dbimp.update_rows( TABLE_NAME, {"access_token": new_access, "refresh_token": new_refresh, "token_expire": expire_time}, filters={"account_id": account_id,"id":user_id})
     return new_access
 
 @app.route("/auth/login",methods=["POST"])
@@ -286,8 +286,8 @@ def clean(value):
     return (value or "").split("#", 1)[0].strip()
 
 def store_x_account(token, user_id, access_token, username, account_id, timestamp, expire,refresh_token):
-    dbimp.update_rows( token, TABLE_NAME, { "access_token": access_token, "refresh_token": refresh_token, "timestamp": timestamp, "token_expire": expire, "username": username, "account_id": account_id, }, filters={"id": user_id}, ) 
-    dbimp.update_rows(token,"users",{"x":True},{"user_id":user_id})
+    dbimp.update_rows( TABLE_NAME, { "access_token": access_token, "refresh_token": refresh_token, "timestamp": timestamp, "token_expire": expire, "username": username, "account_id": account_id, }, filters={"id": user_id}, ) 
+    dbimp.update_rows("users",{"x":True},{"user_id":user_id})
 
 @app.route("/auth/callback", methods=["GET"])
 def instagram_callback():

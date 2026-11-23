@@ -43,7 +43,7 @@ def refresh_threads_token(expire, access, token, user_id, username):
         new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
         new_access = data["access_token"]
         try:
-            dbimp.update_rows( token, THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"username": username, "id": user_id}, )
+            dbimp.update_rows( THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"username": username, "id": user_id}, )
         except Exception as e:
             print(f"Failed to persist refreshed Threads token for user_id={user_id}: {e}")
         return new_access
@@ -59,7 +59,7 @@ def refresh_threads_tokenww(expire, access, thread_user_id):
         new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
         new_access = data["access_token"]
         try:
-            dbimp.update_rows_web( THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"account_id": thread_user_id}, )
+            dbimp.update_rows( THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"account_id": thread_user_id}, )
         except Exception as e:
             print(f"Failed to persist refreshed Threads token for : {e}")
         return new_access
@@ -77,7 +77,7 @@ def refresh_threads_token11(expires, accesses, thread_user_ids):
             new_expiry = datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
             new_access = data["access_token"]
             try:
-                dbimp.update_rows_web( THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"account_id": thread_user_id}, )
+                dbimp.update_rows( THREADS_TABLE_NAME, { "access_token": new_access, "token_expire": new_expiry.isoformat(), }, filters={"account_id": thread_user_id}, )
             except Exception as e:
                 print(f"Failed to persist refreshed Threads token for {thread_user_id}: {e}")
             new_accesses.append(new_access)
@@ -297,7 +297,7 @@ def wait_for_threads_container(access_token, creation_id, timeout=30, interval=2
     raise TimeoutError("container did not finish processing in time")
 
 def get_access_token_by_username(token, user_id, username):
-    rows = dbimp.select_rows( token, THREADS_TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
+    rows = dbimp.select_rows( THREADS_TABLE_NAME, select="account_id,access_token,refresh_token,token_expire",filters={"id": user_id, "username": username} )
     if not rows:
         return None,None, (jsonify({"error": "no x account linked for this username"}), 404)
     row = rows[0]
@@ -359,8 +359,8 @@ def threads_login():
     return jsonify({"auth_url": auth_url}) , 200
 
 def store_threads_account(token, user_id, access_token, username, account_id, timestamp, expire):
-    dbimp.update_rows( token, THREADS_TABLE_NAME, {"access_token": access_token, "timestamp": timestamp, "token_expire": expire, "username": username,  "account_id": account_id, }, filters={"id": user_id}, )
-    dbimp.update_rows(token,"users",{"threads":True},{"user_id":user_id})
+    dbimp.update_rows( THREADS_TABLE_NAME, {"access_token": access_token, "timestamp": timestamp, "token_expire": expire, "username": username,  "account_id": account_id, }, filters={"id": user_id}, )
+    dbimp.update_rows("users",{"threads":True},{"user_id":user_id})
 
 def clean(value):
     return (value or "").split("#", 1)[0].strip()
@@ -414,7 +414,7 @@ def posts_with_metrics():
     if not username or not token:
         return jsonify({"status": "failed"}), 400
     tokench = au.process(token=token)
-    rows = dbimp.select_rows( tokench["token"], THREADS_TABLE_NAME, select="access_token,token_expire,account_id", filters={"username": username, "id": tokench["user_id"]}, )
+    rows = dbimp.select_rows( THREADS_TABLE_NAME, select="access_token,token_expire,account_id", filters={"username": username, "id": tokench["user_id"]}, )
     if not rows:
         return jsonify({"status": "failed"}), 400
     row = rows[0]

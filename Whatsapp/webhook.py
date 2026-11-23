@@ -47,7 +47,7 @@ def receive_webhook_message():
                 log.warning(f"Rejected webhook payload: unrecognized phone_number_id ({my_phone_number_id}).")
                 continue
             user_id = user_row["id"]
-            files = dbimp.select_rows_web(TABLE_NAME, select="file,access_token", filters={"account_id": my_phone_number_id})
+            files = dbimp.select_rows(TABLE_NAME, select="file,access_token", filters={"account_id": my_phone_number_id})
             file = files[0]["File"] if files else None
             acc = files[0]["Access_token"] if files else None
             if not file or not acc:

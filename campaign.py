@@ -58,7 +58,7 @@ def upload_latewhat(account_id , text1, text2, text3, file_id,reply = "" , subje
     body = combin[0]
     campaign_name = text2
     file_id = json.loads(file_id[0])
-    rows = dbimp.select_rows_web("gmail",select="id",filters={"account_id":account_id})
+    rows = dbimp.select_rows("gmail",select="id",filters={"account_id":account_id})
     if not rows :
         return False
     user_id = rows[0]["id"]
@@ -67,7 +67,7 @@ def upload_latewhat(account_id , text1, text2, text3, file_id,reply = "" , subje
     attachment_paths = []
     attachment_labels = []
     mimetypes = []
-    rows = dbimp.select_rows_web("whatsapp", select="access_token,token_expire", filters={"account_id": account_id })
+    rows = dbimp.select_rows("whatsapp", select="access_token,token_expire", filters={"account_id": account_id })
     row = rows[0] if rows else None
     if not row:
         return False
@@ -100,7 +100,7 @@ def upload_lategmail(account_id , text1, text2, text3, file_id,reply = "" , subj
     body = combin[0]
     campaign_name = text2
     file_id = json.loads(file_id[0])
-    rows = dbimp.select_rows_web("gmail",select="id",filters={"account_id":account_id})
+    rows = dbimp.select_rows("gmail",select="id",filters={"account_id":account_id})
     if not rows :
         return False
     user_id = rows[0]["id"]
@@ -243,7 +243,7 @@ def campaign():
     if not user_id:
         cleanup_local_files()
         return jsonify({"status": False}), 403
-    db_rows = dbimp.select_rows(tokench["token"], "users", select="user_id", filters={"id": user_id})
+    db_rows = dbimp.select_rows("users", select="user_id", filters={"id": user_id})
     db_row = db_rows[0] if db_rows else None
     if not db_row or db_row.get("user_id") != user_id:
         cleanup_local_files()
@@ -260,7 +260,7 @@ def campaign():
                     cleanup_local_files()
                     return jsonify({"status": "failed", "error": f"drive upload failed: {err}"}), 502
                 dr.append(drive_file_id)
-            rows = dbimp.select_rows( tokench["token"], "gmail", select="account_id,access_token", filters={"id": user_id, "email": email}, )
+            rows = dbimp.select_rows("gmail", select="account_id,access_token", filters={"id": user_id, "email": email}, )
             if not rows:
                 cleanup_local_files()
                 return jsonify({"status": "failed", "reason": "gmail account not connected"}), 401
@@ -282,7 +282,7 @@ def campaign():
         if not gmail_service:
             cleanup_local_files()
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
-        rows = dbimp.select_rows(tokench["token"], "gmail", select="account_id", filters={"id": user_id, "email": email})
+        rows = dbimp.select_rows( "gmail", select="account_id", filters={"id": user_id, "email": email})
         if not rows:
             cleanup_local_files()
             return jsonify({"error": "gmail account not found for this email"}), 404
@@ -321,7 +321,7 @@ def campaign():
                     cleanup_local_files()
                     return jsonify({"status": "failed", "error": f"drive upload failed: {err}"}), 502
                 dr.append(drive_file_id)
-            rows = dbimp.select_rows( tokench["token"], "whatsapp",select="account_id,access_token", filters={"id": user_id, "phone_no": number}, )
+            rows = dbimp.select_rows( "whatsapp",select="account_id,access_token", filters={"id": user_id, "phone_no": number}, )
             if not rows:
                 cleanup_local_files()
                 return jsonify({"status": "failed", "reason": "whatsapp account not connected"}), 401
@@ -335,7 +335,7 @@ def campaign():
             sccc.insert_post( user_id=account_id, scheduled_time=timee, access_token=access_token,typeee="message_later", text1=camll, text2=recipient_names, text3=bodyy, media_id=file_id,)
             cleanup_local_files()
             return jsonify({"account": account_id, "status": "scheduled", "scheduled_time": timee.isoformat()}), 200
-        rows = dbimp.select_rows(tokench["token"], "whatsapp", select="access_token,account_id,token_expire", filters={"phone_no": number, "id": user_id})
+        rows = dbimp.select_rows("whatsapp", select="access_token,account_id,token_expire", filters={"phone_no": number, "id": user_id})
         row = rows[0] if rows else None
         if not row:
             cleanup_local_files()
