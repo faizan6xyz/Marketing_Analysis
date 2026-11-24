@@ -1,6 +1,9 @@
 import database.UserDB as dbimp
 from datetime import datetime
-import os , re , time , base64 
+import os 
+import re 
+import time 
+import base64 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google.auth.transport.requests import Request
@@ -46,28 +49,6 @@ def save_tokens(user_id, creds, google_account_id,email_addr=None):
     else:
         dbimp.insert_rows(TABLE_NAME, {"id": user_id, **payload})
 
-def get_service(token,user_id):
-    rows = dbimp.select_rows(TABLE_NAME, select="access_token,refresh_token,token_expire", filters={"id": user_id})
-    row = rows[0] if rows else None
-    if not row or not row.get("access_token"):
-        return None
-    creds = Credentials(token=row["access_token"], refresh_token=row["refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
-    creds.expiry = row["token_expire"] if row.get("token_expire") else None
-    if not creds.valid:
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            try:
-                resp = requests.get("https://gmail.googleapis.com/gmail/v1/users/me/profile",headers={"Authorization": f"Bearer {creds.token}"},).json()
-                email = resp.get("emailAddress")
-            except Exception:
-                email = None
-            save_tokens_web(user_id, creds, email_addr=email) 
-        else:
-            return None
-    if set(SCOPES) - set(getattr(creds, 'scopes', None) or SCOPES):
-        logger.warning("Stored credentials may not cover all requested scopes.")
-    return build('gmail', 'v1', credentials=creds)
-
 def save_tokens_web(user_id, creds,email_addr=None):
     payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"timestamp": datetime.now(timezone.utc).isoformat()}
     if email_addr:
@@ -89,8 +70,7 @@ def get_service_web(user_id,account_id):
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
             try:
-                resp = requests.get(
-                    "https://gmail.googleapis.com/gmail/v1/users/me/profile",headers={"Authorization": f"Bearer {creds.token}"},).json()
+                resp = requests.get("https://gmail.googleapis.com/gmail/v1/users/me/profile",headers={"Authorization": f"Bearer {creds.token}"},).json()
                 email = resp.get("emailAddress")
             except Exception:
                 email = None
@@ -133,24 +113,6 @@ def _validate_max_results(max_results: int) -> int:
     if max_results > MAX_RESULTS_CAP:
         raise ValueError(f"max_results cannot exceed {MAX_RESULTS_CAP}.")
     return max_results
-
-def _validate_attachment(path: str, base_dir: str = None) -> str:   
-    resolved = os.path.realpath(path)
-    if base_dir is not None:
-        base_resolved = os.path.realpath(base_dir)
-        if os.path.commonpath([resolved, base_resolved]) != base_resolved:
-            raise ValueError(f"Attachment path '{path}' resolves outside the allowed directory.")
-    if not os.path.isfile(resolved):
-        raise FileNotFoundError(f"Attachment not found: {path}")
-    if os.path.islink(path):
-        raise ValueError(f"Attachment '{path}' is a symlink, which is not allowed.")
-    size = os.path.getsize(resolved)
-    if size == 0:
-        raise ValueError(f"Attachment '{path}' is empty.")
-    if size > MAX_ATTACHMENT_BYTES:
-        raise ValueError(f"Attachment '{path}' is {size / (1024*1024):.1f} MB, which exceeds "
-            f"gmail's {MAX_ATTACHMENT_BYTES / (1024*1024):.0f} MB per-message limit.")
-    return resolved
 
 def _safe_output_path(out_dir: str, filename: str) -> str:
     safe_name = os.path.basename(filename or "")

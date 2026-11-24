@@ -120,6 +120,7 @@ def list_messages():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
@@ -132,7 +133,7 @@ def list_messages():
     max_results = max(1, min(max_results, 100))
     all_pages = body.get('all_pages', 'false').lower() == 'true'
     try:
-        service = gc.get_service(token=token,user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         messages = gc.list_messages(service, query=query, max_results=max_results, all_pages=all_pages, verbose=False)
@@ -146,13 +147,14 @@ def list_filters():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
+    account_id = body.get("account_id")
 
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
         return jsonify({"status":False}) , 401
     try:
-        service = gc.get_service(token=token,user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         return jsonify(gc.list_filters(service))
@@ -165,6 +167,7 @@ def create_filter():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
+    account_id = body.get("account_id")
 
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
@@ -178,7 +181,7 @@ def create_filter():
     if "from" in criteria and isinstance(criteria["from"], str):
         criteria["from"] = criteria["from"].replace(",", " OR ")
     try:
-        service = gc.get_service(token=token,user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         result = gc.create_filter(service, criteria, action) # this reutrn the filter_id which is the result["id"]
@@ -192,12 +195,13 @@ def list_labels():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
         return jsonify({"status":False}) , 401
     try:
-        service = gc.get_service(token=token,user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         return jsonify(gc.list_labels(service))
@@ -210,7 +214,7 @@ def create_label():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
     user_id ,token  = get_valid_user_id(token)
-
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token :
@@ -226,7 +230,7 @@ def create_label():
     if label_visibility not in ('labelShow', 'labelShowIfUnread', 'labelHide'):
         label_visibility = 'labelShow'
     try:
-        service = gc.get_service(token=token,user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         result = gc.create_label(service, name, list_visibility, label_visibility)
@@ -241,6 +245,7 @@ def mark_as_read():
     token = body.get("token")
     message_ids = body.get("message_id")
     user_id, token = get_valid_user_id(token)
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
@@ -251,7 +256,7 @@ def mark_as_read():
     if invalid:
         return jsonify({"error": "invalid message_id(s)", "invalid": invalid}), 400
     try:
-        service = gc.get_service(token=token, user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         results = {}
@@ -272,6 +277,7 @@ def mark_as_unread():
     token = body.get("token")
     message_ids = body.get("message_id")
     user_id, token = get_valid_user_id(token)
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
@@ -282,7 +288,7 @@ def mark_as_unread():
     if invalid:
         return jsonify({"error": "invalid message_id(s)", "invalid": invalid}), 400
     try:
-        service = gc.get_service(token=token, user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         results = {}
@@ -303,6 +309,7 @@ def delete_filter():
     token = body.get("token")
     filter_ids = body.get("filter_id")
     user_id, token = get_valid_user_id(token)
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
@@ -313,7 +320,7 @@ def delete_filter():
     if invalid:
         return jsonify({"error": "invalid filter_id(s)", "invalid": invalid}), 400
     try:
-        service = gc.get_service(token=token, user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         deleted = []
@@ -335,6 +342,7 @@ def get_label_count():
     token = body.get("token")
     label_ids = body.get("label_id")
     user_id, token = get_valid_user_id(token)
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
@@ -342,7 +350,7 @@ def get_label_count():
     if not label_ids:
         return jsonify({"error": "at least one valid 'label_id' is required"}), 400
     try:
-        service = gc.get_service(token=token, user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         results = {}
@@ -364,6 +372,7 @@ def get_label_messages():
     token = body.get("token")
     label_ids = body.get("label_id")
     user_id, token = get_valid_user_id(token)
+    account_id = body.get("account_id")
     if not user_id:
         return jsonify({"error": "valid 'user_id' is required"}), 400
     if not token:
@@ -375,7 +384,7 @@ def get_label_messages():
     page_token = body.get("page_token")
     include_details = body.get("include_details", "false").lower() == "true"
     try:
-        service = gc.get_service(token=token, user_id=user_id)
+        service = gc.get_service_web(user_id=user_id,account_id=account_id)
         if not service:
             return jsonify({"error": "not connected", "connect_url": "/connect-gmail"}), 401
         results = {}
