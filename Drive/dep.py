@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.http import MediaIoBaseDownload , MediaIoBaseUpload ,MediaFileUpload
 from googleapiclient.errors import HttpError
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from google.oauth2.credentials import Credentials
 import csv
@@ -27,6 +28,7 @@ app = Flask(__name__)
 frontend = os.environ.get("front_end")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("drive_api")
+executor = ThreadPoolExecutor(max_workers=4)
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 SECRET_KEY = os.environ.get("SECRET_KEY_HMAC", "").encode("utf-8")
@@ -365,16 +367,23 @@ def authenticate_request(token):
         return None, (jsonify({"error": "user_id required"}), 400)
     return user_id, None
 
-# def folders():
-#     try:
-#         structure = create_platform_folder_structure(service)
-#     except HttpError as e:
-#         return jsonify({"error": "drive error", "detail": str(e)}), 400
-#     try :
-#         filename = create_files_in_folders(user_id=user_id,service=service,file_content=filesss,structure=structure) 
-#     except HttpError as e:
-#         return jsonify({"error": "drive error", "detail": str(e)}), 400
-#     return True
+def build_folder(creds, user_id):
+    try:
+        service = build('drive', 'v3',credentials=creds,cache_discovery=False )
+    except Exception:
+        logger.exception(f"Unable to build Drive service for {user_id}")
+        return False
+    try:
+        structure = create_platform_folder_structure(service)
+    except Exception:
+        logger.exception(f"Unable to create folder structure for {user_id}")
+        return False
+    try:
+        create_files_in_folders(user_id=user_id,service=service,file_content=filesss,structure=structure)
+    except Exception:
+        logger.exception(f"Unable to create files in folders for {user_id}")
+        return False
+    return True
 
 @app.route("/auth/login", methods=['POST'])
 def connect_drive():
@@ -431,14 +440,7 @@ def oauth_callback():
         save_tokens( user_id, creds.token, creds.refresh_token, expire , email_addr)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
-    try:
-        structure = create_platform_folder_structure(service)
-    except HttpError as e:
-        return jsonify({"error": "drive error", "detail": str(e)}), 400
-    try :
-        create_files_in_folders(user_id=user_id,service=service,file_content=filesss,structure=structure) 
-    except HttpError as e:
-        return jsonify({"error": "drive error", "detail": str(e)}), 400
+    executor.submit(build_folder, creds, user_id)
     return jsonify({"status":True}),200
     
 def list_files():
