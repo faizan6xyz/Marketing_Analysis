@@ -4,18 +4,21 @@ import json
 import uuid
 import base64
 import zlib
+import hashlib
 import logging
 import threading
+from decimal import Decimal
+from urllib.parse import urlparse
+from datetime import datetime, timezone
 import authnew as au
 import requests
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
+from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography import x509
-from urllib.parse import urlparse
-from flask_cors import CORS
-from datetime import datetime, timezone
 load_dotenv()
 import database.UserDB as dbimp
 
@@ -39,18 +42,29 @@ PLAN_CATALOG = json.loads(_require("PAYPAL_PLANS"))
 BASE_URL = "https://api-m.paypal.com" if PAYPAL_ENV == "live" else "https://api-m.sandbox.paypal.com"
 PAYPAL_TABLE = "paypal"
 VERIFY_TABLE = "paypal_verify"
+CART_COLUMNS = ("id", "cart_id", "plan", "status", "paid", "paypal_order_id")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("paypal_app")
 TRUSTED_CERT_HOSTS = ("api.paypal.com", "api.sandbox.paypal.com")
 ACTIVE_ORDER_STATUSES = ("CREATED", "COMPLETED")
+REUSABLE_ORDER_STATUSES = ("CREATED", "PAYER_ACTION_REQUIRED")
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET_KEY
 frontend = os.environ.get("front_end")
-CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
+CORS(app, origins=[frontend] if frontend else [], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
+_session = requests.Session()
 
 class PayPalError(Exception):
     pass
 
+def _col(row, key):
+    if row is None:
+        return None
+    if key in row:
+        return row[key]
+    return row.get(key.capitalize())
 
 def _update_succeeded(resp) -> bool:
     if resp is None:
@@ -63,94 +77,92 @@ def _update_succeeded(resp) -> bool:
         return rowcount > 0
     return bool(resp)
 
-def seed_demo_cart(token,user_id, cart_id, plan_key):
-    rows = dbimp.select_rows(PAYPAL_TABLE, select="id", filters={"id": user_id})
-    existing = rows[0] if rows else None
+def _format_amount(amount):
+    return f"{Decimal(str(amount)):.2f}"
 
+def authenticate():
+    body = request.get_json(silent=True) or {}
+    token = body.get("token") or request.headers.get("Authorization", "").removeprefix("Bearer ").strip() or None
+    tokench = au.process(token=token)
+    if not tokench["status"]:
+        return body, None, (jsonify({"status": "failed", "reason": tokench["reason"]}), 401)
+    return body, tokench, None
+
+def user_is_paid(user_id):
+    rows = dbimp.select_rows("users", select="paid", filters={"user_id": user_id})
+    if not rows:
+        return None
+    return bool(_col(rows[0], "paid"))
+
+def seed_demo_cart(token, user_id, cart_id, plan_key):
+    rows = dbimp.select_rows(PAYPAL_TABLE, select="id", filters={"id": user_id})
     data = {"cart_id": cart_id, "plan": plan_key, "status": "CREATED", "paid": 0}
-    if existing:
+    if rows:
         dbimp.update_rows(PAYPAL_TABLE, data, {"id": user_id})
     else:
         data["id"] = user_id
         dbimp.insert_rows(PAYPAL_TABLE, data)
 
-def get_cart_for_user(token,user_id):
-    rows = dbimp.select_rows( PAYPAL_TABLE, select="id,cart_id,plan,status,paid,paypal_order_id", filters={"id": user_id}, )
-    row = rows[0] if rows else None
-    return dict(row) if row else None
+def get_cart_for_user(token, user_id):
+    rows = dbimp.select_rows(PAYPAL_TABLE, select=",".join(CART_COLUMNS), filters={"id": user_id})
+    if not rows:
+        return None
+    return {c: _col(rows[0], c) for c in CART_COLUMNS}
 
-def get_active_order_for_user(token,user_id):
-    row = get_cart_for_user(token,user_id)
-    if row and row["paypal_order_id"] and row["status"] in ACTIVE_ORDER_STATUSES:
-        return row
-    return None
-
-def get_order_for_user(token,user_id, paypal_order_id):
-    row = get_cart_for_user(token,user_id)
+def get_order_for_user(token, user_id, paypal_order_id):
+    row = get_cart_for_user(token, user_id)
     if not row or row["paypal_order_id"] != paypal_order_id:
         return None
     return row
 
 def get_user_id_for_order(paypal_order_id):
     rows = dbimp.select_rows(PAYPAL_TABLE, select="id", filters={"paypal_order_id": paypal_order_id})
-    row = rows[0] if rows else None
-    return row["id"] if row else None
+    return _col(rows[0], "id") if rows else None
 
-def save_order(token,user_id, paypal_order_id, cart_id, plan_key) -> bool:
-    resp = dbimp.update_rows( PAYPAL_TABLE, {"paypal_order_id": paypal_order_id,"cart_id": cart_id,"plan": plan_key,"status": "CREATED","updated_at": _now(),},{"id": user_id},)
+def save_order(token, user_id, paypal_order_id, cart_id, plan_key) -> bool:
+    resp = dbimp.update_rows(PAYPAL_TABLE, {"paypal_order_id": paypal_order_id, "cart_id": cart_id, "plan": plan_key, "status": "CREATED", "updated_at": _now()}, {"id": user_id})
     return _update_succeeded(resp)
 
 def mark_order_paid(user_id, paypal_order_id) -> bool:
-    rows = dbimp.select_rows(PAYPAL_TABLE , select="plan" , filters={"id": user_id, "paypal_order_id": paypal_order_id})
-    if not rows :
+    rows = dbimp.select_rows(PAYPAL_TABLE, select="plan", filters={"id": user_id, "paypal_order_id": paypal_order_id})
+    if not rows:
         return False
-    plan_id = rows[0]["plan"]
-    dbimp.update_rows("users",{"paid": True,"plan":plan_id} , {"user_id" : user_id})
-    resp = dbimp.update_rows(PAYPAL_TABLE, {"paid": 1, "status": "COMPLETED", "updated_at": _now()}, {"id": user_id, "paypal_order_id": paypal_order_id, "paid": 0},)
+    plan_id = _col(rows[0], "plan")
+    dbimp.update_rows("users", {"paid": True, "plan": plan_id}, {"user_id": user_id})
+    resp = dbimp.update_rows(PAYPAL_TABLE, {"paid": 1, "status": "COMPLETED", "updated_at": _now()}, {"id": user_id, "paypal_order_id": paypal_order_id, "paid": 0})
     return _update_succeeded(resp)
 
 def _hash_request(payload):
-    import hashlib
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
-def get_idempotent_response(token,user_id, key, request_hash):
+def get_idempotent_response(token, user_id, key, request_hash):
     rows = dbimp.select_rows(VERIFY_TABLE, select="idempotency_key,request_hash,response", filters={"id": user_id})
     row = rows[0] if rows else None
-
-    if not row or row["idempotency_key"] != key:
+    if not row or _col(row, "idempotency_key") != key:
         return None, False
-    if row["request_hash"] != request_hash:
+    if _col(row, "request_hash") != request_hash:
         return None, True
-    resp = row["response"]
+    resp = _col(row, "response")
     return (json.loads(resp) if isinstance(resp, str) else resp), False
 
-def save_idempotent_response(token,user_id, key, request_hash, response):
+def _upsert_verify_row(user_id, data):
     rows = dbimp.select_rows(VERIFY_TABLE, select="id", filters={"id": user_id})
-    existing = rows[0] if rows else None
-    data = {"idempotency_key": key, "request_hash": request_hash, "response": response}
-    if existing:
+    if rows:
         dbimp.update_rows(VERIFY_TABLE, data, {"id": user_id})
     else:
-        data["id"] = user_id
-        dbimp.insert_rows(VERIFY_TABLE, data)
+        dbimp.insert_rows(VERIFY_TABLE, {**data, "id": user_id})
+
+def save_idempotent_response(token, user_id, key, request_hash, response):
+    _upsert_verify_row(user_id, {"idempotency_key": key, "request_hash": request_hash, "response": response})
 
 def is_duplicate_webhook_event(event_id) -> bool:
     rows = dbimp.select_rows(VERIFY_TABLE, select="event_id", filters={"event_id": event_id})
-    row = rows[0] if rows else None
-
-    return row is not None
+    return bool(rows)
 
 def record_webhook_event(event_id, user_id) -> bool:
     if not user_id:
         return False
-    rows = dbimp.select_rows(VERIFY_TABLE, select="id", filters={"id": user_id})
-    existing = rows[0] if rows else None
-    data = {"event_id": event_id, "created_at": _now()}
-    if existing:
-        dbimp.update_rows(VERIFY_TABLE, data, {"id": user_id})
-    else:
-        data["id"] = user_id
-        dbimp.insert_rows(VERIFY_TABLE, data)
+    _upsert_verify_row(user_id, {"event_id": event_id, "created_at": _now()})
     return True
 
 _token_lock = threading.Lock()
@@ -163,7 +175,7 @@ def get_access_token():
     with _token_lock:
         if _token_cache["access_token"] and time.time() < _token_cache["expires_at"]:
             return _token_cache["access_token"]
-        resp = requests.post( f"{BASE_URL}/v1/oauth2/token", headers={"Accept": "application/json"}, data={"grant_type": "client_credentials"},auth=(CLIENT_ID, SECRET), timeout=10, )
+        resp = _session.post(f"{BASE_URL}/v1/oauth2/token", headers={"Accept": "application/json"}, data={"grant_type": "client_credentials"}, auth=(CLIENT_ID, SECRET), timeout=10)
         if resp.status_code != 200:
             raise PayPalError(f"Auth failed ({resp.status_code}): {resp.text}")
         data = resp.json()
@@ -171,27 +183,38 @@ def get_access_token():
         _token_cache["expires_at"] = time.time() + data["expires_in"] - 60
         return _token_cache["access_token"]
 
-def paypal_request(method, path, retry_on_auth_fail=True, **kwargs):
+def _headers(extra=None):
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {get_access_token()}"}
+    if extra:
+        headers.update(extra)
+    return headers
+
+def paypal_request(method, path, **kwargs):
     url = f"{BASE_URL}{path}"
+    refreshed = False
     last_exc = None
-    for attempt in range(3):
+    attempt = 0
+    while attempt < 3:
         try:
-            resp = requests.request(method, url, timeout=10, **kwargs)
+            resp = _session.request(method, url, timeout=10, **kwargs)
         except requests.RequestException as e:
             last_exc = e
-            if attempt == 2:
+            attempt += 1
+            if attempt == 3:
                 raise PayPalError(f"Network error after retries: {e}") from e
-            time.sleep(1.5 * (attempt + 1))
+            time.sleep(1.5 * attempt)
             continue
-        if resp.status_code == 401 and retry_on_auth_fail:
+        if resp.status_code == 401 and not refreshed:
+            refreshed = True
             with _token_lock:
                 _token_cache["access_token"] = None
                 _token_cache["expires_at"] = 0
-            if "headers" in kwargs and "Authorization" in kwargs["headers"]:
-                kwargs["headers"]["Authorization"] = f"Bearer {get_access_token()}"
-            return paypal_request(method, path, retry_on_auth_fail=False, **kwargs)
-        if resp.status_code >= 500 and attempt < 2:
-            time.sleep(1.5 * (attempt + 1))
+            if kwargs.get("headers"):
+                kwargs["headers"] = {**kwargs["headers"], "Authorization": f"Bearer {get_access_token()}"}
+            continue
+        attempt += 1
+        if resp.status_code >= 500 and attempt < 3:
+            time.sleep(1.5 * attempt)
             continue
         return resp
     raise PayPalError(f"Request failed after retries: {last_exc}")
@@ -204,7 +227,7 @@ def _get_cert(cert_url):
     parsed = urlparse(cert_url)
     if parsed.scheme != "https" or parsed.hostname not in TRUSTED_CERT_HOSTS:
         raise PayPalError(f"Untrusted cert_url host: {parsed.hostname}")
-    resp = requests.get(cert_url, timeout=10)
+    resp = _session.get(cert_url, timeout=10)
     if resp.status_code != 200:
         raise PayPalError(f"Could not fetch webhook cert: {resp.status_code}")
     cert = x509.load_pem_x509_certificate(resp.content)
@@ -229,9 +252,9 @@ def verify_webhook_signature_local(headers, raw_body: bytes) -> bool:
     except Exception:
         return False
 
-def verify_webhook_signature_remote(headers, event: dict) -> bool: 
-    payload = { "auth_algo": headers.get("Paypal-Auth-Algo"), "cert_url": headers.get("Paypal-Cert-Url"), "transmission_id": headers.get("Paypal-Transmission-Id"),"transmission_sig": headers.get("Paypal-Transmission-Sig"),"transmission_time": headers.get("Paypal-Transmission-Time"),"webhook_id": WEBHOOK_ID,"webhook_event": event,}
-    resp = paypal_request("POST", "/v1/notifications/verify-webhook-signature", headers={"Content-Type": "application/json", "Authorization": f"Bearer {get_access_token()}"}, json=payload, )
+def verify_webhook_signature_remote(headers, event: dict) -> bool:
+    payload = {"auth_algo": headers.get("Paypal-Auth-Algo"), "cert_url": headers.get("Paypal-Cert-Url"), "transmission_id": headers.get("Paypal-Transmission-Id"), "transmission_sig": headers.get("Paypal-Transmission-Sig"), "transmission_time": headers.get("Paypal-Transmission-Time"), "webhook_id": WEBHOOK_ID, "webhook_event": event}
+    resp = paypal_request("POST", "/v1/notifications/verify-webhook-signature", headers=_headers(), json=payload)
     if resp.status_code != 200:
         raise PayPalError(f"Verification call failed: {resp.status_code}")
     return resp.json().get("verification_status") == "SUCCESS"
@@ -243,82 +266,87 @@ def verify_webhook_signature(headers, raw_body: bytes, event: dict) -> bool:
         logger.warning("Local webhook verification failed, falling back to API: %s", e)
         return verify_webhook_signature_remote(headers, event)
 
-def logincheck(token ,user_id):
-    if not user_id:
-        return {"logged_in": False}
+def get_approval_link(order):
+    return next((l["href"] for l in order.get("links", []) if l.get("rel") in ("approve", "payer-action")), None)
+
+def find_reusable_order(cart, amount, currency):
     try:
-        rows = dbimp.select_rows(PAYPAL_TABLE, select="id", filters={"id": user_id})
-        found = rows[0] if rows else None
-    except Exception:
-        return {"logged_in": False}
-    return {"logged_in": bool(found)}
+        resp = paypal_request("GET", f"/v2/checkout/orders/{cart['paypal_order_id']}", headers=_headers())
+    except PayPalError:
+        return None
+    if resp.status_code != 200:
+        return None
+    order = resp.json()
+    if order.get("status") not in REUSABLE_ORDER_STATUSES:
+        return None
+    unit = (order.get("purchase_units") or [{}])[0]
+    unit_amount = unit.get("amount", {})
+    if unit.get("custom_id") != cart["cart_id"] or unit_amount.get("value") != amount or unit_amount.get("currency_code") != currency:
+        return None
+    link = get_approval_link(order)
+    if not link:
+        return None
+    return {"order_id": order["id"], "approval_link": link}
 
 @app.route("/api/demo/seed-cart", methods=["POST"])
 def seed_cart():
-    body = request.get_json(silent=True) or {}
+    body, tokench, err = authenticate()
+    if err:
+        return err
+    user_id = tokench["user_id"]
     cart_id = body.get("cart_id")
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
-    tokench = au.process(token=token)
-    if not tokench["status"] :
-        return jsonify({"status": "failed" , "reason": tokench["reason"]})
-    user_id = tokench['user_id']
-    plan_key = body.get("plan_id", "basic_monthly") # default is basic monthly
+    plan_key = body.get("plan_id", "basic_monthly")
     if not cart_id or not user_id:
         return jsonify({"error": "cart_id and user_id required"}), 400
     if plan_key not in PLAN_CATALOG:
         return jsonify({"error": "invalid_plan"}), 400
-    seed_demo_cart(tokench["token"],user_id, cart_id, plan_key)
+    if user_is_paid(user_id):
+        return jsonify({"error": "user paid Already"}), 400
+    seed_demo_cart(tokench["token"], user_id, cart_id, plan_key)
     return jsonify({"seeded": True, "cart_id": cart_id})
 
 @app.route("/api/payment/create", methods=["POST"])
 def create_payment():
-    body = request.get_json(silent=True) or {}
+    body, tokench, err = authenticate()
+    if err:
+        return err
+    token = tokench["token"]
+    user_id = tokench["user_id"]
     cart_id = body.get("cart_id")
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
-    tokench = au.process(token=token)
-    if not tokench["status"] :
-        return jsonify({"status": "failed" , "reason": tokench["reason"]})
-    user_id = tokench['user_id']
-    check = logincheck(tokench['token'],user_id)
-    ro = dbimp.select_rows("users",select="paid",filters={"user_id":user_id})
-    if not ro :
-        return jsonify({"error":"user_not_exist"}) , 400
-    paid = ro[0]["Paid"]
-    if paid :
-        return jsonify({"error":"user paid Already"}) , 400
-    if not check["logged_in"] :
+    paid = user_is_paid(user_id)
+    if paid is None:
+        return jsonify({"error": "user_not_exist"}), 400
+    if paid:
+        return jsonify({"error": "user paid Already"}), 400
+    cart = get_cart_for_user(token, user_id)
+    if not cart:
         return jsonify({"status": False}), 401
     if not cart_id:
         return jsonify({"error": "cart_id required"}), 400
-    cart = get_cart_for_user(token['token'],user_id)
-    if not cart or cart.get("Cart_id") != cart_id:
+    if cart["cart_id"] != cart_id:
         return jsonify({"error": "cart_not_found"}), 404
-    plan_key = cart.get("Plan")
+    plan_key = cart["plan"]
     plan = PLAN_CATALOG.get(plan_key)
     if not plan:
         return jsonify({"error": "invalid_plan"}), 400
-    amount = plan["amount"]
+    amount = _format_amount(plan["amount"])
     currency = plan["currency"]
     idempotency_key = request.headers.get("Idempotency-Key")
     request_hash = _hash_request({"cart_id": cart_id, "user_id": user_id})
     if idempotency_key:
-        cached, mismatch = get_idempotent_response(tokench["token"],user_id, idempotency_key, request_hash)
+        cached, mismatch = get_idempotent_response(token, user_id, idempotency_key, request_hash)
         if mismatch:
             return jsonify({"error": "idempotency_key_reused_with_different_request"}), 409
         if cached:
             return jsonify(cached)
-    existing_order = get_active_order_for_user(tokench["token"],user_id)
-    if existing_order:
-        return jsonify({"error": "order_already_exists", "order_id": existing_order["Paypal_order_id"]}), 409
-    payload = {"intent": "CAPTURE",
-                    "purchase_units": [{"amount": {"currency_code": currency, "value": amount},"custom_id": cart_id, }],
-                    "application_context": { "return_url": RETURN_URL, "cancel_url": CANCEL_URL,"user_action": "PAY_NOW",},}
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {get_access_token()}"}
-    headers["PayPal-Request-Id"] = idempotency_key or str(uuid.uuid4())
+    if cart["paypal_order_id"] and cart["status"] in ACTIVE_ORDER_STATUSES:
+        reusable = find_reusable_order(cart, amount, currency)
+        if reusable:
+            return jsonify(reusable)
+        return jsonify({"error": "order_already_exists", "order_id": cart["paypal_order_id"]}), 409
+    payload = {"intent": "CAPTURE", "purchase_units": [{"amount": {"currency_code": currency, "value": amount}, "custom_id": cart_id}], "application_context": {"return_url": RETURN_URL, "cancel_url": CANCEL_URL, "user_action": "PAY_NOW"}}
     try:
-        resp = paypal_request("POST", "/v2/checkout/orders", headers=headers, json=payload)
+        resp = paypal_request("POST", "/v2/checkout/orders", headers=_headers({"PayPal-Request-Id": idempotency_key or str(uuid.uuid4())}), json=payload)
     except PayPalError as e:
         logger.error("Order creation failed: %s", e)
         return jsonify({"error": "order_creation_failed"}), 502
@@ -326,35 +354,28 @@ def create_payment():
         logger.error("PayPal order creation error: %s", resp.text)
         return jsonify({"error": "order_creation_failed"}), 502
     order = resp.json()
-    approval_link = next((l["href"] for l in order["links"] if l["rel"] == "approve"), None)
-    if not save_order(tokench["token"],user_id, order["id"], cart_id, plan_key):
+    if not save_order(token, user_id, order["id"], cart_id, plan_key):
         logger.warning("Could not persist order %s for user %s, checking for a race", order["id"], user_id)
-        existing_order = get_active_order_for_user(tokench['token'],user_id)
-        if existing_order:
-            return jsonify({"error": "order_already_exists", "order_id": existing_order["Paypal_order_id"]}), 409
+        latest = get_cart_for_user(token, user_id)
+        if latest and latest["paypal_order_id"] and latest["status"] in ACTIVE_ORDER_STATUSES:
+            return jsonify({"error": "order_already_exists", "order_id": latest["paypal_order_id"]}), 409
         return jsonify({"error": "order_persist_failed"}), 500
-    result = {"order_id": order["id"], "approval_link": approval_link}
+    result = {"order_id": order["id"], "approval_link": get_approval_link(order)}
     if idempotency_key:
-        save_idempotent_response(tokench['token'],user_id, idempotency_key, request_hash, result)
+        save_idempotent_response(token, user_id, idempotency_key, request_hash, result)
     logger.info("Order created: %s for user %s", order["id"], user_id)
     return jsonify(result)
 
-@app.route("/api/payment/status/<order_id>", methods=["GET"])
+@app.route("/api/payment/status/<order_id>", methods=["GET", "POST"])
 def payment_status(order_id):
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
-    tokench = au.process(token=token)
-    if not tokench["status"] :
-        return jsonify({"status": "failed" , "reason": tokench["reason"]})
-    user_id = tokench['user_id']
-    check = logincheck(tokench['token'],user_id)
-    if not check["logged_in"] :
-        return jsonify({"status": False}), 401
-    order = get_order_for_user(user_id , order_id)
+    body, tokench, err = authenticate()
+    if err:
+        return err
+    order = get_order_for_user(tokench["token"], tokench["user_id"], order_id)
     if not order:
         return jsonify({"error": "order_not_found"}), 404
     try:
-        resp = paypal_request( "GET",f"/v2/checkout/orders/{order_id}",headers={"Content-Type": "application/json", "Authorization": f"Bearer {get_access_token()}"},)
+        resp = paypal_request("GET", f"/v2/checkout/orders/{order_id}", headers=_headers())
     except PayPalError as e:
         logger.error("Status check failed: %s", e)
         return jsonify({"error": "paypal_unavailable"}), 503
@@ -368,26 +389,17 @@ def payment_status(order_id):
 
 @app.route("/api/payment/capture/<order_id>", methods=["POST"])
 def capture_payment(order_id):
-    body = request.get_json(silent=True) or {}
-    token = body.get("token")
-    tokench = au.process(token=token)
-    if not tokench["status"] :
-        return jsonify({"status": "failed" , "reason": tokench["reason"]})
-    user_id = tokench['user_id']
-    check = logincheck(tokench['token'],user_id)
-    if not check["logged_in"] :
-        return jsonify({"status": False}), 401
-    order = get_order_for_user(user_id, order_id)
+    body, tokench, err = authenticate()
+    if err:
+        return err
+    user_id = tokench["user_id"]
+    order = get_order_for_user(tokench["token"], user_id, order_id)
     if not order:
         return jsonify({"error": "order_not_found"}), 404
-    if order.get("Paid"):
+    if order["paid"]:
         return jsonify({"status": "Payment Done"})
     try:
-        status_resp = paypal_request( "GET", f"/v2/checkout/orders/{order_id}", headers={"Content-Type": "application/json", "Authorization": f"Bearer {get_access_token()}"}, )
-        if status_resp.status_code == 200 and status_resp.json().get("status") == "COMPLETED":
-            mark_order_paid(user_id, order_id)
-            return jsonify({"status": "Payment Done"})
-        resp = paypal_request("POST",f"/v2/checkout/orders/{order_id}/capture",headers={"Content-Type": "application/json", "Authorization": f"Bearer {get_access_token()}"},)
+        resp = paypal_request("POST", f"/v2/checkout/orders/{order_id}/capture", headers=_headers())
     except PayPalError as e:
         logger.error("Capture failed: %s", e)
         return jsonify({"error": "paypal_unavailable"}), 503
@@ -397,18 +409,18 @@ def capture_payment(order_id):
     if resp.status_code not in (200, 201):
         logger.error("Capture error: %s", resp.text)
         return jsonify({"error": "capture_failed"}), 502
-    data = resp.json()
-    if data.get("status") == "COMPLETED":
+    status = resp.json().get("status")
+    if status == "COMPLETED":
         mark_order_paid(user_id, order_id)
         logger.info("Order captured: %s", order_id)
         return jsonify({"status": "Payment Done"})
-    return jsonify({"status": data.get("status")})
+    return jsonify({"status": status})
 
 @app.route("/api/webhook", methods=["POST"])
 def paypal_webhook():
     raw_body = request.get_data()
     event = request.get_json(silent=True)
-    if event is None:
+    if not isinstance(event, dict):
         return jsonify({"error": "invalid_json"}), 400
     event_id = event.get("id")
     if not event_id:
@@ -424,27 +436,25 @@ def paypal_webhook():
         logger.warning("Webhook signature verification failed for event %s", event_id)
         return jsonify({"error": "invalid_signature"}), 400
     event_type = event.get("event_type")
-    order_id = None
     if event_type == "PAYMENT.CAPTURE.COMPLETED":
-        resource = event.get("resource", {})
-        order_id = resource.get("supplementary_data", {}).get("related_ids", {}).get("order_id")
-    user_id = get_user_id_for_order(order_id) if order_id else None
-    if not record_webhook_event(event_id, user_id):
-        logger.warning("Could not record webhook event %s (no matching user for order %s)", event_id, order_id)
-    if event_type == "PAYMENT.CAPTURE.COMPLETED":
-        if order_id and user_id:
-            mark_order_paid(user_id, order_id)
-            logger.info("Order marked paid via webhook: %s", order_id)
-        else:
+        resource = event.get("resource") or {}
+        order_id = (resource.get("supplementary_data") or {}).get("related_ids", {}).get("order_id")
+        user_id = get_user_id_for_order(order_id) if order_id else None
+        if not (order_id and user_id):
             logger.warning("Webhook %s missing order_id or matching user, could not mark paid", event_id)
+            return jsonify({"received": True}), 200
+        mark_order_paid(user_id, order_id)
+        record_webhook_event(event_id, user_id)
+        logger.info("Order marked paid via webhook: %s", order_id)
     logger.info("Webhook processed: %s (%s)", event_id, event_type)
     return jsonify({"received": True}), 200
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(e):
+    if isinstance(e, HTTPException):
+        return jsonify({"error": e.name.lower().replace(" ", "_")}), e.code
     logger.exception("Unhandled error")
     return jsonify({"error": "internal_error"}), 500
 
 if __name__ == "__main__":
-    # Dev server only. In production run: gunicorn -w 4 -b 0.0.0.0:5000 paypal_payments:app
     app.run(port=5000, debug=False)
