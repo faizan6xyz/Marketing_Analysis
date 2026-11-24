@@ -1,13 +1,12 @@
 import os
 import limit as lmmm
 import json
-import secrets
 import tempfile
 import time
 from datetime import datetime, timezone, timedelta
 import requests
 import Instagram.schedule_video as sccc
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -106,13 +105,6 @@ def _iso_to_aware_utc(iso_str: str | None) -> datetime | None:
 
 def build_flow():
     return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token",   "redirect_uris": [f"{BASE_URL}/youtube/auth/callback"],}}, scopes=YOUTUBE_SCOPES, redirect_uri=f"{BASE_URL}/youtube/auth/callback",autogenerate_code_verifier=True)
-
-def credentials_from_json(creds_json: str) -> Credentials:
-    data = json.loads(creds_json)
-    creds = Credentials(token=data["token"], refresh_token=data.get("refresh_token"),  token_uri=data["token_uri"], client_id=data["client_id"], client_secret=data["client_secret"],scopes=data.get("scopes"),    )
-    if data.get("expiry"):
-        creds.expiry = datetime.fromisoformat(data["expiry"])
-    return creds
 
 def save_youtube_account_web( user_id, channel_id, channel_title, creds: Credentials):
     payload = { "id": user_id, "account_id": channel_id, "channel_title": channel_title, "access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": _expiry_to_iso(creds.expiry), "timestamp": datetime.now(timezone.utc).isoformat(), }

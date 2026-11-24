@@ -35,7 +35,6 @@ THREADS_REFRESH_URL = "https://graph.threads.net/refresh_access_token"
 THREADS_ME_URL = "https://graph.threads.net/v1.0/me"
 
 def refresh_threads_token(expire, access, token, user_id, username):
-    expire = datetime.fromisoformat(expire)
     if expire - datetime.now(timezone.utc) < timedelta(days=1):
         resp = requests.get( THREADS_REFRESH_URL, params={"grant_type": "th_refresh_token", "access_token": access}, )
         resp.raise_for_status()
@@ -51,7 +50,6 @@ def refresh_threads_token(expire, access, token, user_id, username):
         return access
 
 def refresh_threads_tokenww(expire, access, thread_user_id):
-    expire = datetime.fromisoformat(expire)
     if expire - datetime.now(timezone.utc) < timedelta(days=1):
         resp = requests.get( THREADS_REFRESH_URL, params={"grant_type": "th_refresh_token", "access_token": access}, )
         resp.raise_for_status()
@@ -69,8 +67,7 @@ def refresh_threads_tokenww(expire, access, thread_user_id):
 def refresh_threads_token11(expires, accesses, thread_user_ids):
     new_accesses = []
     for expire, access, thread_user_id in zip(expires, accesses, thread_user_ids):
-        expire_dt = datetime.fromisoformat(expire)
-        if expire_dt - datetime.now(timezone.utc) < timedelta(days=1):
+        if expire - datetime.now(timezone.utc) < timedelta(days=1):
             resp = requests.get( THREADS_REFRESH_URL, params={"grant_type": "th_refresh_token", "access_token": access}, )
             resp.raise_for_status()
             data = resp.json()
@@ -303,16 +300,15 @@ def get_access_token_by_username(token, user_id, username):
     row = rows[0]
     account_id = row["account_id"]
     access_token = row["access_token"]
-    raw_expiry = row["token_expire"]
-    if not access_token or not raw_expiry:
+    token_expiry = row["token_expire"]
+    if not access_token or not token_expiry:
         return None, None,(jsonify({"error": "missing access_token"}), 400)
-    token_expiry = datetime.fromisoformat(raw_expiry)
     if token_expiry.tzinfo is None:
         token_expiry = token_expiry.replace(tzinfo=timezone.utc)
     if token_expiry - datetime.now(timezone.utc) < timedelta(minutes=10):
         refresh_token = row["refresh_token"]
         if refresh_token:
-            refreshed = refresh_threads_token(raw_expiry, access_token, token, user_id, username)
+            refreshed = refresh_threads_token(token_expiry, access_token, token, user_id, username)
             if refreshed:
                 access_token = refreshed
     return access_token,account_id, None

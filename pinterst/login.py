@@ -65,7 +65,6 @@ def refresh_pinterest_token11(access, username_id):
     row = rows[0]
     refresh_token = row["refresh_token"]
     expire = row["token_expire"]
-    expire = datetime.fromisoformat(expire)
     if expire - datetime.now(timezone.utc) < timedelta(minutes=3):
         token_url = "https://api.pinterest.com/v5/oauth/token"
         credentials = f"{PINTEREST_APP_ID}:{PINTEREST_APP_SECRET}"
@@ -151,8 +150,7 @@ def get_access_token_by_username(token, user_id, username):
     refresh_token = row["refresh_token"]
     if not access_token or not raw_expiry:
         return None, (jsonify({"error": "missing access_token"}), 400) , None
-    token_expiry = datetime.fromisoformat(raw_expiry)
-    access_token = refresh_pinterest_token(refresh_token, token_expiry, access_token, token, user_id, username)
+    access_token = refresh_pinterest_token(refresh_token, raw_expiry, access_token, token, user_id, username)
     return access_token, None , account_id
 
 def get_pins_analytics(access_token, pin_ids, metric_types="IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK"):
@@ -169,7 +167,6 @@ def get_pins_analytics(access_token, pin_ids, metric_types="IMPRESSION,SAVE,PIN_
     return results
 
 def refresh_pinterest_token(refresh_token, expire, access, token, user_id, username):
-    expire = datetime.fromisoformat(expire)
     if expire - datetime.now(timezone.utc) < timedelta(minutes=3):
         token_url = "https://api.pinterest.com/v5/oauth/token"
         credentials = f"{PINTEREST_APP_ID}:{PINTEREST_APP_SECRET}"

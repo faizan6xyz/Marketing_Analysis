@@ -135,9 +135,8 @@ def get_containers_due(now):
         return _rows_as_lists(cur, cur.fetchall())
 
 def get_failed_one(now):
-    tim = datetime.fromisoformat(now) - timedelta(minutes=30)
     with get_conn_read() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, container_id, access_token, user_id, type, media_id, hour, text1, text2, text3 FROM schedule WHERE time < %s AND taken = %s", (tim, 1))
+        cur.execute("SELECT id, container_id, access_token, user_id, type, media_id, hour, text1, text2, text3 FROM schedule WHERE time < %s AND taken = %s", (now, 1))
         return _rows_as_lists(cur, cur.fetchall())
 
 def update_container_schedule(container_id, sctime):

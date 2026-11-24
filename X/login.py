@@ -205,10 +205,9 @@ def get_access_token_by_username(token, user_id, username):
     row = rows[0]
     account_id = row["account_id"]
     access_token = row["access_token"]
-    raw_expiry = row["token_expire"]
-    if not access_token or not raw_expiry:
+    token_expiry = row["token_expire"]
+    if not access_token or not token_expiry:
         return None, (jsonify({"error": "missing access_token"}), 400), account_id
-    token_expiry = datetime.fromisoformat(raw_expiry)
     if token_expiry.tzinfo is None:
         token_expiry = token_expiry.replace(tzinfo=timezone.utc)
     if token_expiry - datetime.now(timezone.utc) < timedelta(minutes=10):

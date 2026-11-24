@@ -93,8 +93,7 @@ def access_tokenvali(account_id):
         return False
     row = rows[0]
     access_token = row["access_token"]
-    raw_expiry = row["token_expire"]
-    token_expiry = datetime.fromisoformat(raw_expiry)
+    token_expiry = row["token_expire"]
     if token_expiry.tzinfo is None:
         token_expiry = token_expiry.replace(tzinfo=timezone.utc)
     if token_expiry - datetime.now(timezone.utc) < timedelta(days=2):

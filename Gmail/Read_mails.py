@@ -35,7 +35,7 @@ ALLOWED_ATTACHMENT_EXTENSIONS = { '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.cs
 def build_flow():
     return Flow.from_client_config({"web": { "client_id": Clientid, "client_secret": Clientsec, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/gmail/auth/callback"], }}, scopes=SCOPES, redirect_uri=f"{BASE_URL}/gmail/auth/callback",autogenerate_code_verifier=True)
 
-def save_tokens(token, user_id, creds, google_account_id,email_addr=None):
+def save_tokens(user_id, creds, google_account_id,email_addr=None):
     payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
     dbimp.update_rows("users",{"gmail":True},{"user_id":user_id})
     if email_addr:
@@ -52,26 +52,24 @@ def get_service(token,user_id):
     if not row or not row.get("access_token"):
         return None
     creds = Credentials(token=row["access_token"], refresh_token=row["refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
-    if row.get("token_expire"):
-        creds.expiry = datetime.fromisoformat(row["token_expire"])
+    creds.expiry = row["token_expire"] if row.get("token_expire") else None
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
             try:
-                resp = requests.get(
-                    "https://gmail.googleapis.com/gmail/v1/users/me/profile",headers={"Authorization": f"Bearer {creds.token}"},).json()
+                resp = requests.get("https://gmail.googleapis.com/gmail/v1/users/me/profile",headers={"Authorization": f"Bearer {creds.token}"},).json()
                 email = resp.get("emailAddress")
             except Exception:
                 email = None
-            save_tokens(token ,user_id, creds, email_addr=email)  # save refreshed token regardless
+            save_tokens_web(user_id, creds, email_addr=email) 
         else:
             return None
     if set(SCOPES) - set(getattr(creds, 'scopes', None) or SCOPES):
         logger.warning("Stored credentials may not cover all requested scopes.")
     return build('gmail', 'v1', credentials=creds)
 
-def save_tokens_web(user_id, creds, google_account_id,email_addr=None):
-    payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"account_id":google_account_id ,"timestamp": datetime.now(timezone.utc).isoformat()}
+def save_tokens_web(user_id, creds,email_addr=None):
+    payload = {"access_token": creds.token, "refresh_token": creds.refresh_token, "token_expire": creds.expiry.isoformat(),"timestamp": datetime.now(timezone.utc).isoformat()}
     if email_addr:
         payload["email"] = email_addr
     rows = dbimp.select_rows(TABLE_NAME, select="id", filters={"id": user_id})
@@ -86,8 +84,7 @@ def get_service_web(user_id,account_id):
     if not row or not row.get("access_token"):
         return None
     creds = Credentials(token=row["access_token"], refresh_token=row["refresh_token"], token_uri="https://oauth2.googleapis.com/token", client_id=Clientid, client_secret=Clientsec, scopes=SCOPES)
-    if row.get("token_expire"):
-        creds.expiry = datetime.fromisoformat(row["token_expire"])
+    creds.expiry = row["token_expire"] if row.get("token_expire") else None
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
