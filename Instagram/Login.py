@@ -8,15 +8,20 @@ import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
 from flask import Flask, request, jsonify , redirect
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 import limit as lmmm
 import Drive.dep as dpp
 import authnew as au
 from moviepy import VideoFileClip
 import Instagram.upload as uploadd
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from dotenv import load_dotenv
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 load_dotenv()
+import logging
+executor = ThreadPoolExecutor(max_workers=4)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("drive_api")
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 homepage = os.environ.get("homepage")
@@ -180,6 +185,34 @@ def get_authenticated_access_token(user_id, token, account_id):
         access_token = uploadd.refresh_token(token, user_id, access_token)
     return access_token, None
 
+def post_story_job(tokench, usernames, rows_by_username, media_size, media_url,publish_now, video_type, duration, post_time):
+    try:
+        failures = 0
+        for user in usernames:
+            if failures >= 3:
+                logger.warning("aborting story job after 3 failures")
+                break
+            row = rows_by_username.get(user)
+            if row is None:
+                failures += 1
+                logger.warning(f"no account row for {user}")
+                continue
+            access_token, err = get_authenticated_access_token(tokench["user_id"], tokench["token"], user)
+            if err:
+                failures += 1
+                logger.warning(f"access token error for {user}: {err}")
+                continue
+            try:
+                uploadd.post_story(
+                    access_token=access_token, ig_user_id=row["account_id"],
+                    media_size=media_size, media_url=media_url, publish=publish_now,
+                    is_video=video_type, media_duration=duration, timmmm=post_time)
+            except Exception:
+                failures += 1
+                logger.exception(f"unable to post story for {user}")
+    except Exception:
+        logger.exception("story job crashed")
+
 @app.route("/auth/login", methods=["POST"])
 def instagram_login():
     body = request.get_json(silent=True) or {}
@@ -293,74 +326,52 @@ def get_instagram_stories():
 
 @app.route("/upload/story", methods=["POST"])
 def story():
-    data = request.get_json(silent=True) or {}
-    is_video = data.get("is_video")
-    media_size = data.get("media_size")
-    publish = data.get("publish")
-    timee_raw = data.get("time") or {}
-    duration = data.get("duration")
-    account_id = data.get("account_id") 
-    token = data.get("token")
-    if not isinstance(account_id, list):
-        account_id = [account_id] if account_id else []
-    if not account_id:
+    body = request.get_json(silent=True) or {}
+    account_ids = body.get("account_id")
+    token = body.get("token")
+    media_size = _coerce_int(body.get("media_size"))
+    duration = _coerce_int(body.get("duration"))
+    video_type = str(body.get("is_video")).strip().lower() == "true"
+    publish_now = str(body.get("publish")).strip().lower() == "true"
+    if not isinstance(account_ids, list):
+        account_ids = [account_ids] if account_ids else []
+    if not account_ids:
         return jsonify({"error": "at least one username is required"}), 400
     if media_size is None or not token:
-        return jsonify({"error": "url and media size is required"}), 400
-    tokench = au.process(token)
-    if not tokench["status"]:
-        return jsonify({"success": False, "message": "token_invlaid"}), 400
-    media_size = _coerce_int(media_size)
-    duration = _coerce_int(duration)
-    if media_size is None or duration is None:
-        return jsonify({"success": False, "message": "Unable to post story. due to duration / media size int value"}), 400
+        return jsonify({"error": "media_size and token are required"}), 400
+    if video_type and duration is None:
+        return jsonify({"error": "duration is required for video"}), 400
     try:
         _validate_int(media_size)
-        _validate_int(duration)
+        if duration is not None:
+            _validate_int(duration)
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
-    video_type = str(is_video).strip().lower() == "true"
-    publish_now = str(publish).strip().lower() == "true"
-    if not publish_now :
-        timee = parse_datetime(timee_raw)
-        if timee is None:
-            return jsonify({"error": "invalid type or missing date/time"}), 400
-        now = datetime.now(timezone.utc)
-        lb = now + timedelta(minutes=5)
-        up = now + timedelta(days=4)
-        if timee < lb or timee > up:
-            return jsonify({"error": "invalid time for the posting"}), 400
-    else :
-        timee = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(account_id)):
-        return jsonify({"error": "limit has been reached"}) ,400
-    rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
-    rows_by_username = {row["username"]: row for row in rows}
-    results = []
+    tokench = au.process(token)
+    if not tokench["status"]:
+        return jsonify({"success": False, "message": "token_invalid"}), 400
+    now = datetime.now(timezone.utc)
+    if publish_now:
+        post_time = now
+    else:
+        post_time = parse_datetime(body.get("time") or {})
+        if post_time is None:
+            return jsonify({"error": "invalid or missing date/time"}), 400
+        if post_time.tzinfo is None:
+            post_time = post_time.replace(tzinfo=timezone.utc)
+        if not (now + timedelta(minutes=5) <= post_time <= now + timedelta(days=4)):
+            return jsonify({"error": "invalid time for posting"}), 400
+    rows = dbimp.select_rows(TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
+    rows_by_username = {r["username"]: r for r in rows}
     service = dpp.authenticate_and_get_service(token)
-    data , error , code  = get_files_and_upload_to_drive(service=service,type="story")
-    if not data or data[0]["error"] :
-        return jsonify({"error":error}) , code
-    media_url = data[0]["webViewLink"]
-    for user in account_id:
-        row = rows_by_username.get(user)
-        if row is None:
-            results.append({"username": user, "success": False, "message": "account not found"})
-            continue
-        account_id = row["account_id"]
-        access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],user)
-        if err:
-            results.append({"username": user, "account_id": account_id, "success": False, "message": err})
-            continue
-        try:
-            id_post = uploadd.post_story(access_token=access_token,ig_user_id=account_id,media_size=media_size,media_url=media_url,publish=publish_now,is_video=video_type,media_duration=duration,timmmm=timee, )
-        except Exception as e:
-            results.append({"username": user, "account_id": account_id, "success": False, "message": f"Unable to post story: {e}"})
-            continue
-        results.append({"username": user, "account_id": account_id, "success": True, "media_id": id_post})
-    overall_success = any(r["success"] for r in results)
-    status_code = 200 if overall_success else 500
-    return jsonify({"success": overall_success, "results": results}), status_code
+    drive_data, error, code = get_files_and_upload_to_drive(service=service, type="story")
+    if not drive_data or drive_data[0].get("error"):
+        return jsonify({"error": error or "drive upload failed"}), code or 500
+    if not lmmm.checkk(tokench["token"], tokench["user_id"], now.isoformat(), len(account_ids)):
+        return jsonify({"error": "limit has been reached"}), 400
+    media_url = drive_data[0]["webContentLink"]  # direct URL, must be publicly accessible
+    executor.submit(post_story_job, tokench, account_ids, rows_by_username,media_size, media_url, publish_now, video_type, duration, post_time)
+    return jsonify({"success": "added"}), 200
 
 @app.route("/upload/photo", methods=["POST"])
 def photo():
