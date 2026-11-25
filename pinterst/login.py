@@ -21,6 +21,9 @@ import authnew as au
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
@@ -393,7 +396,7 @@ def instagram_callback():
         store_pinterest_account(token, user_id, access_token, username, account_id, timestamp, expire,refresh_token)
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
-    return jsonify({"status": "ok"}), 200
+    return redirect(homepage, code=302)
     
 @app.route("/pins-with-metrics", methods=["GET"])
 def pins_with_metrics():

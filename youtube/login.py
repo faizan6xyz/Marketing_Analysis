@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone, timedelta
 import requests
 import Instagram.schedule_video as sccc
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify , redirect
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -43,6 +43,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 TABLE_NAME = "youtube"
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
@@ -369,7 +372,7 @@ def youtube_oauth_callback():
     except Exception as e:
         logger.exception("save_youtube_account failed")
         return jsonify({"status": False, "error": "could not save account"}), 403
-    return jsonify({"status": True}), 200
+    return redirect(homepage, code=302)
 
 @app.route("/accounts", methods=["POST"])
 @limiter.limit("10 per minute")

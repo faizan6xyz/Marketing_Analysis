@@ -6,6 +6,7 @@ import time
 import base64 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from googleapiclient.http import BatchHttpRequest
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -32,6 +33,7 @@ EMAIL_ADDR_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 HEADER_INJECTION_RE = re.compile(r"[\r\n]")
 MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 2
+BATCH_SIZE = 50
 RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503}
 ALLOWED_ATTACHMENT_EXTENSIONS = { '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.ppt', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.mp3', }
 
@@ -171,30 +173,59 @@ def get_email_body(payload) -> str:
         return "\n".join(html_parts)
     return "No body content found."
 
-def list_messages(service, query='is:unread', max_results=10, all_pages=False, verbose=True) -> list[dict]:
+def _fetch_messages(service, ids, get_kwargs):
+    results, failed = {}, []
+    def cb(request_id, response, exception):
+        if exception:
+            failed.append(request_id)
+        else:
+            results[request_id] = response
+    for i in range(0, len(ids), BATCH_SIZE):
+        batch = service.new_batch_http_request(callback=cb)
+        for mid in ids[i:i + BATCH_SIZE]:
+            batch.add(service.users().messages().get(userId="me", id=mid, **get_kwargs),request_id=mid,)
+        batch.execute()
+    return results, failed
+
+
+def list_messages(service, query='is:unread', max_results=10,all_pages=False, verbose=True, include_body=False):
     query = _validate_query(query)
     max_results = _validate_max_results(max_results)
-    parsed = []
-    page_token = None
+    if include_body:
+        get_kwargs = {"format": "full"}
+    else:
+        get_kwargs = {"format": "metadata","metadataHeaders": ["From", "Subject"],"fields": "id,snippet,payload/headers", }
+    parsed, page_token = [], None
     max_pages = 20 if all_pages else 1
     for _ in range(max_pages):
-        list_kwargs = {"userId": "me", "q": query, "maxResults": max_results}
+        list_kwargs = {"userId": "me","q": query,"maxResults": max_results,"fields": "messages/id,nextPageToken", }
         if page_token:
-            list_kwargs["pagetoken"] = page_token
+            list_kwargs["pageToken"] = page_token
         results = _with_retry(service.users().messages().list, **list_kwargs)
-        messages = results.get('messages', [])
-        for msg in messages:
-            full = _with_retry(service.users().messages().get, userId='me', id=msg['id'], format='full')
-            headers = full.get('payload', {}).get('headers', [])
-            subject = next((h['value'] for h in headers if h['name'] == 'Subject'), '')
-            sender = next((h['value'] for h in headers if h['name'] == 'From'), '')
-            body = get_email_body(full.get('payload'))
-            entry = {"id": msg['id'], "from": sender, "subject": subject, "body": body}
+        ids = [m["id"] for m in results.get("messages", [])]
+        if not ids:
+            break
+        fetched, failed = _fetch_messages(service, ids, get_kwargs)
+        if failed:
+            time.sleep(1)
+            retried, _still_failed = _fetch_messages(service, failed, get_kwargs)
+            fetched.update(retried)
+        for mid in ids:  # keep Gmail's ordering
+            msg = fetched.get(mid)
+            if not msg:
+                continue
+            headers = {h["name"].lower(): h["value"]  for h in msg.get("payload", {}).get("headers", [])}
+            entry = {"id": mid,"from": headers.get("from", ""),"subject": headers.get("subject", ""),}
+            if include_body:
+                entry["body"] = get_email_body(msg.get("payload"))
+            else:
+                entry["snippet"] = msg.get("snippet", "")
             parsed.append(entry)
             if verbose:
-                print(f"From: {sender} | Subject: {subject} | Body: {body}")
-        page_token = results.get('nextPagetoken')
-        if not page_token or not all_pages:
+                preview = entry.get("body") or entry.get("snippet", "")
+                print(f"From: {entry['from']} | Subject: {entry['subject']} | {preview}")
+        page_token = results.get("nextPageToken")
+        if not page_token:
             break
     return parsed
 

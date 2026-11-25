@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 import os
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify , redirect
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from Whatsapp.new import ( WA_APP_ID, WA_REDIRECT_URI, GRAPH_VERSION, SCOPE, APP_SECRET,  TABLE_NAME , log )
 import database.UserDB as dbimp
@@ -13,6 +13,9 @@ load_dotenv()
 BASE_URL = ""
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
@@ -91,7 +94,7 @@ def instagram_callback():
         store_whatsapp_account(token, user_id, long_token, display_number, phone_number_id, times, expp)
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
-    return jsonify({"status": "ok"}), 200
+    return redirect(homepage, code=302)
 
 if __name__ == "__main__":
     # debug=False in production — the Werkzeug debugger is an RCE risk if exposed.

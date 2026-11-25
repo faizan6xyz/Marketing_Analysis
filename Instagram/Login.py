@@ -7,7 +7,7 @@ import database.UserDB as dbimp
 import requests
 from urllib.parse import urlencode
 from flask_cors import CORS
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify , redirect
 from datetime import datetime, timezone, timedelta
 import limit as lmmm
 import Drive.dep as dpp
@@ -19,6 +19,9 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
@@ -228,15 +231,15 @@ def instagram_callback():
         store_instagram_account(db_token, user_id, long_token, about.get("username"), about.get("id"),now.isoformat(), (now + timedelta(seconds=seconds)).isoformat(),)
     except Exception as e:
         return jsonify({"error": "failed to save token", "details": str(e)}), 500
-    return jsonify({"status": True}), 200
+    return redirect(homepage, code=302)
 
 @app.route("/posts/", methods=["POST"])
 def get_instagram_posts():
     body = request.get_json(silent=True) or {}
-    username = body.get("username")
+    account_id = body.get("account_id")
     token = body.get("token")
     tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"], tokench["token"], username)
+    access_token, err = get_authenticated_access_token(tokench["user_id"], tokench["token"], account_id)
     if err:
         return err
     fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count"
@@ -296,11 +299,11 @@ def story():
     publish = data.get("publish")
     timee_raw = data.get("time") or {}
     duration = data.get("duration")
-    usernames = data.get("username")  # expected: list of usernames
+    account_id = data.get("account_id") 
     token = data.get("token")
-    if not isinstance(usernames, list):
-        usernames = [usernames] if usernames else []
-    if not usernames:
+    if not isinstance(account_id, list):
+        account_id = [account_id] if account_id else []
+    if not account_id:
         return jsonify({"error": "at least one username is required"}), 400
     if media_size is None or not token:
         return jsonify({"error": "url and media size is required"}), 400
@@ -329,7 +332,7 @@ def story():
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
         timee = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(account_id)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
@@ -339,7 +342,7 @@ def story():
     if not data or data[0]["error"] :
         return jsonify({"error":error}) , code
     media_url = data[0]["webViewLink"]
-    for user in usernames:
+    for user in account_id:
         row = rows_by_username.get(user)
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
@@ -369,10 +372,10 @@ def photo():
     token = data.get("token")
     comment = data.get("comment")  or ""
     message = data.get("message") or ""
-    usernames = data.get("username")
-    if not isinstance(usernames, list):
-        usernames = [usernames] if usernames else []
-    if not usernames:
+    account_id = data.get("account_id")
+    if not isinstance(account_id, list):
+        account_id = [account_id] if account_id else []
+    if not account_id:
         return jsonify({"error": "at least one username is required"}), 400
     if media_size is None:
         return jsonify({"error": "url and media size is required"}), 400
@@ -403,12 +406,12 @@ def photo():
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
         timee = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(account_id)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
     results = []
-    for user in usernames:
+    for user in account_id:
         row = rows_by_username.get(user)
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
@@ -440,10 +443,10 @@ def video():
     token = data.get("token")
     comment = data.get("comment") or ""
     message = data.get("message") or ""
-    usernames = data.get("username")
-    if not isinstance(usernames, list):
-        usernames = [usernames] if usernames else []
-    if not usernames:
+    account_id = data.get("account_id")
+    if not isinstance(account_id, list):
+        account_id = [account_id] if account_id else []
+    if not account_id:
         return jsonify({"error": "at least one username is required"}), 400
     if media_size is None:
         return jsonify({"error": "url and media size is required"}), 400
@@ -477,12 +480,12 @@ def video():
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
         timee = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(account_id)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
     results = []
-    for user in usernames:
+    for user in account_id:
         row = rows_by_username.get(user)
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
@@ -515,10 +518,10 @@ def carousel():
     token = data.get("token")
     comment = data.get("comment") or ""
     message = data.get("message") or ""
-    usernames = data.get("username")
-    if not isinstance(usernames, list):
-        usernames = [usernames] if usernames else []
-    if not usernames:
+    account_id = data.get("account_id")
+    if not isinstance(account_id, list):
+        account_id = [account_id] if account_id else []
+    if not account_id:
         return jsonify({"error": "at least one username is required"}), 400
     if not is_video or not media_size or not media_duration:
         return jsonify({"success": False, "message": "media_urls, is_video, media_size, and media_duration are all required"}), 400
@@ -551,12 +554,12 @@ def carousel():
             return jsonify({"error": "invalid time for the posting"}), 400
     else :
         timee = datetime.now(timezone.utc)
-    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(usernames)):
+    if not lmmm.checkk(tokench["token"],tokench["user_id"],now.isoformat(),len(account_id)):
         return jsonify({"error": "limit has been reached"}) ,400
     rows = dbimp.select_rows( TABLE_NAME, select="username,account_id",filters={"id": tokench["user_id"]})
     rows_by_username = {row["username"]: row for row in rows}
     results = []
-    for user in usernames:
+    for user in account_id:
         row = rows_by_username.get(user)
         if row is None:
             results.append({"username": user, "success": False, "message": "account not found"})
@@ -582,10 +585,10 @@ def insight():
     body = request.get_json(silent=True) or {}
     is_story = body.get("is_story")
     media_id = body.get("media_id")
-    username = body.get("username")
+    account_id = body.get("account_id")
     token = body.get("token")
     tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],username)
+    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],account_id)
     if err: return err
     is_story = str(is_story).strip().lower() == "true" if is_story else False
     try:

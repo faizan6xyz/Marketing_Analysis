@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from moviepy import VideoFileClip
 import tempfile
 from flask_cors import CORS
-from flask import Flask, request,  jsonify
+from flask import Flask, redirect ,request,  jsonify
 import Drive.dep as dpp
 from datetime import datetime, timezone, timedelta
 from flask_limiter import Limiter
@@ -22,6 +22,9 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
@@ -326,7 +329,7 @@ def instagram_callback():
         store_x_account(token, user_id, access_token, username, account_id, timestamp, expire,refresh_token)
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
-    return jsonify({"status": "ok"}), 200
+    return redirect(homepage, code=302)
 
 @app.route("/post/text", methods=["POST"])
 def post_to_x_text():

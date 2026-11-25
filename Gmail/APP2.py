@@ -1,7 +1,7 @@
 import os
 import re
 import logging
-from flask import Flask, request, jsonify 
+from flask import Flask, request, jsonify , redirect
 import database.UserDB as dbimp
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -15,6 +15,7 @@ load_dotenv()
 app = Flask(__name__)
 app.url_map.strict_slashes = False  # avoids slash redirects on preflight
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
 if not frontend:
     raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
@@ -112,7 +113,7 @@ def gmail_oauth_callback():
         gc.save_tokens( user_id, creds, google_account_id,email_addr)
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 401
-    return jsonify({"status": True}), 200
+    return redirect(homepage, code=302)
 
 @app.route('/messages', methods=['POST'])
 @limiter.limit("30 per minute", methods=["POST"])

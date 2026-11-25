@@ -2,7 +2,7 @@ import io
 import pandas as pd
 import os
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify ,redirect
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.http import MediaIoBaseDownload , MediaIoBaseUpload ,MediaFileUpload
 from googleapiclient.errors import HttpError
@@ -26,6 +26,9 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("drive_api")
 executor = ThreadPoolExecutor(max_workers=4)
@@ -441,7 +444,7 @@ def oauth_callback():
     except Exception as e:
         return jsonify({"status": False, "error": str(e)}), 403
     executor.submit(build_folder, creds, user_id)
-    return jsonify({"status":True}),200
+    return redirect(homepage, code=302)
     
 def list_files():
     body = request.get_json(silent=True) or {}

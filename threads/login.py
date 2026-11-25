@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from flask_cors import CORS
 import limit as lmmm
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from datetime import datetime, timezone, timedelta
 import Instagram.schedule_video as sccc
 import Drive.dep as dpp
@@ -16,6 +16,9 @@ import authnew as au
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
+homepage = os.environ.get("homepage")
+if not frontend:
+    raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
@@ -347,9 +350,6 @@ def threads_login():
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
     user_id = tokench["user_id"]
     state = serializer.dumps({"user_id": user_id})
-    # params = { "response_type": "code", "client_id": THREADS_APP_ID, "redirect_uri": THREADS_REDIRECT_URI, "scope": THREADS_SCOPES, "state": state, }
-    # auth_url = THREADS_AUTH_URL + "?" + urlencode(params)
-    # return redirect(auth_url)
     params = {"response_type": "code","client_id": THREADS_APP_ID,"redirect_uri": THREADS_REDIRECT_URI,"scope": THREADS_SCOPES,"state": state, }
     auth_url = THREADS_AUTH_URL + "?" + urlencode(params)
     return jsonify({"auth_url": auth_url}) , 200
@@ -400,7 +400,7 @@ def instagram_callback():
         store_threads_account(token, user_id, access_token, username, account_id, timestamp, expire)
     except Exception as e:
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
-    return jsonify({"status": "ok"}), 200
+    return redirect(homepage, code=302)
 
 @app.route("/posts-with-metrics", methods=["GET"])
 def posts_with_metrics():
