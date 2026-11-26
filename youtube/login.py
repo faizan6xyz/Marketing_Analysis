@@ -22,10 +22,11 @@ from google_auth_oauthlib.flow import Flow
 import database.UserDB as dbimp
 import authnew as au
 import Drive.dep as dpp
+from concurrent.futures import ThreadPoolExecutor
 import logging
 from dotenv import load_dotenv
 load_dotenv()
-YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/youtube.readonly","https://www.googleapis.com/auth/drive.readonly",]
+YOUTUBE_SCOPES = [ "https://www.googleapis.com/auth/youtube.upload","https://www.googleapis.com/auth/youtube.readonly","https://www.googleapis.com/auth/drive.readonly","https://www.googleapis.com/auth/yt-analytics.readonly",]
 CLIENT_SECRETS_FILE = "client_secret.json"
 BASE_URL = os.environ.get("BASE_URL")
 STATE_MAX_AGE = 600  # seconds
@@ -39,6 +40,8 @@ os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("drive_api")
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_VIDEO_SIZE + 1024 * 1024  # reject oversized bodies early
+executor = ThreadPoolExecutor(max_workers=4)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
@@ -163,13 +166,12 @@ def get_valid_access_token(channel_id, token, client_id, client_secret, refresh_
         dbimp.update_rows( TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
     except Exception as e:
         print(f"token update failed for channel {channel_id}: {e}")
-        return False
     return new_access_token
 
 def get_valid_access_token11(channel_id,client_id, client_secret, refresh_token, access_token,expires_at_iso):
     now = datetime.now(timezone.utc)
     expiry = _iso_to_aware_utc(expires_at_iso)
-    if expiry and now < expiry - timedelta(seconds=60):
+    if access_token and expiry and now < expiry - timedelta(seconds=60):
         return access_token
     resp = requests.post( "https://oauth2.googleapis.com/token", data={ "client_id": client_id, "client_secret": client_secret, "refresh_token": refresh_token, "grant_type": "refresh_token", }, timeout=10,     )
     resp.raise_for_status()
@@ -180,11 +182,10 @@ def get_valid_access_token11(channel_id,client_id, client_secret, refresh_token,
         dbimp.update_rows(TABLE_NAME, {"access_token": new_access_token, "token_expire": new_expiry_iso}, filters={"account_id": channel_id}, )
     except Exception as e:
         print(f"token update failed for channel {channel_id}: {e}")
-        return False
     return new_access_token
 
 def shorts_schedule(channel_id, video_id, access_token):
-    start_date = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    start_date = (datetime.now(timezone.utc) - timedelta(hours=24)).date().isoformat()
     rows = dbimp.select_rows( TABLE_NAME, select="refresh_token,token_expire", filters={"account_id": channel_id})
     row = rows[0] if rows else None
     if not row:
@@ -195,10 +196,10 @@ def shorts_schedule(channel_id, video_id, access_token):
     if not access_token:
         return False
     meta_resp = requests.get( "https://www.googleapis.com/youtube/v3/videos", params={"part": "snippet,statistics", "id": video_id, "key": YOUTUBE_API_KEY},timeout=10,    ).json()
-    item = meta_resp.get("items", [{}])[0]
+    item = (meta_resp.get("items") or [{}])[0]
     snippet = item.get("snippet", {})
     stats = item.get("statistics", {})
-    analytics_resp = requests.get( "https://youtubeanalytics.googleapis.com/v2/reports", params={ "ids": "channel==MINE", "startDate": start_date, "endDate": datetime.now(timezone.utc).date().isoformat(), "metrics": "estimatedMinutesWatched,averageViewDuration,shares,impressions,subscribersGained", "dimensions": "video", "filters": f"video=={video_id}", "access_token": access_token,}, timeout=10,     ).json()
+    analytics_resp = requests.get( "https://youtubeanalytics.googleapis.com/v2/reports", params={ "ids": "channel==MINE", "startDate": start_date, "endDate": datetime.now(timezone.utc).date().isoformat(), "metrics": "estimatedMinutesWatched,averageViewDuration,shares,subscribersGained", "dimensions": "video", "filters": f"video=={video_id}", "access_token": access_token,}, timeout=10,     ).json()
     headers = [c["name"] for c in analytics_resp.get("columnHeaders", [])]
     row = analytics_resp.get("rows", [[]])[0] if analytics_resp.get("rows") else []
     metrics = dict(zip(headers, row))
@@ -227,6 +228,12 @@ def _upload_resumable_with_retry(request_):
                 time.sleep(min(2 ** retries,16))
                 continue
             raise
+        except (ConnectionError, TimeoutError, OSError):
+            if retries < RESUMABLE_UPLOAD_MAX_RETRIES:
+                retries += 1
+                time.sleep(min(2 ** retries,16))
+                continue
+            raise
     return response
 
 def post_later(channel_id, file_id, text1, text2, text3):
@@ -238,25 +245,71 @@ def post_later(channel_id, file_id, text1, text2, text3):
     user_id = rows[0]["id"]
     drive_service = dpp.get_drive_service(user_id)
     tmp_path, mimetype, name = dpp.download_drive_file_to_temp(drive_service, file_id)
-    for channel_id in channel_ids :
-        creds = get_youtube_credentials_for_account_web(channel_id)
-        if not creds:
-            print(f"post_later: no credentials found for channel {channel_id}")
-            return False
-        try:
-            response = upload_video_to_youtube_channel( creds, tmp_path, mimetype, title=text1, description=text2, tags=text3, )
-            video_id = response.get("id")
+    if not tmp_path:
+        print(f"post_later: unable to download drive file {file_id}")
+        return False
+    video_ids = []
+    try:
+        for channel_id in channel_ids :
+            creds = get_youtube_credentials_for_account_web(channel_id)
+            if not creds:
+                print(f"post_later: no credentials found for channel {channel_id}")
+                continue
+            try:
+                response = upload_video_to_youtube_channel( creds, tmp_path, mimetype, title=text1, description=text2, tags=text3, )
+                video_id = response.get("id")
+            except Exception as e:
+                print(f"post_later: upload failed for channel {channel_id}: {e}")
+                continue
+            video_ids.append(video_id)
             try:
                 xcccc(channel_id, creds.token, video_id, "shorts")
             except Exception as e:
                 print(f"xcccc scheduling failed for channel {channel_id}: {e}")
-            return video_id
-        except Exception as e:
-            print(f"post_later: upload failed for channel {channel_id}: {e}")
-            return False
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    if len(video_ids) == len(channel_ids):
+        rollback_drive(service=drive_service,file_ids=[file_id])
+    return video_ids[0] if video_ids else False
+
+def deleteFile(service ,file_id):
+    if not service :
+        return False
+    if not file_id:
+        return False
+    try: 
+        service.files().delete(fileId=file_id).execute()
+    except Exception:
+        logger.warning(f"failed to delete drive file {file_id}")
+        return False
+    return True
+
+def rollback_drive(service, file_ids):
+    if not file_ids:
+        return
+    if isinstance(file_ids, str):
+        file_ids = [file_ids]
+    logger.info(f"rolling back {len(file_ids)} drive file(s)")
+    for file_id in file_ids:
+        deleteFile(service, file_id)
+
+def _publish_to_channel(token, user_id, channel_id, upload_tmp_path, mimetype, caption, description, tags):
+    creds = get_youtube_credentials_for_account(token, user_id, channel_id)
+    if not creds:
+        logger.error(f"no credentials for channel {channel_id}")
+        return None
+    try:
+        response = upload_video_to_youtube_channel(creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags)
+        video_id = response.get("id")
+    except Exception:
+        logger.exception(f"upload failed for channel {channel_id}")
+        return None
+    try:
+        xcccc(channel_id, creds.token, video_id, "shorts")
+    except Exception as e:
+        logger.warning(f"xcccc scheduling failed for channel {channel_id}: {e}")
+    return video_id
 
 def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
     account_ids = []
@@ -268,33 +321,20 @@ def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, 
         account_ids.append(channel_id)
     if not publish_now:
         service = dpp.get_drive_service(user_id)
-        drive_file_id, err = dpp.upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
-        if err is not None:
+        created_file, err = dpp.upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
+        if err is not None or not created_file:
+            logger.error("unable to upload to the drive")
             return False
         channel_id  = json.dumps(account_ids)
-        sccc.insert_post( user_id=channel_id, scheduled_time=timee, access_token="", typeee="Shorts_later", text1=caption, text2=description, text3=tags, media_id=drive_file_id, )
+        sccc.insert_post( user_id=channel_id, scheduled_time=timee, access_token="", typeee="Shorts_later", text1=caption, text2=description, text3=tags, media_id=created_file.get("id"), )
         return {"account": channel_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
-    video_ids = []
-    for channel_id in account_ids :
-        creds = get_youtube_credentials_for_account(token, user_id, channel_id)
-        if not creds:
-            return False
-        try:
-            response = upload_video_to_youtube_channel(creds, upload_tmp_path, mimetype, title=caption, description=description, tags=tags)
-            video_id = response.get("id")
-            try:
-                xcccc(channel_id, creds.token, video_id, "shorts")
-            except Exception as e:
-                return False
-            video_ids.append(video_id)
-        except HttpError as e:
-            return False
-        except Exception as e:
-            return False
-    return video_id
+    with ThreadPoolExecutor(max_workers=min(MAX_UPLOAD_WORKERS, len(account_ids))) as pool:
+        results = list(pool.map(lambda cid: _publish_to_channel(token, user_id, cid, upload_tmp_path, mimetype, caption, description, tags), account_ids))
+    video_ids = [v for v in results if v]
+    return video_ids or False
 
 def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, description="", tags=None, category_id="22", privacy_status="public"):
-    youtube_service = build("youtube", "v3", credentials=creds)
+    youtube_service = build("youtube", "v3", credentials=creds, cache_discovery=False)
     media = MediaFileUpload(tmp_path, mimetype=mimetype, chunksize=10 * 1024 * 1024, resumable=True)
     body = { "snippet": {"title": title, "description": description, "tags": tags or [], "categoryId": category_id},
         "status": {"privacyStatus": privacy_status}, }
@@ -377,7 +417,8 @@ def youtube_oauth_callback():
 @app.route("/accounts", methods=["POST"])
 @limiter.limit("10 per minute")
 def list_youtube_accounts():
-    token = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True) or {}
+    token = body.get("token")
     if not token:
         return jsonify({"error": "'token' is required"}), 400
     tokench = au.process(token=token)
@@ -390,7 +431,7 @@ def list_youtube_accounts():
 @app.route("/upload/short", methods=["POST"])
 @limiter.limit("5 per minute")
 def upload():
-    data = request.get_json(silent=True) or {}
+    data = request.form
     token = data.get("token")
     if not token:
         return jsonify({"error": "'token' is required"}), 400
@@ -401,49 +442,74 @@ def upload():
     publish = data.get("publish", "true")
     timee_raw = data.get("time")
     publish_now = str(publish).strip().lower() == "true"
-    accounts = data.get("username")
-    if not isinstance(accounts, list):
-        return jsonify({"error": "accounts must be a list"}), 400
-    now = datetime.now(timezone.utc).isoformat()
-    if not lmmm.checkk(tokench["token"],user_id,now,len(accounts)):
-        return jsonify({"error": "limit has been reached"}) ,400
-    timee = parse_datetime(timee_raw)
-    if timee is None:
-        return jsonify({"error": "invalid or missing date/time"}), 400
-    lb = now + timedelta(seconds=180)
-    up = now + timedelta(hours=72)
-    if timee < lb or timee > up:
-        return jsonify({"error": "invalid time for the posting"}), 400
-    if not accounts:
-        return jsonify({"error": "'accounts' is required (one or more connected channel ids)"}), 400
+    all_files = [f for _, f in request.files.items(multi=True)]
+    if len(all_files) != 1:
+        return jsonify({"error": "exactly one file is allowed per upload (form-data field: file)"}), 400
     uploaded_file = request.files.get("file")
     if not uploaded_file or uploaded_file.filename == "":
         return jsonify({"error": "file required (form-data field: file)"}), 400
+    if uploaded_file.mimetype not in ALLOWED_VIDEO_MIMETYPES:
+        return jsonify({"error": f"unsupported file type: {uploaded_file.mimetype}"}), 400
     uploaded_file.stream.seek(0, os.SEEK_END)
     size = uploaded_file.stream.tell()
     uploaded_file.stream.seek(0)
     if size > MAX_VIDEO_SIZE:
         return jsonify({"error": f"file exceeds max size of {MAX_VIDEO_SIZE} bytes"}), 400
+    accounts = data.getlist("account_id")
+    if len(accounts) == 1 and accounts[0].strip().startswith("["):
+        try:
+            accounts = json.loads(accounts[0])
+        except ValueError:
+            return jsonify({"error": "accounts must be a list"}), 400
+    if not isinstance(accounts, list) or not all(isinstance(a, str) for a in accounts):
+        return jsonify({"error": "accounts must be a list"}), 400
+    accounts = list(dict.fromkeys(a.strip() for a in accounts if a.strip()))
+    if not accounts:
+        return jsonify({"error": "'accounts' is required (one or more connected channel ids)"}), 400
+    now_dt = datetime.now(timezone.utc)
+    timee = None
+    if not publish_now:
+        timee = parse_datetime(timee_raw)
+        if timee is None:
+            return jsonify({"error": "invalid or missing date/time"}), 400
+        lb = now_dt + timedelta(seconds=180)
+        up = now_dt + timedelta(hours=72)
+        if timee < lb or timee > up:
+            return jsonify({"error": "invalid time for the posting"}), 400
+    if not lmmm.checkk(tokench["token"],user_id,now_dt.isoformat(),len(accounts)):
+        return jsonify({"error": "limit has been reached"}) ,400
+    caption = data.get("caption") or ""
+    description = data.get("description") or ""
+    tags = [t.strip() for t in (data.get("tags") or "").split(",") if t.strip()]
     upload_tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        suffix = os.path.splitext(uploaded_file.filename)[1] or ".mp4"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             uploaded_file.save(tmp.name)
             upload_tmp_path = tmp.name
+        executor.submit(upload_short_job, upload_tmp_path, uploaded_file.mimetype, caption, description, tags, accounts, token, user_id, publish_now, timee)
+    except Exception:
+        logger.exception("failed to queue upload")
+        if upload_tmp_path and os.path.exists(upload_tmp_path):
+            os.remove(upload_tmp_path)
+        return jsonify({"status": False, "error": "could not start upload"}), 500
+    return jsonify({"status":True}), 200
+    
+def upload_short_job(upload_tmp_path, mimetype, caption, description, tags, accounts, token, user_id, publish_now, timee):
+    try:
         if get_video_duration(upload_tmp_path) > MAX_SHORT_SECONDS:
-            return jsonify({"error": f"video exceeds max short length of {MAX_SHORT_SECONDS} seconds"}), 400
-        mimetype = uploaded_file.mimetype
-        caption = data.get("caption") or ""
-        description = data.get("description") or ""
-        tags = [t.strip() for t in (data.get("tags") or "").split(",") if t.strip()]
+            logger.info(f"video exceeds max short length of {MAX_SHORT_SECONDS} seconds for user {user_id}")
+            return
         x = _upload_one_account(accounts, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee)
         if not  x :
-            return jsonify({"status":False}), 400
-        return jsonify({"status":True}), 200
+            logger.info(f"fail to post the user shorts {accounts}")
+    except Exception:
+        logger.exception(f"upload job crashed for user {user_id}")
     finally:
         if upload_tmp_path and os.path.exists(upload_tmp_path):
             os.remove(upload_tmp_path)
 
-@app.route("/shorts", methods=["POST'"])
+@app.route("/shorts", methods=["POST"])
 @limiter.limit("10 per minute")
 def fetch_shorts():
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token")
@@ -457,7 +523,7 @@ def fetch_shorts():
     if not rows:
         return jsonify({"error": "account not found"}), 404
     channel_id = rows[0]["account_id"]
-    channel_resp = requests.get( f"{YOUTUBE_DATA_URL}/channels", params={"part": "contentDetails", "id": channel_id, "key": YOUTUBE_API_KEY}, )
+    channel_resp = requests.get( f"{YOUTUBE_DATA_URL}/channels", params={"part": "contentDetails", "id": channel_id, "key": YOUTUBE_API_KEY}, timeout=10, )
     channel_resp.raise_for_status()
     channel_items = channel_resp.json().get("items", [])
     if not channel_items:
@@ -468,22 +534,22 @@ def fetch_shorts():
     while True:
         params = {"part": "contentDetails", "playlistId": uploads_playlist_id, "maxResults": 50, "key": YOUTUBE_API_KEY}
         if page_token:
-            params["pagetoken"] = page_token
-        playlist_resp = requests.get(f"{YOUTUBE_DATA_URL}/playlistItems", params=params)
+            params["pageToken"] = page_token
+        playlist_resp = requests.get(f"{YOUTUBE_DATA_URL}/playlistItems", params=params, timeout=10)
         playlist_resp.raise_for_status()
         data = playlist_resp.json()
         video_ids.extend(item["contentDetails"]["videoId"] for item in data.get("items", []))
-        page_token = data.get("nextPagetoken")
+        page_token = data.get("nextPageToken")
         if not page_token:
             break
     shorts = []
     for i in range(0, len(video_ids), 50):
         batch = video_ids[i: i + 50]
-        videos_resp = requests.get( f"{YOUTUBE_DATA_URL}/videos", params={"part": "snippet,contentDetails,statistics", "id": ",".join(batch), "key": YOUTUBE_API_KEY}, )
+        videos_resp = requests.get( f"{YOUTUBE_DATA_URL}/videos", params={"part": "snippet,contentDetails,statistics", "id": ",".join(batch), "key": YOUTUBE_API_KEY}, timeout=10, )
         videos_resp.raise_for_status()
         for item in videos_resp.json().get("items", []):
             seconds = int(isodate.parse_duration(item["contentDetails"]["duration"]).total_seconds())
-            if seconds <= 60:
+            if seconds <= MAX_SHORT_SECONDS:
                 shorts.append({ "video_id": item["id"], "published_at": item["snippet"]["publishedAt"], "caption": item["snippet"]["title"], "thumbnail": item["snippet"]["thumbnails"]["high"]["url"], "views": item["statistics"].get("viewCount", 0), "likes": item["statistics"].get("likeCount", 0), "comments": item["statistics"].get("commentCount", 0), "duration_seconds": seconds,})
     return jsonify({"shorts": shorts})
 
