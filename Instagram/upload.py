@@ -14,9 +14,11 @@ logger = logging.getLogger("ig_post")
 GRAPH_VERSION = "v25.0"
 BASE_URL = f"https://graph.facebook.com/{GRAPH_VERSION}"
 MAX_REEL_SECONDS = 15 * 60      # 15 min
+MIN_REEL_SECONDS = 3            # 3 sec
 MAX_STORY_SECONDS = 60          # 60 sec
+MIN_STORY_SECONDS = 3          # 3 sec
 MAX_VIDEO_SECONDS = 60 * 60     # 60 min
-MIN_VIDEO_SECONDS = 3           # IG rejects clips shorter than this
+MIN_VIDEO_SECONDS = 3           # IG rejects clips shorter than this 
 MAX_CAPTION_CHARS = 2170
 MAX_HASHTAGS = 5
 MAX_PHOTO_BYTES = 8 * 1024 * 1024        # 8 MB
@@ -27,6 +29,7 @@ RETRY_BACKOFF_BASE = 2               # seconds; doubles each retry
 RETRYABLE_IG_ERROR_CODES = {4, 17, 32}   # IG rate-limit / throttling codes
 ALLOWED_URL_SCHEMES = {"https"}
 TABLE_NAME = "instagram"
+GRAPH_BASE = "https://graph.instagram.com"
 
 def _redact(text: str, access_token: str = None) -> str:
     if access_token:
@@ -138,6 +141,22 @@ def _check_caption(caption: str) -> str:
     if match and len(caption) == MAX_CAPTION_CHARS:
         caption = caption[:match.start()].rstrip()
     return caption
+
+
+def get_media_thumbnail(access_token, media_id, timeout=10):
+    try:
+        resp = requests.get(f"{GRAPH_BASE}/{media_id}",params={"fields": "media_type,media_url,thumbnail_url","access_token": access_token,},timeout=timeout,)
+        data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"thumbnail request failed for media {media_id}: {e}")
+        return {"success": False, "error": str(e)}
+    if "error" in data:
+        logger.warning(f"thumbnail API error for media {media_id}: {data['error']}")
+        return {"success": False, "error": data["error"]}
+    thumb = data.get("thumbnail_url") or data.get("media_url")
+    if not thumb:
+        return {"success": False, "error": "no thumbnail_url or media_url returned"}
+    return {"success": True, "data": thumb}
 
 def wait_for_container(access_token: str, container_id: str, timeout: int = 300, interval: int = 5) -> None:
     elapsed = 0
