@@ -12,6 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 import limit as lmmm
 import Drive.dep as dpp
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import authnew as au
 from moviepy import VideoFileClip
 import Instagram.upload as uploadd
@@ -19,7 +21,7 @@ from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 load_dotenv()
 import logging
-executor = ThreadPoolExecutor(max_workers=4)
+executor = ThreadPoolExecutor(max_workers=2)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("drive_api")
 app = Flask(__name__)
@@ -29,6 +31,7 @@ if not frontend:
     raise RuntimeError("front_end env var is not set")
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
+limiter = Limiter(get_remote_address, app=app, default_limits=["20 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)
 IG_APP_ID = os.getenv("IG_APP_ID")
 IG_APP_SECRET = os.getenv("IG_APP_SECRET")
@@ -169,25 +172,16 @@ def rollback_drive(service, file_ids):
     for file_id in file_ids:
         deleteFile(service, file_id)
 
-def upload_files_to_drive(service, tmp_files, make_public=True):
+def upload_files_to_drive(service, tmp_files):
     results = []
     uploaded_drive_ids = []
-    try:
-        for f in tmp_files:
-            media_upload = MediaFileUpload(f["path"], mimetype=f["mimetype"], resumable=True)
-            created_file = service.files().create( body={"name": f["filename"]} , media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType", ).execute()
-            drive_file_id = created_file["id"]
-            uploaded_drive_ids.append(drive_file_id)
-            if make_public:
-                service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"} ).execute()
-            results.append({ "file_id": drive_file_id, "webViewLink": created_file.get("webViewLink"), "webContentLink": created_file.get("webContentLink"), "status": "uploaded", })
-            logger.info(f"uploaded {f['filename']} to drive as {drive_file_id}")
-        return results, uploaded_drive_ids, None
-    except (HttpError, Exception):
-        logger.exception("drive upload failed")
-        rollback_drive(service, uploaded_drive_ids)
-        return None, [], "drive upload failed"
-
+    for f in tmp_files:
+        created_file = dpp.upload_path_to_drive(service=service,file_path=f["path"],filename=f["filename"],mimetype=f["mimetype"])
+        results.append({ "file_id": created_file.get("id"), "webViewLink": created_file.get("webViewLink"), "webContentLink": created_file.get("webContentLink"), "status": "uploaded", })
+        uploaded_drive_ids.append(created_file.get("id"))
+        logger.info(f"uploaded {f['filename']} to drive as {created_file.get("id")}")
+    return results, uploaded_drive_ids, None
+    
 def get_authenticated_access_token(user_id, token, account_id):
     rows = dbimp.select_rows(TABLE_NAME,select="access_token,token_expire",filters={"account_id": account_id, "id": user_id})
     if not rows:
@@ -279,6 +273,7 @@ def _run_jobs(label, usernames, rows_by_username, tokench, post_fn, tmp_files, t
             rollback_drive(service, drive_ids)
 
 @app.route("/auth/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def instagram_login():
     body = request.get_json(silent=True) or {}
     token = body.get("token")
@@ -340,6 +335,7 @@ def instagram_callback():
     return redirect(homepage, code=302)
 
 @app.route("/posts/", methods=["POST"])
+@limiter.limit("10 per minute")
 def get_instagram_posts():
     body = request.get_json(silent=True) or {}
     account_id = body.get("account_id")
@@ -368,41 +364,8 @@ def get_instagram_posts():
     logger.info(f"fetched {len(posts)} posts for {account_id}")
     return jsonify({"count": len(posts), "post_ids": post_ids, "posts": posts}), 200
 
-@app.route("/stories/", methods=["POST"])
-def get_instagram_stories():
-    body = request.get_json(silent=True) or {}
-    account_id = body.get("account_id")
-    token = body.get("token")
-    tokench = au.process(token=token)
-    access_token, err = get_authenticated_access_token(tokench["user_id"],tokench["token"],account_id)
-    if err: return err
-    fields = "id,media_type,media_url,timestamp"
-    url = "https://graph.instagram.com/me/stories"
-    params = {"fields": fields, "access_token": access_token}
-    stories = []
-    while url:
-        resp = requests.get(url, params=params).json()
-        if "error" in resp:
-            logger.error(f"stories fetch error for {account_id}: {resp['error']}")
-            return jsonify(resp), 400   
-        stories.extend(resp.get("data", []))
-        url = resp.get("paging", {}).get("next")
-        params = None
-    for story in stories:
-        try:
-            thumb_result = uploadd.get_media_thumbnail(access_token=access_token, media_id=story["id"])
-        except Exception as e:
-            logger.warning(f"thumbnail fetch failed for story {story['id']}: {e}")
-            story["thumbnail_url"] = None
-            continue
-        if thumb_result["success"]:
-            story["thumbnail_url"] = thumb_result["data"]
-        else:
-            story["thumbnail_url"] = None
-    logger.info(f"fetched {len(stories)} stories for {account_id}")
-    return jsonify({"count": len(stories), "stories": stories}), 200
- 
 @app.route("/upload/story", methods=["POST"])
+@limiter.limit("3 per minute")
 def story():
     body = request.form
     usernames = _as_list(body.get("account_id"))
@@ -430,6 +393,7 @@ def story():
     return jsonify({"success": "added"}), 200
  
 @app.route("/upload/photo", methods=["POST"])
+@limiter.limit("3 per minute")
 def photo():
     body = request.form
     usernames = _as_list(body.get("account_id"))
@@ -460,6 +424,7 @@ def photo():
     return jsonify({"success": "added"}), 200
  
 @app.route("/upload/reel", methods=["POST"])
+@limiter.limit("3 per minute")
 def video():
     body = request.form
     usernames = _as_list(body.get("account_id"))
@@ -492,6 +457,7 @@ def video():
     return jsonify({"success": "added"}), 200
  
 @app.route("/upload/carousel", methods=["POST"])
+@limiter.limit("3 per minute")
 def carousel():
     body = request.form
     usernames = _as_list(body.get("account_id"))
@@ -524,6 +490,7 @@ def carousel():
     return jsonify({"success": "added"}), 200
 
 @app.route("/insight", methods=["POST"])
+@limiter.limit("10 per minute")
 def insight():
     body = request.get_json(silent=True) or {}
     is_story = body.get("is_story")

@@ -94,19 +94,18 @@ def download_drive_file_to_temp(drive_service, file_id):
 
 def upload_path_to_drive(service, file_path, filename, mimetype):
     make_public = True
-    drive_file_id = None
     try:
         file_metadata = {"name": filename}
         media_upload = MediaFileUpload(file_path, mimetype=mimetype, resumable=True)
         created_file = service.files().create(body=file_metadata, media_body=media_upload, fields="id, name, webViewLink, webContentLink, mimeType",).execute()
-        drive_file_id = created_file["id"]
+        # drive_file_id = created_file["id"]
         if make_public:
-            service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
-        return drive_file_id, None
+            service.permissions().create( fileId=created_file["id"], body={"type": "anyone", "role": "reader"},).execute()
+        return created_file, None
     except HttpError as e:
-        if drive_file_id:
+        if created_file:
             try:
-                service.files().delete(fileId=drive_file_id).execute()
+                service.files().delete(fileId=created_file["id"]).execute()
             except HttpError:
                 pass
         return None, str(e)
