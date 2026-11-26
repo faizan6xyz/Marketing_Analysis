@@ -34,6 +34,7 @@ if not frontend:
 CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "Request-ID"])
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 serializer = URLSafeTimedSerializer(app.secret_key)
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # means 50 MB is the maximum request size it could have 
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 PINTEREST_TABLE_NAME = "pinterest"
 PINTEREST_APP_ID = os.environ.get("PINTEREST_APP_ID")
@@ -213,7 +214,7 @@ def _get_tokench(data):
     return tokench, None
 
 def _authenticate(data, tokench):
-    usernames = data.getlist("username") if hasattr(data, "getlist") else data.get("username")
+    usernames = data.getlist("username")
     if len(usernames) == 1 and isinstance(usernames[0], str) and usernames[0].strip().startswith("["):
         try:
             usernames = json.loads(usernames[0])
@@ -403,31 +404,7 @@ def _finish(results, publish_now, access_tokens, kind, user_id=None):
             except Exception:
                 logger.exception(f"xcccc scheduling failed for {res['account']}")
 
-def upload_pin_job(kind, access_tokens, title, description, board_id, publish_now, timee, user_id, tmp_path, mimetype, account_ids):
-    try:
-        if kind == "pin_photo":
-            results = upload_pin_from_file(access_tokens, title, board_id, publish_now, timee, user_id, tmp_path, mimetype, account_ids, "Pin_photo_later", description)
-        else:
-            results = create_pinterest_video_pin_full(access_tokens, board_id, title, description, tmp_path, publish_now, timee, account_ids, user_id, "Pin_video_later", mimetype)
-        _finish(results, publish_now, access_tokens, kind, user_id)
-    except Exception:
-        logger.exception(f"{kind} upload job crashed for user {user_id} accounts {account_ids}")
-    finally:
-        _remove_quietly(tmp_path)
-
-def _handle_upload(kind, mime_prefix, suffix_default, size_limit, check_video):
-    data = request.form
-    tokench, err = _get_tokench(data)
-    if err:
-        return err
-    publish_now, timee, err = _parse_schedule(data)
-    if err:
-        return err
-    title = data.get("title")
-    description = data.get("description", "")
-    board_id = data.get("board_id")
-    if not board_id:
-        return jsonify({"error": "board_id is required"}), 400
+def upload_pin_job(kind, access_tokens, title, description, board_id, publish_now, timee, user_id, account_ids,mime_prefix, suffix_default, size_limit, check_video):
     files = request.files.getlist("file")
     if not files:
         return jsonify({"error": f"a {mime_prefix} file is required"}), 400
@@ -436,9 +413,6 @@ def _handle_upload(kind, mime_prefix, suffix_default, size_limit, check_video):
     f = files[0]
     if not (f.mimetype or "").startswith(f"{mime_prefix}/"):
         return jsonify({"error": "unsupported file type in upload"}), 400
-    access_tokens ,err , account_ids , user_id = _authenticate(data, tokench)
-    if err:
-        return err
     tmp_path = None
     try:
         suffix = os.path.splitext(f.filename or "")[1] or suffix_default
@@ -458,15 +432,21 @@ def _handle_upload(kind, mime_prefix, suffix_default, size_limit, check_video):
             if video_length > duation:
                 _remove_quietly(tmp_path)
                 return jsonify({"error": "video exceeds allowed duration or size"}), 400
-        if not _limit_ok(tokench, len(account_ids)):
-            _remove_quietly(tmp_path)
-            return jsonify({"error": "limit has been reached"}) ,400
-        executor.submit(upload_pin_job, kind, access_tokens, title, description, board_id, publish_now, timee, user_id, tmp_path, f.mimetype, account_ids)
     except Exception:
         logger.exception(f"failed to queue {kind} upload for user {user_id}")
         _remove_quietly(tmp_path)
-        return jsonify({"status": False, "error": "could not start upload"}), 500
-    return jsonify({"status": True}), 200
+    try:
+        if kind == "pin_photo":
+            results = upload_pin_from_file(access_tokens, title, board_id, publish_now, timee, user_id, tmp_path, f.mimetype, account_ids, "Pin_photo_later", description)
+        else:
+            results = create_pinterest_video_pin_full(access_tokens, board_id, title, description, tmp_path, publish_now, timee, account_ids, user_id, "Pin_video_later", f.mimetype)
+        _finish(results, publish_now, access_tokens, kind, user_id)
+    except Exception:
+        logger.exception(f"{kind} upload job crashed for user {user_id} accounts {account_ids}")
+    finally:
+        _remove_quietly(tmp_path)
+
+
 
 def generate_pkce_pair():
     code_verifier = secrets.token_urlsafe(64)[:128]
@@ -598,12 +578,53 @@ def pins_with_metrics():
 
 @app.route("/post/photo", methods=["POST"])
 def post_to_pinterest_photo():
-    return _handle_upload("pin_photo", "image", ".jpg", image_size, False)
+    data = request.form
+    tokench, err = _get_tokench(data)
+    if err:
+        return err
+    publish_now, timee, err = _parse_schedule(data)
+    if err:
+        return err
+    title = data.get("title")
+    description = data.get("description", "")
+    board_id = data.get("board_id")
+    access_tokens ,err , account_ids , user_id = _authenticate(data, tokench)
+    if err:
+        return err
+    if not board_id:
+        return jsonify({"error": "board_id is required"}), 400
+    if not _limit_ok(tokench, len(account_ids)):
+        return jsonify({"error": "limit has been reached"}) ,400
+    try:
+        executor.submit(upload_pin_job, "pin_photo", access_tokens, title, description, board_id, publish_now, timee, tokench["user_id"],account_ids, "image", ".jpg", image_size, False)
+    except Exception:
+        logger.exception(f"failed to queue the upload for photo pin for {data.getlist("username")} from the user {user_id}")
+    return jsonify({"success": "added"}), 200
 
 @app.route("/post/video", methods=["POST"])
 def post_to_pinterest_video():
-    return _handle_upload("pin_video", "video", ".mp4", max_size, True)
-
+    data = request.form
+    tokench, err = _get_tokench(data)
+    if err:
+        return err
+    publish_now, timee, err = _parse_schedule(data)
+    if err:
+        return err
+    title = data.get("title")
+    description = data.get("description", "")
+    board_id = data.get("board_id")
+    access_tokens ,err , account_ids , user_id = _authenticate(data, tokench)
+    if err:
+        return err
+    if not board_id:
+        return jsonify({"error": "board_id is required"}), 400
+    if not _limit_ok(tokench, len(account_ids)):
+        return jsonify({"error": "limit has been reached"}) ,400
+    try :
+        executor.submit(upload_pin_job, "pin_video", access_tokens, title, description, board_id, publish_now, timee, tokench["user_id"], account_ids,"video", ".mp4", max_size, True)
+    except Exception:
+        logger.exception(f"failed to queue the upload for video pin for {data.getlist("username")} from the user {user_id}")
+    return jsonify({"success": "added"}), 200
 
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_ENV") == "development", port=5000)

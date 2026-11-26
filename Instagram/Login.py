@@ -33,6 +33,7 @@ CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST",
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 limiter = Limiter(get_remote_address, app=app, default_limits=["20 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)
+app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # means 300 MB is the maximum request size it could have 
 IG_APP_ID = os.getenv("IG_APP_ID")
 IG_APP_SECRET = os.getenv("IG_APP_SECRET")
 IG_REDIRECT_URI = os.getenv("IG_REDIRECT_URI")
@@ -40,7 +41,7 @@ INSTAGRAM_AUTH_URL = "https://www.instagram.com/oauth/authorize"
 STATE_MAX_AGE = 600
 TABLE_NAME = "instagram"
 SCOPE = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
-MAX_SIZE = 300 * 1024 * 1024
+MAX_SIZE = 290 * 1024 * 1024
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv", ".webm")
 IMAGE_EXTENSIONS = (".jpg", ".png","jpeg")
 MAX_REEL_SECONDS = 15 * 60
@@ -201,11 +202,6 @@ def get_authenticated_access_token(user_id, token, account_id):
         logger.info(f"refreshing instagram token for account {account_id}")
         access_token = uploadd.refresh_token(token, user_id, access_token)
     return access_token, None
-
-def _as_list(value):
-    if isinstance(value, list):
-        return value
-    return [value] if value else []
  
 def _is_true(value):
     return str(value).strip().lower() == "true"
@@ -368,7 +364,7 @@ def get_instagram_posts():
 @limiter.limit("3 per minute")
 def story():
     body = request.form
-    usernames = _as_list(body.get("account_id"))
+    usernames = body.getlist("account_id")
     token = body.get("token")
     if not usernames:
         return jsonify({"error": "at least one username is required"}), 400
@@ -389,14 +385,17 @@ def story():
     rows_by_username = _load_rows(tokench)
     def post_fn(access_token, ig_user_id, media_urls):
         uploadd.post_story(access_token=access_token,ig_user_id=ig_user_id,media_size=size[0],media_url=media_urls[0],publish=publish_now,is_video=is_video,media_duration=duration,timmmm=post_time,)
-    executor.submit(_run_jobs, "story", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    try:
+        executor.submit(_run_jobs, "story", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    except Exception:
+        logger.exception(f"failed to queue the upload for photo pin for {usernames} from the user {tokench['user_id']}")
     return jsonify({"success": "added"}), 200
  
 @app.route("/upload/photo", methods=["POST"])
 @limiter.limit("3 per minute")
 def photo():
     body = request.form
-    usernames = _as_list(body.get("account_id"))
+    usernames = body.getlist("account_id")
     token = body.get("token")
     caption = body.get("caption", "")
     comment = body.get("comment") or ""
@@ -420,14 +419,17 @@ def photo():
         id_post = uploadd.post_photo(access_token=access_token,ig_user_id=ig_user_id,image_url=media_urls[0],caption=caption,media_size=size[0],publish=publish_now,timmmm=post_time,message=message,comment=comment,)
         if publish_now and comment and message:
             sccc.inert_workflow(id_post, message, comment)
-    executor.submit(_run_jobs, "photo", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    try:
+        executor.submit(_run_jobs, "photo", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    except Exception:
+        logger.exception(f"failed to queue the upload for photo pin for {usernames} from the user {tokench['user_id']}")
     return jsonify({"success": "added"}), 200
  
 @app.route("/upload/reel", methods=["POST"])
 @limiter.limit("3 per minute")
 def video():
     body = request.form
-    usernames = _as_list(body.get("account_id"))
+    usernames = body.getlist("account_id")
     token = body.get("token")
     caption = body.get("caption", "")
     comment = body.get("comment") or ""
@@ -453,14 +455,17 @@ def video():
         id_post = uploadd.post_video(access_token=access_token,ig_user_id=ig_user_id,video_url=media_urls[0],media_size=size[0],caption=caption,publish=publish_now,as_reel=True,media_duration=duration,timmmm=post_time,message=message,comment=comment,)
         if publish_now and comment and message:
             sccc.inert_workflow(id_post, message, comment)
-    executor.submit(_run_jobs, "reel", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    try:
+        executor.submit(_run_jobs, "reel", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    except Exception:
+        logger.exception(f"failed to queue the upload for photo pin for {usernames} from the user {tokench['user_id']}")
     return jsonify({"success": "added"}), 200
  
 @app.route("/upload/carousel", methods=["POST"])
 @limiter.limit("3 per minute")
 def carousel():
     body = request.form
-    usernames = _as_list(body.get("account_id"))
+    usernames = body.getlist("account_id")
     token = body.get("token")
     caption = body.get("caption", "")
     comment = body.get("comment") or ""
@@ -486,7 +491,10 @@ def carousel():
         id_post = uploadd.post_carousel(access_token=access_token,ig_user_id=ig_user_id,is_video=is_video,media_size=size,media_duration=duration,media_urls=media_urls,publish=publish_now,caption=caption,timmmm=post_time,message=message,comment=comment,)
         if publish_now and comment and message:
             sccc.inert_workflow(id_post, message, comment)
-    executor.submit(_run_jobs, "carousel", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    try:
+        executor.submit(_run_jobs, "carousel", usernames, rows_by_username, tokench, post_fn, tmp_files, token)
+    except Exception:
+        logger.exception(f"failed to queue the upload for photo pin for {usernames} from the user {tokench['user_id']}")
     return jsonify({"success": "added"}), 200
 
 @app.route("/insight", methods=["POST"])

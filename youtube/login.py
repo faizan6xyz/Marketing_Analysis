@@ -31,7 +31,7 @@ CLIENT_SECRETS_FILE = "client_secret.json"
 BASE_URL = os.environ.get("BASE_URL")
 STATE_MAX_AGE = 600  # seconds
 MAX_VIDEO_SIZE = 30 * 1024 * 1024  # 30 MB
-RESUMABLE_UPLOAD_MAX_RETRIES = 5
+RESUMABLE_UPLOAD_MAX_RETRIES = 3
 RETRIABLE_STATUS_CODES = (500, 502, 503, 504)
 MAX_UPLOAD_WORKERS = 4
 YOUTUBE_API_KEY = os.getenv("Youtube_api_key")
@@ -40,8 +40,8 @@ os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("drive_api")
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = MAX_VIDEO_SIZE + 1024 * 1024  # reject oversized bodies early
-executor = ThreadPoolExecutor(max_workers=4)
+app.config["MAX_CONTENT_LENGTH"] = 31 * 1024 * 1024  # means 31 MB is the maximum request size it could have 
+executor = ThreadPoolExecutor(max_workers=2)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 Clientid = os.environ.get("client_id")
 Clientsec = os.environ.get("client_secrect")
@@ -445,22 +445,9 @@ def upload():
     all_files = [f for _, f in request.files.items(multi=True)]
     if len(all_files) != 1:
         return jsonify({"error": "exactly one file is allowed per upload (form-data field: file)"}), 400
-    uploaded_file = request.files.get("file")
-    if not uploaded_file or uploaded_file.filename == "":
-        return jsonify({"error": "file required (form-data field: file)"}), 400
-    if uploaded_file.mimetype not in ALLOWED_VIDEO_MIMETYPES:
-        return jsonify({"error": f"unsupported file type: {uploaded_file.mimetype}"}), 400
-    uploaded_file.stream.seek(0, os.SEEK_END)
-    size = uploaded_file.stream.tell()
-    uploaded_file.stream.seek(0)
-    if size > MAX_VIDEO_SIZE:
-        return jsonify({"error": f"file exceeds max size of {MAX_VIDEO_SIZE} bytes"}), 400
     accounts = data.getlist("account_id")
-    if len(accounts) == 1 and accounts[0].strip().startswith("["):
-        try:
-            accounts = json.loads(accounts[0])
-        except ValueError:
-            return jsonify({"error": "accounts must be a list"}), 400
+    if not accounts :
+            return jsonify({"error": "accounts must be a there"}), 400
     if not isinstance(accounts, list) or not all(isinstance(a, str) for a in accounts):
         return jsonify({"error": "accounts must be a list"}), 400
     accounts = list(dict.fromkeys(a.strip() for a in accounts if a.strip()))
@@ -481,26 +468,37 @@ def upload():
     caption = data.get("caption") or ""
     description = data.get("description") or ""
     tags = [t.strip() for t in (data.get("tags") or "").split(",") if t.strip()]
-    upload_tmp_path = None
+    try:
+        executor.submit(upload_short_job,request.files.get("file") , caption, description, tags, accounts, token, user_id, publish_now, timee)
+    except Exception:
+        logger.exception(f"failed to queue the upload for shorts for {accounts} from the user {user_id}")
+    return jsonify({"status":True}), 200
+    
+def upload_short_job(request , caption, description, tags, accounts, token, user_id, publish_now, timee):
+    uploaded_file = request.files.get("file")
+    if not uploaded_file or uploaded_file.filename == "":
+        return jsonify({"error": "file required (form-data field: file)"}), 400
+    if uploaded_file.mimetype not in ALLOWED_VIDEO_MIMETYPES:
+        return jsonify({"error": f"unsupported file type: {uploaded_file.mimetype}"}), 400
+    uploaded_file.stream.seek(0, os.SEEK_END)
+    size = uploaded_file.stream.tell()
+    uploaded_file.stream.seek(0)
+    if size > MAX_VIDEO_SIZE:
+        return jsonify({"error": f"file exceeds max size of {MAX_VIDEO_SIZE} bytes"}), 400
     try:
         suffix = os.path.splitext(uploaded_file.filename)[1] or ".mp4"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             uploaded_file.save(tmp.name)
             upload_tmp_path = tmp.name
-        executor.submit(upload_short_job, upload_tmp_path, uploaded_file.mimetype, caption, description, tags, accounts, token, user_id, publish_now, timee)
-    except Exception:
-        logger.exception("failed to queue upload")
+    except :
+        logger.error(f"failed to save the tempfile for the user {user_id}")
         if upload_tmp_path and os.path.exists(upload_tmp_path):
             os.remove(upload_tmp_path)
-        return jsonify({"status": False, "error": "could not start upload"}), 500
-    return jsonify({"status":True}), 200
-    
-def upload_short_job(upload_tmp_path, mimetype, caption, description, tags, accounts, token, user_id, publish_now, timee):
     try:
         if get_video_duration(upload_tmp_path) > MAX_SHORT_SECONDS:
             logger.info(f"video exceeds max short length of {MAX_SHORT_SECONDS} seconds for user {user_id}")
             return
-        x = _upload_one_account(accounts, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee)
+        x = _upload_one_account(accounts, token, user_id, upload_tmp_path, uploaded_file.mimetype, caption, description, tags, publish_now, timee)
         if not  x :
             logger.info(f"fail to post the user shorts {accounts}")
     except Exception:
