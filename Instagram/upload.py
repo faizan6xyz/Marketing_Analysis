@@ -221,7 +221,7 @@ def post_video(timmmm,access_token: str, ig_user_id: str, video_url: str, media_
         return "Video added for scheduling"
     params = { "video_url": video_url, "caption": caption, "media_type": "REELS" if as_reel else "VIDEO", "access_token": access_token, }
     if cover_url is not None:
-        params["cover_url"] = cover_url  # custom thumbnail image; takes precedence over thumb_offset
+        params["cover_url"] = cover_url 
     container = _post(f"{ig_user_id}/media", params)
     creation_id = container["id"]
     wait_for_container(access_token, creation_id)

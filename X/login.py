@@ -228,7 +228,7 @@ def post_later(tpyee, account_id, text, text2 ,file_ids=None):
             return False
         if drive_ids and all(r[0] for r in results.values()):
             for drive_file_id in drive_ids:
-                deleteFile(service, drive_file_id)
+                dpp.deleteFile(service, drive_file_id)
         return results
     except Exception:
         logger.exception(f"post_later failed for {tpyee}")
@@ -237,18 +237,6 @@ def post_later(tpyee, account_id, text, text2 ,file_ids=None):
         for p in tmp_paths:
             if os.path.exists(p):
                 os.remove(p)
-
-def deleteFile(service ,file_id):
-    if not service :
-        return False
-    if not file_id:
-        return False
-    try: 
-        service.files().delete(fileId=file_id).execute()
-    except Exception:
-        logger.warning(f"failed to delete drive file {file_id}")
-        return False
-    return True
 
 def fetch_tweet_metrics(tweet_ids: list[str], access_token: str) -> list[dict]:
     resp = session.get( "https://api.twitter.com/2/tweets",  headers={"Authorization": f"Bearer {access_token}"}, params={ "ids": ",".join(tweet_ids), "tweet.fields": "created_at,public_metrics,non_public_metrics,organic_metrics",   }, )

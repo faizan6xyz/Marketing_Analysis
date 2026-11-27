@@ -110,6 +110,18 @@ def upload_path_to_drive(service, file_path, filename, mimetype):
                 pass
         return None, str(e)
 
+def deleteFile(service ,file_id):
+    if not service :
+        return False
+    if not file_id:
+        return False
+    try: 
+        service.files().delete(fileId=file_id).execute()
+    except Exception:
+        logger.warning(f"failed to delete drive file {file_id}")
+        return False
+    return True
+
 def build_flow():
     return Flow.from_client_config({"web": { "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [f"{BASE_URL}/drive/auth/callback",], }}, scopes=SCOPES,redirect_uri=f"{BASE_URL}/drive/auth/callback",autogenerate_code_verifier=True)
 

@@ -655,7 +655,7 @@ def post_carousel(access_tokens, threads_user_ids, text, publish_now, timee, com
             suffix = os.path.splitext(uploaded_file.filename or "")[1].lower()
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    tmp_paths.append(tmp.name)      # track immediately so cleanup always works
+                    tmp_paths.append(tmp.name)     
                     uploaded_file.save(tmp.name)
                     path = tmp.name
             except Exception:

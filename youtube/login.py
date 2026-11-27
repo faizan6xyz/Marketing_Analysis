@@ -78,20 +78,21 @@ def get_file_and_upload_to_drive(service):
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             uploaded_file.save(tmp.name)
             tmp_path = tmp.name
-        file_metadata = {"name": uploaded_file.filename}
-        media_upload = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
-        created_file = service.files().create(body=file_metadata, media_body=media_upload,fields="id, name, webViewLink, webContentLink, mimeType",).execute()
-        drive_file_id = created_file["id"]
-        if make_public:
-            service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
-        return drive_file_id, None, None
-    except HttpError as e:
-        if drive_file_id:
-            try:
-                service.files().delete(fileId=drive_file_id).execute()
-            except HttpError:
-                pass
-        return None, jsonify({"error": str(e)}), 500
+            created_file , err = dpp.upload_path_to_drive(service, tmp_path, uploaded_file.filename,uploaded_file.mimetype)
+    #     file_metadata = {"name": uploaded_file.filename}
+    #     media_upload = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
+    #     created_file = service.files().create(body=file_metadata, media_body=media_upload,fields="id, name, webViewLink, webContentLink, mimeType",).execute()
+    #     drive_file_id = created_file["id"]
+    #     if make_public:
+    #         service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
+    #     return drive_file_id, None, None
+    # except HttpError as e:
+    #     if drive_file_id:
+    #         try:
+    #             service.files().delete(fileId=drive_file_id).execute()
+    #         except HttpError:
+    #             pass
+    #     return None, jsonify({"error": str(e)}), 500
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)

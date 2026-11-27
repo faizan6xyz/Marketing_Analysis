@@ -363,21 +363,9 @@ def post_late(account_id , access_token , title, description, board_id,  typee ,
         logger.exception("post_late crashed")
         return False
     finally:
-        deleteFile(service ,drive_file_id)
+        dpp.deleteFile(service ,drive_file_id)
         _remove_quietly(tmp_path)
     return results
-
-def deleteFile(service ,file_id):
-    if not service :
-        return False
-    if not file_id:
-        return False
-    try: 
-        service.files().delete(fileId=file_id).execute()
-    except Exception:
-        logger.warning(f"failed to delete drive file {file_id}")
-        return False
-    return True
 
 def _schedule_pin(access_token, title, description, board_id, timee, user_id, file_path, mimetype, account_id, typeee):
     service = dpp.get_drive_service(user_id)

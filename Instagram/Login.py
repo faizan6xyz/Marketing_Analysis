@@ -13,6 +13,7 @@ import Drive.dep as dpp
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import authnew as au
+import magic
 from moviepy import VideoFileClip
 import Instagram.upload as uploadd
 from dotenv import load_dotenv
@@ -169,7 +170,12 @@ def upload_files_to_drive(service, tmp_files):
     results = []
     uploaded_drive_ids = []
     for f in tmp_files:
-        created_file = dpp.upload_path_to_drive(service=service,file_path=f["path"],filename=f["filename"],mimetype=f["mimetype"])
+        created_file , err = dpp.upload_path_to_drive(service=service,file_path=f["path"],filename=f["filename"],mimetype=f["mimetype"])
+        if err :
+            logger.error(f"unable to add the file to drive {tmp_files}")
+            for uploaded_drive_id in uploaded_drive_ids :
+                dpp.deleteFile(service=service,file_id=uploaded_drive_id)
+            return None , None , err
         results.append({ "file_id": created_file.get("id"), "webViewLink": created_file.get("webViewLink"), "webContentLink": created_file.get("webContentLink"), "status": "uploaded", })
         uploaded_drive_ids.append(created_file.get("id"))
         logger.info(f"uploaded {f['filename']} to drive as {created_file.get("id")}")
