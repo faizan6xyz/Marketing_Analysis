@@ -269,8 +269,10 @@ def _create_image_pin(access, board_id, title, description, photo_bytes, content
         resp.raise_for_status()
         return {"status": "posted", "pin_id": resp.json().get("id")}
     except requests.HTTPError as e:
-        return _failed(resp, e)
+        logger.error(f"failed upload for the pin {resp} , {e}")
+        return _failed(None, e)
     except requests.RequestException as e:
+        logger.error(f"failed upload for the pin {resp} , {e}")
         return _failed(None, e)
 
 def _create_video_pin(access, board_id, title, description, file_path, timeout=VIDEO_PROCESS_TIMEOUT):
@@ -332,14 +334,19 @@ def post_late(account_id , access_token , title, description, board_id,  typee ,
         logger.error(f"post_late: unable to download drive file {drive_file_id}")
         return False
     results = []
+    failed_one = 0
     try:
         photo_bytes = None
         if typee == "photo":
             with open(tmp_path, "rb") as fh:
                 photo_bytes = fh.read()
         for acc_id in account_ids:
+            if failed_one > MAX_FAILURE :
+                logger.error(f"failed post later due to max failure limit from user {user_id}, passed ones are : {results}")
+                return False
             access = get_fresh_token_for_account(acc_id)
             if not access:
+                failed_one +=1
                 logger.error(f"post_late: no token found for account {acc_id}")
                 results.append({"account": acc_id, "status": "failed", "error": "no token found"})
                 continue
@@ -347,8 +354,9 @@ def post_late(account_id , access_token , title, description, board_id,  typee ,
                 res = _create_image_pin(access, board_id, title, description, photo_bytes, mimetype)
             else:
                 res = _create_video_pin(access, board_id, title, description, tmp_path)
-            res["account"] = acc_id
+            res["account"] = acc_id 
             if res["status"] != "posted":
+                failed_one +=1
                 logger.error(f"post_late: {typee} pin failed for account {acc_id}: {res.get('error')}")
             results.append(res)
     except Exception:
@@ -384,9 +392,16 @@ def create_pinterest_video_pin_full(access_token, board_id, title, description, 
     if not publish_now :
         return _schedule_pin(access_token, title, description, board_id, timee, user_id, file_path, mimetype, account_id, typeee)
     results = []
+    failed_one = 0
     for access, acc_id in zip(access_token, account_id):
+        if failed_one > MAX_FAILURE :
+            logger.error(f"failed post later due to max failure limit from user {user_id} , passed ones are : {results}")
+            return False
         res = _create_video_pin(access, board_id, title, description, file_path, timeout)
-        res["account"] = acc_id
+        if res["status"] != "posted":
+            failed_one +=1
+            logger.error(f"video pin failed for account {acc_id}: {res.get('error')}")
+        res["account"] = acc_id  
         results.append(res)
     return results
 
@@ -396,9 +411,16 @@ def upload_pin_from_file(access_token, title, board_id, publish_now, timee, user
     with open(upload_tmp_path, "rb") as fh:
         photo_bytes = fh.read()
     results = []
+    failed_one = 0
     for access, acc_id in zip(access_token, account_id):
+        if failed_one > MAX_FAILURE :
+            logger.error(f"failed post later due to max failure limit from user {user_id} , passed ones are : {results}")
+            return False
         res = _create_image_pin(access, board_id, title, description, photo_bytes, mimetype)
-        res["account"] = acc_id
+        if res["status"] != "posted":
+            failed_one +=1
+            logger.error(f"video pin failed for account {acc_id}: {res.get('error')}")
+        res["account"] = acc_id 
         results.append(res)
     return results
 
@@ -460,8 +482,6 @@ def upload_pin_job(kind, access_tokens, title, description, board_id, publish_no
         logger.exception(f"{kind} upload job crashed for user {user_id} accounts {account_ids}")
     finally:
         _remove_quietly(tmp_path)
-
-
 
 def generate_pkce_pair():
     code_verifier = secrets.token_urlsafe(64)[:128]

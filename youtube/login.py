@@ -54,6 +54,7 @@ TABLE_NAME = "youtube"
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)
 MAX_SHORT_SECONDS = 180
+MAX_FAILURE = 3
 ALLOWED_VIDEO_MIMETYPES = {"video/mp4", "video/quicktime", "video/webm"}
 session = requests.Session()    
 
@@ -311,14 +312,7 @@ def _publish_to_channel(token, user_id, channel_id, upload_tmp_path, mimetype, c
         logger.warning(f"shorts_query scheduling failed for channel {channel_id}: {e}")
     return video_id
 
-def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
-    account_ids = []
-    for account_title in account_channel_title :
-        rows = dbimp.select_rows( TABLE_NAME, select="account_id", filters={"id": user_id, "channel_title": account_title},)
-        if not rows:
-            return False
-        channel_id = rows[0]["account_id"]
-        account_ids.append(channel_id)
+def _upload_one_account(account_ids, token, user_id, upload_tmp_path, mimetype, caption, description, tags, publish_now, timee):
     if not publish_now:
         service = dpp.get_drive_service(user_id)
         created_file, err = dpp.upload_path_to_drive( service, upload_tmp_path, os.path.basename(upload_tmp_path), mimetype, )
@@ -328,10 +322,17 @@ def _upload_one_account(account_channel_title, token, user_id, upload_tmp_path, 
         channel_id  = json.dumps(account_ids)
         sccc.insert_post( user_id=channel_id, scheduled_time=timee, access_token="", typeee="Shorts_later", text1=caption, text2=description, text3=tags, media_id=created_file.get("id"), )
         return {"account": channel_id, "status": "scheduled", "scheduled_time": timee.isoformat()}
-    with ThreadPoolExecutor(max_workers=min(MAX_UPLOAD_WORKERS, len(account_ids))) as pool:
-        results = list(pool.map(lambda cid: _publish_to_channel(token, user_id, cid, upload_tmp_path, mimetype, caption, description, tags), account_ids))
-    video_ids = [v for v in results if v]
-    return video_ids or False
+    failed_one = 0
+    video_ids = []
+    for account_id in account_ids :
+        if failed_one > MAX_FAILURE :
+            logger.error(f"failed to upload the shorts for user {user_id} , done with {results}")
+            return False
+        results = _publish_to_channel(token, user_id, account_id, upload_tmp_path, mimetype, caption, description, tags)
+        if not results :
+            logger.error(f"failed to upload the shorts for account_id {account_id}")
+        video_ids.append(results)
+    return video_ids 
 
 def upload_video_to_youtube_channel(creds, tmp_path, mimetype, title, description="", tags=None, category_id="22", privacy_status="public"):
     youtube_service = build("youtube", "v3", credentials=creds, cache_discovery=False)
