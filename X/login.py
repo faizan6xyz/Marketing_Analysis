@@ -44,14 +44,16 @@ TWEET_URL = "https://api.twitter.com/2/tweets"
 TABLE_NAME = "x"
 SCOPE = "tweet.read users.read offline.access"
 AUTH_URL = "https://twitter.com/i/oauth2/authorize"
+MAX_FAILURE = 3
 TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
 image_size = 7 * 1024 * 1024
 video_size = 60 * 1024 * 1024
 MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
 duation = 139
+session = requests.Session()    
 
 def upload_image(access_token, file_bytes):
-    resp = requests.post( MEDIA_UPLOAD_URL, headers={"Authorization": f"Bearer {access_token}"}, files={"media": file_bytes} ).json()
+    resp = session.post( MEDIA_UPLOAD_URL, headers={"Authorization": f"Bearer {access_token}"}, files={"media": file_bytes} ).json()
     media_id = resp.get("media_id_string")
     if not media_id:
         logger.error(f"image upload failed: {resp}")
@@ -64,7 +66,7 @@ def refresh_x_token11( account_id):
         return None
     refresh_token = rows[0]["refresh_token"]
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
-    resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
+    resp = session.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
     new_access = resp.get("access_token")
     new_refresh = resp.get("refresh_token", refresh_token)
     seconds = resp.get("expires_in")
@@ -86,7 +88,7 @@ def get_tweet_metrics(x_user_id, tweet_id, access_token):
     headers = {"Authorization": f"Bearer {access_token}"}
     tweet_url = f"https://api.x.com/2/tweets/{tweet_id}"
     tweet_params = {"tweet.fields": "created_at,public_metrics"}
-    resp = requests.get(tweet_url, headers=headers, params=tweet_params, timeout=10)
+    resp = session.get(tweet_url, headers=headers, params=tweet_params, timeout=10)
     resp.raise_for_status()
     t = resp.json()["data"]
     pm = t.get("public_metrics", {})
@@ -95,7 +97,7 @@ def get_tweet_metrics(x_user_id, tweet_id, access_token):
 def upload_video(access_token, file_bytes, mime_type="video/mp4"):
     total_bytes = len(file_bytes)
     headers = {"Authorization": f"Bearer {access_token}"}
-    init_resp = requests.post(MEDIA_UPLOAD_URL, headers=headers, data={ "command": "INIT", "media_type": mime_type, "total_bytes": total_bytes, "media_category": "tweet_video" }).json()
+    init_resp = session.post(MEDIA_UPLOAD_URL, headers=headers, data={ "command": "INIT", "media_type": mime_type, "total_bytes": total_bytes, "media_category": "tweet_video" }).json()
     media_id = init_resp.get("media_id_string")
     if not media_id:
         logger.error(f"video INIT failed: {init_resp}")
@@ -103,16 +105,16 @@ def upload_video(access_token, file_bytes, mime_type="video/mp4"):
     chunk_size = 4 * 1024 * 1024
     for i, offset in enumerate(range(0, total_bytes, chunk_size)):
         chunk = file_bytes[offset:offset + chunk_size]
-        app_resp = requests.post(MEDIA_UPLOAD_URL, headers=headers, data={ "command": "APPEND", "media_id": media_id, "segment_index": i }, files={"media": chunk})
+        app_resp = session.post(MEDIA_UPLOAD_URL, headers=headers, data={ "command": "APPEND", "media_id": media_id, "segment_index": i }, files={"media": chunk})
         if app_resp.status_code >= 400:
             logger.error(f"video APPEND failed for the chunk {i} ({app_resp.status_code}): {app_resp.text}")
             return None
-    fin_resp = requests.post(MEDIA_UPLOAD_URL, headers=headers, data={ "command": "FINALIZE", "media_id": media_id }).json()
+    fin_resp = session.post(MEDIA_UPLOAD_URL, headers=headers, data={ "command": "FINALIZE", "media_id": media_id }).json()
     processing = fin_resp.get("processing_info")
     while processing and processing.get("state") in ("pending", "in_progress"):
         wait = processing.get("check_after_secs", 1)
         import time; time.sleep(wait)
-        status_resp = requests.get(MEDIA_UPLOAD_URL, headers=headers, params={ "command": "STATUS", "media_id": media_id }).json()
+        status_resp = session.get(MEDIA_UPLOAD_URL, headers=headers, params={ "command": "STATUS", "media_id": media_id }).json()
         processing = status_resp.get("processing_info")
         if processing and processing.get("state") == "failed":
             logger.error(f"video processing failed: {processing}")
@@ -124,7 +126,7 @@ def get_video_duration(file_path):
         return video.duration
 
 def create_tweet_with_media(access_token, text, media_ids):
-    resp = requests.post( "https://api.twitter.com/2/tweets", headers={ "Authorization": f"Bearer {access_token}", "Content-Type": "application/json", }, json={ "text": text or "", "media": {"media_ids": media_ids}, }, )
+    resp = session.post( "https://api.twitter.com/2/tweets", headers={ "Authorization": f"Bearer {access_token}", "Content-Type": "application/json", }, json={ "text": text or "", "media": {"media_ids": media_ids}, }, )
     if resp.status_code not in (200, 201):
         return None, resp.text
     return resp.json().get("data", {}).get("id"), None
@@ -141,7 +143,7 @@ def parse_datetime(value: str, require_tz: bool = True):
     return dt
 
 def get_last_n_tweet_ids(user_id: str, access_token: str, n: int = 20) -> list[str]:
-    resp = requests.get( f"https://api.twitter.com/2/users/{user_id}/tweets", headers={"Authorization": f"Bearer {access_token}"}, params={"max_results": max(5, min(n, 100)),  
+    resp = session.get( f"https://api.twitter.com/2/users/{user_id}/tweets", headers={"Authorization": f"Bearer {access_token}"}, params={"max_results": max(5, min(n, 100)),  
             "tweet.fields": "created_at", }, )
     resp.raise_for_status()
     data = resp.json()
@@ -151,7 +153,7 @@ def _post_tweet(access_token, text, media_ids=None):
     payload = {"text": text}
     if media_ids:
         payload["media"] = {"media_ids": media_ids}
-    resp = requests.post( TWEET_URL, headers={ "Authorization": f"Bearer {access_token}", "Content-Type": "application/json",}, json=payload,    )
+    resp = session.post( TWEET_URL, headers={ "Authorization": f"Bearer {access_token}", "Content-Type": "application/json",}, json=payload,    )
     data = resp.json()
     if resp.status_code >= 400:
         logger.error(f"post tweet failed ({resp.status_code}): {data}")
@@ -249,7 +251,7 @@ def deleteFile(service ,file_id):
     return True
 
 def fetch_tweet_metrics(tweet_ids: list[str], access_token: str) -> list[dict]:
-    resp = requests.get( "https://api.twitter.com/2/tweets",  headers={"Authorization": f"Bearer {access_token}"}, params={ "ids": ",".join(tweet_ids), "tweet.fields": "created_at,public_metrics,non_public_metrics,organic_metrics",   }, )
+    resp = session.get( "https://api.twitter.com/2/tweets",  headers={"Authorization": f"Bearer {access_token}"}, params={ "ids": ",".join(tweet_ids), "tweet.fields": "created_at,public_metrics,non_public_metrics,organic_metrics",   }, )
     resp.raise_for_status()
     data = resp.json()
     results = []
@@ -315,7 +317,7 @@ def _authenticate(data,tokench):
 
 def refresh_x_token(token,user_id, account_id, refresh_token):
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
-    resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
+    resp = session.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": X_CLIENT_ID}, ).json()
     new_access = resp.get("access_token")
     new_refresh = resp.get("refresh_token", refresh_token)
     seconds = resp.get("expires_in")
@@ -367,7 +369,7 @@ def instagram_callback():
     expiry_ts = datetime.now(timezone.utc) + timedelta(hours=1)
     token = au.jsonspoof(user_id=user_id, timestamp=expiry_ts)
     basic_auth = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
-    token_resp = requests.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={ "grant_type": "authorization_code", "code": code, "redirect_uri": X_REDIRECT_URI, "code_verifier": code_verifier, "client_id": X_CLIENT_ID,  }, ).json()
+    token_resp = session.post( TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={ "grant_type": "authorization_code", "code": code, "redirect_uri": X_REDIRECT_URI, "code_verifier": code_verifier, "client_id": X_CLIENT_ID,  }, ).json()
     access_token = token_resp.get("access_token")
     refresh_token = token_resp.get("refresh_token")
     seconds = token_resp.get("expires_in")
@@ -375,7 +377,7 @@ def instagram_callback():
         logger.error(f"x token exchange failed for the user {user_id}: {token_resp}")
         return jsonify({"error": "token exchange failed"}), 400
     expire_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-    about = requests.get( "https://api.twitter.com/2/users/me", headers={"Authorization": f"Bearer {access_token}"}, params={"user.fields": "username"}, ).json()
+    about = session.get( "https://api.twitter.com/2/users/me", headers={"Authorization": f"Bearer {access_token}"}, params={"user.fields": "username"}, ).json()
     data = about.get("data", {})
     username = data.get("username")
     account_id = data.get("id")
@@ -445,7 +447,10 @@ def post_to_x_text():
     return jsonify({"success": "added"}), 200
 
 def tweet_job(text,account_id,access_token,analytic_bool):
+    Failed_one = 0
     for acccount ,acesss in zip(account_id,access_token) :
+        if Failed_one > MAX_FAILURE :
+            raise BrokenPipeError("failure limit")
         try :
             tweet_id = _post_tweet(acesss, text)
             if not tweet_id:
@@ -517,7 +522,10 @@ def tweet_photo(tokench , publish_now , access_token,account_id , timee , text, 
             drvie_ids = json.dumps(drvie_id)
             sccc.insert_post( user_id=list_account_ids, scheduled_time=timee, access_token="", typeee="photo_tweet_later", text1=text, text2="true" if analytic_bool else "", text3="", media_id=drvie_ids, )
             return
+        Failed_one = 0
         for acccount, acesss in zip(account_id, access_token):
+            if Failed_one > MAX_FAILURE :
+                raise BrokenPipeError("failure limit")
             media_ids = []
             for tmp_path, mimetype in files:  # media ids belong to the account that uploaded them
                 with open(tmp_path, "rb") as fh:
@@ -599,7 +607,10 @@ def upload_video_job(publish_now,tokench,text,analytic_bool,timee,access_token,a
             return
         with open(tmp_path, "rb") as file:
             bytesss = file.read()
+        Failed_one = 0
         for acccount, acesss in zip(account_id, access_token):
+            if Failed_one > MAX_FAILURE :
+                raise BrokenPipeError("failure limit")
             media_id = upload_video(acesss, bytesss)  # media ids belong to the account that uploaded them
             if not media_id:
                 logger.error(f"failed to upload video post in {acccount}")

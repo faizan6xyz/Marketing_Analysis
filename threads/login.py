@@ -123,7 +123,6 @@ def parse_aware_timestamp(timestamp: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 def add_post_jobs(threads_user_id, access_token, thread_id, typee, comment, message):
-    # jobs that must exist after every successful publish: 7 days of metrics fetch + the auto comment workflow
     xcccc(threads_user_id, access_token, thread_id, typee)
     if comment and message:
         try:
@@ -629,6 +628,7 @@ def post_threads_carousel():
         return terr
     executor.submit(post_carousel, access_tokens, threads_user_ids, items, text, publish_now, timee, data.get("comment"), data.get("message"), tokench)  # carousel can take minutes, so not in the request
     return jsonify({"success": True, "Added": len(threads_user_ids)}), 200
+
 
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1", port=5000)

@@ -56,10 +56,12 @@ app.config["MAX_CONTENT_LENGTH"] = max_size + 1024 * 1024  # reject oversized bo
 METRIC_TYPES = "IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK,ENGAGEMENT,USER_FOLLOW"
 HTTP_TIMEOUT = 10
 UPLOAD_TIMEOUT = 120
+MAX_FAILURE = 3
 VIDEO_PROCESS_TIMEOUT = 180
 VIDEO_POLL_INTERVAL = 2
 REFRESH_MARGIN = timedelta(minutes=5)
 STORY_REPEAT_DAYS = 7
+session = requests.Session()    
 
 def _utcnow():
     return datetime.now(timezone.utc)
@@ -91,7 +93,7 @@ def parse_datetime(value: str, require_tz: bool = True):
         return None
     return dt
 
-def xcccc(user_id,access_token,media_id,typee):
+def pin_query(user_id,access_token,media_id,typee):
     base = _utcnow()
     for i in range(STORY_REPEAT_DAYS):
         sccc.insert__story1(user_id, (base + timedelta(days=i)).isoformat(), access_token,media_id,typee)
@@ -106,7 +108,7 @@ def _refresh_core(refresh_token, expire, access, filters):
     headers = {"Authorization": f"Basic {encoded_credentials}", "Content-Type": "application/x-www-form-urlencoded", }
     payload = { "grant_type": "refresh_token", "refresh_token": refresh_token, }
     try:
-        resp = requests.post(PINTEREST_TOKEN_URL, headers=headers, data=payload, timeout=HTTP_TIMEOUT)
+        resp = session.post(PINTEREST_TOKEN_URL, headers=headers, data=payload, timeout=HTTP_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         new_access = data["access_token"]
@@ -145,7 +147,7 @@ def get_all_pins(access_token, page_size=100):
         params = {"page_size": page_size}
         if bookmark:
             params["bookmark"] = bookmark
-        resp = requests.get(f"{PINTEREST_API_BASE}/pins", headers=headers, params=params, timeout=HTTP_TIMEOUT)
+        resp = session.get(f"{PINTEREST_API_BASE}/pins", headers=headers, params=params, timeout=HTTP_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         pins.extend(data.get("items", []))
@@ -159,13 +161,13 @@ def get_pinterest_pin_analytics_csv(username_id,pin_id, access_token):
     headers = {"Authorization": f"Bearer {access_token}"}
     end_date = _utcnow()
     start_date = end_date - timedelta(hours=24)
-    pin_resp = requests.get(f"{PINTEREST_API_BASE}/pins/{pin_id}", headers=headers, timeout=HTTP_TIMEOUT)
+    pin_resp = session.get(f"{PINTEREST_API_BASE}/pins/{pin_id}", headers=headers, timeout=HTTP_TIMEOUT)
     published_at = ""
     if pin_resp.ok:
         published_at = pin_resp.json().get("created_at", "")
     else:
         logger.warning(f"pin lookup failed for {pin_id} [{pin_resp.status_code}]: {pin_resp.text}")
-    analytics_resp = requests.get( f"{PINTEREST_API_BASE}/pins/{pin_id}/analytics", headers=headers, params={ "start_date": start_date.strftime("%Y-%m-%d"), "end_date": end_date.strftime("%Y-%m-%d"), "metric_types": METRIC_TYPES, "app_types": "ALL", "split_field": "NO_SPLIT",}, timeout=HTTP_TIMEOUT)
+    analytics_resp = session.get( f"{PINTEREST_API_BASE}/pins/{pin_id}/analytics", headers=headers, params={ "start_date": start_date.strftime("%Y-%m-%d"), "end_date": end_date.strftime("%Y-%m-%d"), "metric_types": METRIC_TYPES, "app_types": "ALL", "split_field": "NO_SPLIT",}, timeout=HTTP_TIMEOUT)
     metrics = {}
     if analytics_resp.ok:
         bucket = analytics_resp.json().get("all", {})
@@ -182,7 +184,7 @@ def get_pins_analytics(access_token, pin_ids, metric_types="IMPRESSION,SAVE,PIN_
     for i in range(0, len(pin_ids), 100):
         chunk = pin_ids[i:i + 100]
         params = { "pin_ids": ",".join(chunk), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "metric_types": metric_types, }
-        resp = requests.get(f"{PINTEREST_API_BASE}/pins/analytics", headers=headers, params=params, timeout=HTTP_TIMEOUT)
+        resp = session.get(f"{PINTEREST_API_BASE}/pins/analytics", headers=headers, params=params, timeout=HTTP_TIMEOUT)
         resp.raise_for_status()
         results.update(resp.json())
     return results
@@ -263,7 +265,7 @@ def _create_image_pin(access, board_id, title, description, photo_bytes, content
     headers = {"Authorization": f"Bearer {access}", "Content-Type": "application/json"}
     resp = None
     try:
-        resp = requests.post(PIN_CREATE_URL, headers=headers, json=payload, timeout=UPLOAD_TIMEOUT)
+        resp = session.post(PIN_CREATE_URL, headers=headers, json=payload, timeout=UPLOAD_TIMEOUT)
         resp.raise_for_status()
         return {"status": "posted", "pin_id": resp.json().get("id")}
     except requests.HTTPError as e:
@@ -275,7 +277,7 @@ def _create_video_pin(access, board_id, title, description, file_path, timeout=V
     json_headers = {"Authorization": f"Bearer {access}", "Content-Type": "application/json"}
     resp = None
     try:
-        resp = requests.post( MEDIA_REGISTER_URL, headers=json_headers, json={"media_type": "video"}, timeout=HTTP_TIMEOUT )
+        resp = session.post( MEDIA_REGISTER_URL, headers=json_headers, json={"media_type": "video"}, timeout=HTTP_TIMEOUT )
         resp.raise_for_status()
         registration = resp.json()
         media_id = registration.get("media_id")
@@ -284,13 +286,13 @@ def _create_video_pin(access, board_id, title, description, file_path, timeout=V
         if not media_id or not upload_url or not upload_parameters:
             raise RuntimeError(f"registration response missing required fields: {registration}")
         with open(file_path, "rb") as fh:
-            resp = requests.post(upload_url, data=upload_parameters, files={"file": fh}, timeout=UPLOAD_TIMEOUT)
+            resp = session.post(upload_url, data=upload_parameters, files={"file": fh}, timeout=UPLOAD_TIMEOUT)
         if not resp.ok:
             raise RuntimeError(f"upload failed [{resp.status_code}]: {resp.text}")
         deadline = time.time() + timeout
         headers = {"Authorization": f"Bearer {access}"}
         while time.time() < deadline:
-            resp = requests.get(f"{MEDIA_REGISTER_URL}/{media_id}", headers=headers, timeout=HTTP_TIMEOUT)
+            resp = session.get(f"{MEDIA_REGISTER_URL}/{media_id}", headers=headers, timeout=HTTP_TIMEOUT)
             resp.raise_for_status()
             status = resp.json().get("status")
             if status == "succeeded":
@@ -302,7 +304,7 @@ def _create_video_pin(access, board_id, title, description, file_path, timeout=V
             raise RuntimeError(f"video processing timed out after {timeout}s for media_id={media_id}")
         payload = { "title": title, "description": description, "board_id": board_id, "media_source": { "source_type": "video_id", "media_id": media_id, }, }
         payload = {k: v for k, v in payload.items() if v is not None}
-        resp = requests.post(PIN_CREATE_URL, headers=json_headers, json=payload, timeout=HTTP_TIMEOUT)
+        resp = session.post(PIN_CREATE_URL, headers=json_headers, json=payload, timeout=HTTP_TIMEOUT)
         resp.raise_for_status()
         return {"status": "posted", "pin_id": resp.json().get("id")}
     except requests.HTTPError as e:
@@ -353,8 +355,21 @@ def post_late(account_id , access_token , title, description, board_id,  typee ,
         logger.exception("post_late crashed")
         return False
     finally:
+        deleteFile(service ,drive_file_id)
         _remove_quietly(tmp_path)
     return results
+
+def deleteFile(service ,file_id):
+    if not service :
+        return False
+    if not file_id:
+        return False
+    try: 
+        service.files().delete(fileId=file_id).execute()
+    except Exception:
+        logger.warning(f"failed to delete drive file {file_id}")
+        return False
+    return True
 
 def _schedule_pin(access_token, title, description, board_id, timee, user_id, file_path, mimetype, account_id, typeee):
     service = dpp.get_drive_service(user_id)
@@ -400,9 +415,9 @@ def _finish(results, publish_now, access_tokens, kind, user_id=None):
         logger.info(f"{kind} posted for account {res['account']} pin {res.get('pin_id')}")
         if res.get("pin_id"):
             try:
-                xcccc(res["account"], access_token, res["pin_id"], kind)
+                pin_query(res["account"], access_token, res["pin_id"], kind)
             except Exception:
-                logger.exception(f"xcccc scheduling failed for {res['account']}")
+                logger.exception(f"pin_query scheduling failed for {res['account']}")
 
 def upload_pin_job(kind, access_tokens, title, description, board_id, publish_now, timee, user_id, account_ids,mime_prefix, suffix_default, size_limit, check_video):
     files = request.files.getlist("file")
@@ -516,7 +531,7 @@ def pinterest_callback():
         logger.warning(f"unable to delete verifier for {user_id} pinterest")
     basic_auth = base64.b64encode(f"{PINTEREST_APP_ID}:{PINTEREST_APP_SECRET}".encode()).decode()
     try:
-        token_resp = requests.post( PINTEREST_TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={ "grant_type": "authorization_code", "code": code, "redirect_uri": PINTEREST_REDIRECT_URI, "code_verifier": code_verifier, }, timeout=HTTP_TIMEOUT ).json()
+        token_resp = session.post( PINTEREST_TOKEN_URL, headers={"Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic_auth}"}, data={ "grant_type": "authorization_code", "code": code, "redirect_uri": PINTEREST_REDIRECT_URI, "code_verifier": code_verifier, }, timeout=HTTP_TIMEOUT ).json()
     except (requests.RequestException, ValueError):
         logger.exception("pinterest token exchange failed")
         return jsonify({"error": "token exchange failed, please reconnect"}), 502
@@ -528,7 +543,7 @@ def pinterest_callback():
         return jsonify({"error": "token exchange failed", "details": token_resp}), 400
     expire = (_utcnow() + timedelta(seconds=seconds)).isoformat()
     try:
-        about = requests.get( PINTEREST_USER_URL, headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT ).json()
+        about = session.get( PINTEREST_USER_URL, headers={"Authorization": f"Bearer {access_token}"}, timeout=HTTP_TIMEOUT ).json()
     except (requests.RequestException, ValueError):
         logger.exception("pinterest profile fetch failed")
         return jsonify({"error": "failed to fetch profile"}), 502
@@ -545,7 +560,7 @@ def pinterest_callback():
         return jsonify({"error": "token stored failed to save", "details": str(e)}), 500
     return redirect(homepage, code=302)
 
-@app.route("/pins-with-metrics", methods=["GET"])
+@app.route("/pins-with-metrics", methods=["POST"])
 def pins_with_metrics():
     data = request.get_json(silent=True) or {}
     username = request.args.get("username") or data.get("username")

@@ -1,5 +1,3 @@
-from googleapiclient.http import MediaFileUpload
-from googleapiclient.errors import HttpError
 import tempfile
 import os
 import Instagram.schedule_video as sccc
@@ -23,7 +21,7 @@ load_dotenv()
 import logging
 executor = ThreadPoolExecutor(max_workers=2)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-logger = logging.getLogger("drive_api")
+logger = logging.getLogger("instagram_api")
 app = Flask(__name__)
 frontend = os.environ.get("front_end")
 homepage = os.environ.get("homepage")
@@ -33,7 +31,7 @@ CORS(app, origins=[frontend], supports_credentials=True, methods=["GET", "POST",
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 limiter = Limiter(get_remote_address, app=app, default_limits=["20 per minute"])
 serializer = URLSafeTimedSerializer(app.secret_key)
-app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # means 300 MB is the maximum request size it could have 
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # means 100 MB is the maximum request size it could have 
 IG_APP_ID = os.getenv("IG_APP_ID")
 IG_APP_SECRET = os.getenv("IG_APP_SECRET")
 IG_REDIRECT_URI = os.getenv("IG_REDIRECT_URI")
@@ -51,10 +49,11 @@ MIN_STORY_SECONDS = 3
 MAX_VIDEO_SECONDS = 60 * 60
 MIN_VIDEO_SECONDS = 3
 MAX_CROUSAL_SECONDS = 59
-PHOTO_SIZE = 20 * 1024 * 1024
-STORY_SIZE = 180 * 1024 * 1024
-REEL_SIZE = 270 * 1024 * 1024
+PHOTO_SIZE = 10 * 1024 * 1024
+STORY_SIZE = 100 * 1024 * 1024
+REEL_SIZE = 100 * 1024 * 1024
 MAX_FAILURES = 3
+session = requests.Session()    
 
 def parse_datetime(value: str, require_tz: bool = True):
     if not value or not isinstance(value, str):
@@ -166,13 +165,6 @@ def deleteFile(service ,file_id):
         return False
     return True
 
-def rollback_drive(service, file_ids):
-    if not file_ids:
-        return
-    logger.info(f"rolling back {len(file_ids)} drive file(s)")
-    for file_id in file_ids:
-        deleteFile(service, file_id)
-
 def upload_files_to_drive(service, tmp_files):
     results = []
     uploaded_drive_ids = []
@@ -262,11 +254,13 @@ def _run_jobs(label, usernames, rows_by_username, tokench, post_fn, tmp_files, t
                 logger.exception(f"unable to post {label} for {user}")
         logger.info(f"{label} job finished: {successes} ok, {failures} failed")
         if successes == 0:
-            rollback_drive(service, drive_ids)
+            for drive_id in drive_ids:
+                deleteFile(service, drive_ids)
     except Exception:
         logger.exception(f"{label} job crashed")
         if service and drive_ids:
-            rollback_drive(service, drive_ids)
+            for drive_id in drive_ids:
+                deleteFile(service, drive_ids)
 
 @app.route("/auth/login", methods=["POST"])
 @limiter.limit("10 per minute")
@@ -305,18 +299,18 @@ def instagram_callback():
         logger.warning("instagram callback invalid state")
         return jsonify({"error": "invalid state"}), 400
     try:
-        token_resp = requests.post("https://api.instagram.com/oauth/access_token",data={"client_id": IG_APP_ID, "client_secret": IG_APP_SECRET,"grant_type": "authorization_code","redirect_uri": IG_REDIRECT_URI, "code": code},timeout=10,).json()
+        token_resp = session.post("https://api.instagram.com/oauth/access_token",data={"client_id": IG_APP_ID, "client_secret": IG_APP_SECRET,"grant_type": "authorization_code","redirect_uri": IG_REDIRECT_URI, "code": code},timeout=10,).json()
         short_token = token_resp.get("access_token")
         if not short_token:
             logger.error("instagram token exchange failed")
             return jsonify({"error": "token exchange failed", "details": token_resp}), 400
-        long_resp = requests.get("https://graph.instagram.com/access_token",params={"grant_type": "ig_exchange_token", "client_secret": IG_APP_SECRET,"access_token": short_token},timeout=10,).json()
+        long_resp = session.get("https://graph.instagram.com/access_token",params={"grant_type": "ig_exchange_token", "client_secret": IG_APP_SECRET,"access_token": short_token},timeout=10,).json()
         long_token = long_resp.get("access_token")
         seconds = long_resp.get("expires_in")
         if not long_token or not seconds:
             logger.error("instagram long token exchange failed")
             return jsonify({"error": "long token exchange failed", "details": long_resp}), 400
-        about = requests.get("https://graph.instagram.com/me",params={"fields": "id,username,account_type,media_count", "access_token": long_token},timeout=10,).json()
+        about = session.get("https://graph.instagram.com/me",params={"fields": "id,username,account_type,media_count", "access_token": long_token},timeout=10,).json()
     except requests.RequestException as e:
         logger.exception("instagram request failed")
         return jsonify({"error": "instagram request failed", "details": str(e)}), 502
@@ -345,7 +339,7 @@ def get_instagram_posts():
     params = {"fields": fields, "access_token": access_token}
     posts = []
     while url:
-        resp = requests.get(url, params=params).json()
+        resp = session.get(url, params=params).json()
         if "error" in resp:
             logger.error(f"posts fetch error for {account_id}: {resp['error']}")
             return jsonify(resp), 400

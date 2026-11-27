@@ -30,6 +30,7 @@ RETRYABLE_IG_ERROR_CODES = {4, 17, 32}   # IG rate-limit / throttling codes
 ALLOWED_URL_SCHEMES = {"https"}
 TABLE_NAME = "instagram"
 GRAPH_BASE = "https://graph.instagram.com"
+session = requests.Session()    
 
 def _redact(text: str, access_token: str = None) -> str:
     if access_token:
@@ -44,7 +45,7 @@ def _validate_media_url(url: str) -> None:
         raise ValueError(f"'{url}' is not a valid absolute URL.")
 
 def refresh_token(token, user_id, access_token):
-    resp = requests.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_access_token", "access_token": access_token},).json()
+    resp = session.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_access_token", "access_token": access_token},).json()
     new_token = resp.get("access_token")
     seconds = resp.get("expires_in")
     if new_token and seconds:
@@ -54,7 +55,7 @@ def refresh_token(token, user_id, access_token):
     return access_token
 
 def refresh_token11( IG_user_id, access_token):
-    resp = requests.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_access_token", "access_token": access_token},).json()
+    resp = session.get("https://graph.instagram.com/refresh_access_token",params={"grant_type": "ig_refresh_access_token", "access_token": access_token},).json()
     new_token = resp.get("access_token")
     seconds = resp.get("expires_in")
     if new_token and seconds:
@@ -145,7 +146,7 @@ def _check_caption(caption: str) -> str:
 
 def get_media_thumbnail(access_token, media_id, timeout=10):
     try:
-        resp = requests.get(f"{GRAPH_BASE}/{media_id}",params={"fields": "media_type,media_url,thumbnail_url","access_token": access_token,},timeout=timeout,)
+        resp = session.get(f"{GRAPH_BASE}/{media_id}",params={"fields": "media_type,media_url,thumbnail_url","access_token": access_token,},timeout=timeout,)
         data = resp.json()
     except (requests.RequestException, ValueError) as e:
         logger.warning(f"thumbnail request failed for media {media_id}: {e}")
@@ -190,7 +191,8 @@ def post_photo(timmmm,access_token: str, ig_user_id: str, image_url: str, captio
     if not publish:
         sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container('photo', access_token, ig_user_id, creation_id)
+    media_id = publish_container('photo', access_token, ig_user_id, creation_id)
+    return post_query(ig_user_id,access_token,media_id,"photo")
 
 def post_video(timmmm,access_token: str, ig_user_id: str, video_url: str, media_size: int, caption: str = "", as_reel: bool = True, cover_url: str = None,publish: bool = True, media_duration: int = 0, comment = "" , message = "") -> str:
     _validate_media_url(video_url)
@@ -226,7 +228,8 @@ def post_video(timmmm,access_token: str, ig_user_id: str, video_url: str, media_
     if not publish:
         sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container("video", access_token, ig_user_id, creation_id)
+    media_id = publish_container("video", access_token, ig_user_id, creation_id)
+    return post_query(ig_user_id,access_token,media_id,"video")
  
 def post_carousel(timmmm,access_token: str, ig_user_id: str,   media_size: list[int], media_duration: list[int], media_urls: list[str], is_video: list[bool], caption: str = "", publish: bool = True,comment = "" , message = "" ) -> str:
     if not isinstance(media_duration, list):
@@ -277,7 +280,8 @@ def post_carousel(timmmm,access_token: str, ig_user_id: str,   media_size: list[
     if not publish:
         sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container('carousel', access_token, ig_user_id, creation_id)
+    media_id = publish_container('carousel', access_token, ig_user_id, creation_id)
+    return post_query(ig_user_id,access_token,media_id,"carousel")
 
 def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, media_url: str, is_video: bool = False, publish: bool = True, media_duration: int = 0) -> str:
     _validate_media_url(media_url)
@@ -308,7 +312,8 @@ def post_story( timmmm,access_token: str, ig_user_id: str, media_size: int, medi
     if not publish:
         sccc.insert_time(ig_user_id, creation_id, timmmm, access_token)
         return creation_id
-    return publish_container("story", access_token, ig_user_id, creation_id)
+    media_id = publish_container("story", access_token, ig_user_id, creation_id)
+    return story_query(ig_user_id,access_token,media_id,"story")
 
 def get_media_insights(media_id, access_token, story ):
     metrics = ("views","reach", "replies","shares","likes","navigation","profile_activity") if story else ("views","reach","likes","comments","saved","shares","total_interactions","profile_activity","follows","caption","timestamp")    
@@ -317,7 +322,7 @@ def get_media_insights(media_id, access_token, story ):
     url = f"{BASE_URL}/{media_id}/insights"
     params = {"metric": ",".join(metrics), "access_token": access_token}
     try:
-        response = requests.get(url, params=params, timeout=5)
+        response = session.get(url, params=params, timeout=5)
         payload = response.json()
     except requests.RequestException as e:
         return {"success": False, "data": None, "error": f"request failed for {media_id}: {e}"}
@@ -344,7 +349,7 @@ def reply_to_comment(comment_id, message, access_token):
     url = f"{BASE_URL}/{comment_id}/replies"
     params = {"message": message, "access_token": access_token}
     try:
-        response = requests.post(url, params=params, timeout=5)
+        response = session.post(url, params=params, timeout=5)
         payload = response.json()
     except requests.RequestException as e:
         return {"success": False, "data": None, "error": f"request failed for {comment_id}: {e}"}
@@ -366,7 +371,7 @@ def send_message(recipient_id, message, access_token):
     params = {"access_token": access_token}
     body = {"recipient": {"id": recipient_id},"message": {"text": message}}
     try:
-        response = requests.post(url, params=params, json=body, timeout=5)
+        response = session.post(url, params=params, json=body, timeout=5)
         payload = response.json()
     except requests.RequestException as e:
         return {"success": False, "data": None, "error": f"request failed for {recipient_id}: {e}"}
@@ -383,43 +388,40 @@ def send_message(recipient_id, message, access_token):
 def story_schedule(ig_user_id,hour,media_id,access_token):
     access_token = refresh_token11(ig_user_id,access_token)
     one_hour_before = (datetime.now(timezone.utc)).isoformat()
-    meta_resp = requests.get(f"https://graph.instagram.com/{media_id}", params={ "fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
-    insights_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "views,reach,replies,shares,follows","access_token": access_token,},timeout=10,).json()
-    nav_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "navigation","breakdown": "story_navigation_action_type","access_token": access_token,},timeout=10,).json()
-    profile_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "profile_activity","breakdown": "action_type","access_token": access_token,},timeout=10,).json()
+    meta_resp = session.get(f"https://graph.instagram.com/{media_id}", params={ "fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
+    insights_resp = session.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "views,reach,replies,shares,follows","access_token": access_token,},timeout=10,).json()
+    nav_resp = session.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "navigation","breakdown": "story_navigation_action_type","access_token": access_token,},timeout=10,).json()
+    profile_resp = session.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": "profile_activity","breakdown": "action_type","access_token": access_token,},timeout=10,).json()
     flat_metrics = {item["name"]: item["values"][0]["value"] for item in insights_resp.get("data", [])}
     return f'{media_id},{flat_metrics.get("views")},,{flat_metrics.get("reach")},{flat_metrics.get("replies")},{flat_metrics.get("shares")},{nav_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{flat_metrics.get("follows")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{hour},{meta_resp.get("thumbnail_url")},{one_hour_before}'
 
 def publish_container(typee,access_token: str, ig_user_id: str, creation_id: str) -> str:
     access_token = refresh_token11(ig_user_id,access_token)
     published = _post(f"{ig_user_id}/media_publish", {"creation_id": creation_id, "access_token": access_token})
-    if published["id"] :
-        scccc(user_id=ig_user_id, access_token=access_token,media_id=published["id"],typee=typee,)
-    return published["id"]
+    return published["id"] if published["id"] else None 
 
 def get_media_analytics(ig_user_id , media_id,access_token):
     access_token = refresh_token11(ig_user_id,access_token)
     one_hour_before = (datetime.now(timezone.utc)).isoformat()
-    meta_resp = requests.get(f"https://graph.instagram.com/{media_id}",params={"fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
+    meta_resp = session.get(f"https://graph.instagram.com/{media_id}",params={"fields": "id,media_type,media_product_type,thumbnail_url,timestamp,permalink", "access_token": access_token,},timeout=10,).json()
     media_type = meta_resp.get("media_type")
     flat_metrics_list = ["views", "saved", "shares", "total_interactions", "follows"]
     if media_type == "VIDEO" or meta_resp.get("media_product_type") == "REELS":
         flat_metrics_list += ["likes", "comments"]
-    insights_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": ",".join(flat_metrics_list),"access_token": access_token,},timeout=10,).json()
+    insights_resp = session.get(f"https://graph.instagram.com/{media_id}/insights",params={"metric": ",".join(flat_metrics_list),"access_token": access_token,},timeout=10,).json()
     flat_metrics = {item["name"]: item["values"][0]["value"] for item in insights_resp.get("data", [])}
-    profile_resp = requests.get(f"https://graph.instagram.com/{media_id}/insights", params={"metric": "profile_activity", "breakdown": "action_type", "access_token": access_token,},timeout=10,).json()
+    profile_resp = session.get(f"https://graph.instagram.com/{media_id}/insights", params={"metric": "profile_activity", "breakdown": "action_type", "access_token": access_token,},timeout=10,).json()
     return f'{media_id},{flat_metrics.get("views")},{flat_metrics.get("likes")},{flat_metrics.get("comments")},{flat_metrics.get("saved")},{flat_metrics.get("shares")},{flat_metrics.get("total_interactions")},{profile_resp.get("data", [{}])[0].get("total_value", {}).get("breakdowns", [])},{one_hour_before},{flat_metrics.get("follows")},{meta_resp.get("thumbnail_url")}'
 
-def scccc(user_id,access_token,media_id,typee):
+def story_query(user_id,access_token,media_id,typee):
     for i in range(22):
         timesss = (datetime.now(timezone.utc) + timedelta(hours=i+1)).isoformat()
         sccc.insert__story(user_id, timesss, access_token,media_id,i,typee)
 
-def xcccc(user_id,access_token,media_id,typee):
+def post_query(user_id,access_token,media_id,typee):
     for i in range(10): 
         timesss = (datetime.now(timezone.utc) + timedelta(days=(i))).isoformat()
         sccc.insert__story1(user_id, timesss, access_token,media_id,typee)
-
 
 if __name__ == "__main__":
     print("hi")
