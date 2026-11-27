@@ -1,3 +1,4 @@
+from moviepy import VideoFileClip
 import database.UserDB as dbimp
 import os
 import re
@@ -8,11 +9,13 @@ from flask_cors import CORS
 import limit as lmmm
 import json
 from flask import Flask, request, jsonify, redirect
+import tempfile
 from datetime import datetime, timezone, timedelta
 import Instagram.schedule_video as sccc
 import Drive.dep as dpp
 import logging
 from flask_limiter import Limiter
+import magic
 from flask_limiter.util import get_remote_address
 from concurrent.futures import ThreadPoolExecutor
 import authnew as au
@@ -31,14 +34,22 @@ if not app.secret_key:
     app.secret_key = os.urandom(32).hex()
 serializer = URLSafeTimedSerializer(app.secret_key)
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
-app.config["MAX_CONTENT_LENGTH"] = 65 * 1024 * 1024  # means 65 MB is the maximum request size it could have
+app.config["MAX_CONTENT_LENGTH"] = 70 * 1024 * 1024  # means 70 MB is the maximum request size it could have
 THREADS_TABLE_NAME = "threads"
 THREADS_APP_ID = os.environ.get("Threads_app_id")
+IMAGE_MIME_TYPE = {"image/jpeg","image/png","image/webp"}
+VIDEO_MIME_TYPE = {"video/mp4","video/quicktime",}
+ALLOWED_MIME_TYPES = IMAGE_MIME_TYPE | VIDEO_MIME_TYPE
 executor = ThreadPoolExecutor(max_workers=4)
 THREADS_APP_SECRET = os.environ.get("Threads_app_secrects")
+MEDIA_EXTENSION = (".mp4", ".mov", ".avi", ".mkv", ".webm",".jpg", ".png","jpeg")
 THREADS_REDIRECT_URI = os.environ.get("THREADS_REDIRECT_URI")
 BASE_URL = os.environ.get("BASE_URL")
 MAX_FAILURE = 3
+MAX_VIDEO_DURATION = 299
+MAX_VIDEO_SIZE = 40 * 1024 * 1024
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+MAX_FILE_SIZE = 50 * 1024 * 1024
 STATE_MAX_AGE = 600  # seconds
 REQ_TIMEOUT = 15  # seconds, every outgoing request gets this
 THREADS_SCOPES = "threads_basic,threads_content_publish,threads_manage_insights,threads_manage_replies,threads_read_replies"
@@ -211,8 +222,7 @@ def get_thread_metrics_csv(user_id: str, media_id: str, access_token: str) -> st
                 followers_count = values[0].get("value", 0)
             else:  # followers_count comes back as total_value
                 followers_count = (entry.get("total_value") or {}).get("value", 0)
-    v, l, r, rp, s = (metrics["views"], metrics["likes"], metrics["replies"],
-                       metrics["reposts"], metrics["shares"])
+    v, l, r, rp, s = (metrics["views"], metrics["likes"], metrics["replies"],metrics["reposts"], metrics["shares"])
     return f"{media_id},{v},{l},{r},{rp},{s},{followers_count}"
 
 def xcccc(user_id, access_token, media_id, typee):
@@ -516,7 +526,7 @@ def threads_callback():
     logger.info("threads account %s connected for user %s", username, user_id)
     return redirect(homepage or frontend or "/", code=302)
 
-@app.route("/posts-with-metrics", methods=["GET", "POST"])  # browsers cannot send a body with GET, POST works too
+@app.route("/posts-with-metrics", methods=["POST"])  # browsers cannot send a body with GET, POST works too
 def posts_with_metrics():
     data = request.get_json(silent=True) or {}
     username = data.get("username")
@@ -545,7 +555,56 @@ def posts_with_metrics():
         combined.append({ "media_id": mid, "text": m.get("text"), "permalink": m.get("permalink"), "created_at": m.get("timestamp"), "media_url": m.get("media_url"), "metrics": insights.get(mid, {}),})
     return jsonify({"count": len(combined), "posts": combined}), 200
 
-def _queue_post(data, image_url=None, video_url=None):
+def post_text(request, publish_now, comment, message, tokench, timee, typepost):
+    user_id = tokench["user_id"]
+    media_url = None
+    upload_tmp_path = None
+    if typepost in ("image", "video"):
+        files = request.files.getlist("file")
+        if len(files) != 1 or not files[0].filename:
+            logger.error(" exactly one file required (form-data field: file)")
+        uploaded_file = files[0]
+        uploaded_file.stream.seek(0, os.SEEK_END)
+        size = uploaded_file.stream.tell()
+        uploaded_file.stream.seek(0)
+        if size > MAX_FILE_SIZE:
+            logger.error(f"file exceeds max size of {MAX_FILE_SIZE} bytes")
+        try:
+            suffix = os.path.splitext(uploaded_file.filename)[1].lower() or ".mp4"
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                    uploaded_file.save(tmp.name)
+                    upload_tmp_path = tmp.name
+            except Exception:
+                logger.exception("failed to save the tempfile for user %s", user_id)
+                logger.error("failed to process uploaded file")
+            current_mime = magic.from_file(upload_tmp_path, mime=True)
+            if current_mime not in ALLOWED_MIME_TYPES:
+                logger.error(f"unsupported file type: {current_mime}")
+            service = dpp.get_drive_service(user_id)
+            created_file, err = dpp.upload_path_to_drive(service,upload_tmp_path,os.path.basename(upload_tmp_path),current_mime,)
+            if err or not created_file:
+                logger.error("unable to upload the file to drive for user %s: %s", user_id, err)
+                logger.error("media upload failed")
+            media_url = created_file.get("webContentLink")
+            if not media_url:
+                logger.error("drive returned no webContentLink for user %s", user_id)
+                logger.error("media upload failed")
+        finally:
+            if upload_tmp_path and os.path.exists(upload_tmp_path):
+                os.remove(upload_tmp_path)
+    try:
+        access_tokens, threads_user_ids, text, err = _authenticate(request.form, tokench)
+        if err:
+            logger.error("unable to get the access token for %s", user_id)
+        thread_ids = process_threads_text_posts(access_tokens,threads_user_ids,publish_now,timee,text,comment,message,user_id,typepost,media_url if typepost == "image" else None,media_url if typepost == "video" else None,)
+        logger.info("%s post done for %s, ids=%s", typepost, user_id, thread_ids)
+    except Exception:
+        logger.exception("unable to post the %s for %s", typepost, user_id)
+
+@app.route("/post/text", methods=["POST"])
+def post_threads_text():
+    data = request.get_json(silent=True) or {}
     tokench = au.process(token=data.get("token"))
     if not tokench["status"]:
         return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
@@ -553,55 +612,94 @@ def _queue_post(data, image_url=None, video_url=None):
     timee, err = _resolve_time(publish_now, data.get("time"))
     if err:
         return err
-    executor.submit(post_text, data, publish_now, data.get("comment"), data.get("message"), tokench, timee, image_url, video_url)
+    executor.submit(post_text, request, publish_now, data.get("comment"), data.get("message"), tokench, timee,"text")
     return jsonify({"success": True}), 200
-
-def post_text(data, publish_now, comment, message, tokench, timee, image_url, video_url):
-    try:
-        access_tokens, threads_user_ids, text, err = _authenticate(data, tokench)
-        if err:
-            logger.error("unable to get the access token for %s", tokench["user_id"])
-            return
-        tpyee = "image" if image_url else "video" if video_url else "text"  # was always "text"
-        thread_ids = process_threads_text_posts(access_tokens, threads_user_ids, publish_now, timee, text, comment, message, tokench["user_id"], tpyee, image_url if image_url else None, video_url if video_url else None)
-        logger.info("%s post done for %s, ids=%s", tpyee, tokench["user_id"], thread_ids)
-    except Exception:
-        logger.exception("unable to post the %s for %s", "post", tokench.get("user_id"))
-
-@app.route("/post/text", methods=["POST"])
-def post_threads_text():
-    data = request.get_json(silent=True) or {}
-    return _queue_post(data)
 
 @app.route("/post/image", methods=["POST"])
 def post_threads_image():
     data = request.form
-    image_url = data.get("image_url")
-    if not image_url:
-        return jsonify({"error": "image_url is required"}), 400
-    return _queue_post(data, image_url=image_url)
+    tokench = au.process(token=data.get("token"))
+    if not tokench["status"]:
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
+    publish_now = str(data.get("publish")).strip().lower() == "true"
+    timee, err = _resolve_time(publish_now, data.get("time"))
+    if err:
+        return err
+    executor.submit(post_text, request, publish_now, data.get("comment"), data.get("message"), tokench, timee,"image")
+    return jsonify({"success": True}), 200
 
 @app.route("/post/video", methods=["POST"])
 def post_threads_video():
     data = request.form
-    video_url = data.get("video_url")
-    if not video_url:
-        return jsonify({"error": "video_url is required"}), 400
-    return _queue_post(data, video_url=video_url)
+    tokench = au.process(token=data.get("token"))
+    if not tokench["status"]:
+        return jsonify({"status": "failed", "reason": tokench["reason"]}), 403
+    publish_now = str(data.get("publish")).strip().lower() == "true"
+    timee, err = _resolve_time(publish_now, data.get("time"))
+    if err:
+        return err
+    executor.submit(post_text, request, publish_now, data.get("comment"), data.get("message"), tokench, timee,"video")
+    return jsonify({"success": True}), 200
 
-def post_carousel(access_tokens, threads_user_ids, items, text, publish_now, timee, comment, message, tokench):
+def post_carousel(access_tokens, threads_user_ids, text, publish_now, timee, comment, message, user_id):
+    files = request.files.getlist("file")
+    if not (2 <= len(files) <= 10):
+        logger.error("carousel needs between 2 and 10 files (form-data field: file)")
+    tmp_paths = []
     try:
-        neww = datetime.now(timezone.utc) + timedelta(hours=24)
-        newww = datetime.now(timezone.utc) + timedelta(days=5)
-        if not publish_now and timee > neww and timee < newww:
-            combi = f"{comment},1234,+++x{message}"
-            sccc.insert_post( user_id=json.dumps(threads_user_ids), schedled_time=timee, access_token="", typeee="carousal_later1", text1=combi, text2=tokench["user_id"], text3=text, media_id=json.dumps(items))
-            logger.info("carousel job added for %s accounts of user %s", len(threads_user_ids), tokench["user_id"])
-            return
-        thread_ids = process_threads_carousel(access_tokens, threads_user_ids, items, text, publish_now, timee, comment, message, tokench["user_id"])
-        logger.info("carousel done for %s, ids=%s", tokench["user_id"], thread_ids)
+        validated = []  # (path, mime)
+        for uploaded_file in files:
+            uploaded_file.stream.seek(0, os.SEEK_END)
+            size = uploaded_file.stream.tell()
+            uploaded_file.stream.seek(0)
+            suffix = os.path.splitext(uploaded_file.filename or "")[1].lower()
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                    tmp_paths.append(tmp.name)      # track immediately so cleanup always works
+                    uploaded_file.save(tmp.name)
+                    path = tmp.name
+            except Exception:
+                logger.exception("failed to save tempfile for user %s", user_id)
+                logger.error("failed to process uploaded file")
+            mime = magic.from_file(path, mime=True)
+            if mime not in ALLOWED_MIME_TYPES:
+                logger.error(f"unsupported file type: {mime}")
+            if mime in IMAGE_MIME_TYPE and size > MAX_IMAGE_SIZE:
+                logger.error(f"image too large, max {MAX_IMAGE_SIZE}")
+            if mime in VIDEO_MIME_TYPE:
+                if size > MAX_VIDEO_SIZE:
+                    logger.error(f"video too large, max {MAX_VIDEO_SIZE}")
+                with VideoFileClip(path) as video:
+                    if video.duration > MAX_VIDEO_DURATION:
+                        logger.error("video duration too long")
+            validated.append((path, mime))
+        service = dpp.get_drive_service(user_id)
+        media_urls = []
+        for path, mime in validated:
+            created_file, err = dpp.upload_path_to_drive(service, path, os.path.basename(path), mime)
+            media_url = created_file.get("webContentLink") if created_file else None
+            if err or not media_url:
+                logger.error("drive upload failed for user %s: %s", user_id, err)
+            media_urls.append(media_url)
+    finally:
+        for p in tmp_paths:
+            try:
+                os.remove(p)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                logger.warning("could not remove temp file %s", p)
+    try:
+        now = datetime.now(timezone.utc)
+        if not publish_now and now + timedelta(hours=24) < timee < now + timedelta(days=5):
+            combi = json.dumps({"comment": comment, "message": message})  # instead of the delimiter hack
+            sccc.insert_post(user_id=json.dumps(threads_user_ids),schedled_time=timee,access_token="",typeee="carousal_later1",text1=combi,text2=user_id,text3=text,media_id=json.dumps(media_urls),)
+            logger.info("carousel job added for %s accounts of user %s", len(threads_user_ids), user_id)
+        thread_ids = process_threads_carousel(access_tokens, threads_user_ids, media_urls, text,publish_now, timee, comment, message, user_id,)
+        logger.info("carousel done for %s, ids=%s", user_id, thread_ids)
     except Exception:
-        logger.exception("carousel post failed for %s", tokench.get("user_id"))
+        logger.exception("carousel post failed for %s", user_id)
+        logger.error("carousel post failed")
 
 @app.route("/post/carousel", methods=["POST"])
 def post_threads_carousel():
@@ -612,23 +710,12 @@ def post_threads_carousel():
     access_tokens, threads_user_ids, text, err = _authenticate(data, tokench)
     if err:
         return err
-    items = data.get("items", [])
-    if isinstance(items, str):  # form fields always come as a string
-        try:
-            items = json.loads(items)
-        except ValueError:
-            return jsonify({"error": "items must be a json list"}), 400
-    if not isinstance(items, list) or not items:
-        return jsonify({"error": "items is required for carousel posts"}), 400
-    if len(items) < 2 or len(items) > 20:
-        return jsonify({"error": "carousel requires between 2 and 20 items"}), 400
     publish_now = str(data.get("publish")).strip().lower() == "true"
     timee, terr = _resolve_time(publish_now, data.get("time"))
     if terr:
         return terr
-    executor.submit(post_carousel, access_tokens, threads_user_ids, items, text, publish_now, timee, data.get("comment"), data.get("message"), tokench)  # carousel can take minutes, so not in the request
-    return jsonify({"success": True, "Added": len(threads_user_ids)}), 200
-
+    executor.submit(post_carousel, access_tokens, threads_user_ids, text, publish_now, timee, data.get("comment"), data.get("message"), tokench["user_id"])  # carousel can take minutes, so not in the request
+    return jsonify({"success": "added"}), 200
 
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1", port=5000)
