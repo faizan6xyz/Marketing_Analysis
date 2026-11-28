@@ -62,41 +62,6 @@ def get_video_duration(file_path):
     with VideoFileClip(file_path) as video:
         return video.duration
 
-def get_file_and_upload_to_drive(service):
-    uploaded_file = request.files.get("file")
-    if uploaded_file is None or uploaded_file.filename == "":
-        return None, jsonify({"error": "no file provided"}), 400
-    if uploaded_file.mimetype not in ALLOWED_VIDEO_MIMETYPES:
-        return None, jsonify({"error": f"unsupported file type: {uploaded_file.mimetype}"}), 400
-    uploaded_file.stream.seek(0, os.SEEK_END)
-    uploaded_file.stream.seek(0)
-    make_public = True
-    tmp_path = None
-    drive_file_id = None
-    try:
-        suffix = os.path.splitext(uploaded_file.filename)[1] or ".mp4"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            uploaded_file.save(tmp.name)
-            tmp_path = tmp.name
-            created_file , err = dpp.upload_path_to_drive(service, tmp_path, uploaded_file.filename,uploaded_file.mimetype)
-    #     file_metadata = {"name": uploaded_file.filename}
-    #     media_upload = MediaFileUpload(tmp_path, mimetype=uploaded_file.mimetype, resumable=True)
-    #     created_file = service.files().create(body=file_metadata, media_body=media_upload,fields="id, name, webViewLink, webContentLink, mimeType",).execute()
-    #     drive_file_id = created_file["id"]
-    #     if make_public:
-    #         service.permissions().create( fileId=drive_file_id, body={"type": "anyone", "role": "reader"},).execute()
-    #     return drive_file_id, None, None
-    # except HttpError as e:
-    #     if drive_file_id:
-    #         try:
-    #             service.files().delete(fileId=drive_file_id).execute()
-    #         except HttpError:
-    #             pass
-    #     return None, jsonify({"error": str(e)}), 500
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
-
 def _to_aware_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
@@ -247,7 +212,15 @@ def post_later(channel_id, file_id, text1, text2, text3):
         return False
     user_id = rows[0]["id"]
     drive_service = dpp.get_drive_service(user_id)
-    tmp_path, mimetype, name = dpp.download_drive_file_to_temp(drive_service, file_id)
+    tmp_path = None
+    try:
+        tmp_path, mimetype, name = dpp.download_drive_file_to_temp(drive_service, file_id)
+    except Exception as e:
+        logger.error(f"unable to download the file {file_id} from the drive due to {e}")
+    try:
+        dpp.deleteFile(drive_service, file_id)
+    except Exception as e:
+        logger.error(f"downloaded {file_id} but failed to delete it from drive: {e}")
     if not tmp_path:
         logger.error(f"post_later: unable to download drive file {file_id}")
         return False
@@ -464,14 +437,14 @@ def upload():
 def upload_short_job(request , caption, description, tags, accounts, token, user_id, publish_now, timee):
     uploaded_file = request.files.get("file")
     if not uploaded_file or uploaded_file.filename == "":
-        return jsonify({"error": "file required (form-data field: file)"}), 400
+        logger.error("file required (form-data field: file)")
     if uploaded_file.mimetype not in ALLOWED_VIDEO_MIMETYPES:
-        return jsonify({"error": f"unsupported file type: {uploaded_file.mimetype}"}), 400
+        logger.error(f"unsupported file type: {uploaded_file.mimetype}")
     uploaded_file.stream.seek(0, os.SEEK_END)
     size = uploaded_file.stream.tell()
     uploaded_file.stream.seek(0)
     if size > MAX_VIDEO_SIZE:
-        return jsonify({"error": f"file exceeds max size of {MAX_VIDEO_SIZE} bytes"}), 400
+        logger.error( f"file exceeds max size of {MAX_VIDEO_SIZE} bytes")
     try:
         suffix = os.path.splitext(uploaded_file.filename)[1] or ".mp4"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -484,7 +457,7 @@ def upload_short_job(request , caption, description, tags, accounts, token, user
     try:
         if get_video_duration(upload_tmp_path) > MAX_SHORT_SECONDS:
             logger.info(f"video exceeds max short length of {MAX_SHORT_SECONDS} seconds for user {user_id}")
-            return
+            return 
         x = _upload_one_account(accounts, token, user_id, upload_tmp_path, uploaded_file.mimetype, caption, description, tags, publish_now, timee)
         if not  x :
             logger.info(f"fail to post the user shorts {accounts}")

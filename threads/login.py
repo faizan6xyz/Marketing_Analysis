@@ -678,6 +678,7 @@ def post_carousel(access_tokens, threads_user_ids, text, publish_now, timee, com
         for path, mime in validated:
             created_file, err = dpp.upload_path_to_drive(service, path, os.path.basename(path), mime)
             media_url = created_file.get("webContentLink") if created_file else None
+            file_id = created_file.get("id")
             if err or not media_url:
                 logger.error("drive upload failed for user %s: %s", user_id, err)
             media_urls.append(media_url)

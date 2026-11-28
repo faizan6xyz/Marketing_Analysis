@@ -183,8 +183,17 @@ def post_later(tpyee, account_id, text, text2 ,file_ids=None):
             drive_ids = json.loads(file_ids[0])
             typee = "photo_tweet" if tpyee == "photo_tweet_later" else "video_tweet"
             for drive_file_id in drive_ids:
-                tmp_path, mimetype, name = dpp.download_drive_file_to_temp(service, drive_file_id)
-                tmp_paths.append(tmp_path)
+                tmp_path = None
+                try:
+                    tmp_path, mimetype, name = dpp.download_drive_file_to_temp(service, drive_file_id)
+                except Exception as e:
+                    logger.error(f"unable to download the file {drive_file_id} from the drive due to {e}")
+                if tmp_path:
+                    try:
+                        dpp.deleteFile(service, drive_file_id)
+                    except Exception as e:
+                        logger.error(f"downloaded {drive_file_id} but failed to delete it from drive: {e}")
+                    tmp_paths.append(tmp_path)
             for acc_id in account_ids:
                 try:
                     access_token = refresh_x_token11(acc_id)

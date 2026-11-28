@@ -329,10 +329,18 @@ def post_late(account_id , access_token , title, description, board_id,  typee ,
         return False
     user_id = rows[0]["id"]
     service = dpp.get_drive_service(user_id)
-    tmp_path, mimetype, name = dpp.download_drive_file_to_temp(service, drive_file_id)
+    tmp_path = None
+    try:
+        tmp_path, mimetype, name = dpp.download_drive_file_to_temp(service, drive_file_id)
+    except Exception as e:
+        logger.error(f"unable to download the file {drive_file_id} from the drive due to {e}")
     if not tmp_path:
         logger.error(f"post_late: unable to download drive file {drive_file_id}")
         return False
+    try:
+        dpp.deleteFile(service, drive_file_id)
+    except Exception as e:
+        logger.error(f"downloaded {drive_file_id} but failed to delete it from drive: {e}")
     results = []
     failed_one = 0
     try:
@@ -432,12 +440,12 @@ def _finish(results, publish_now, access_tokens, kind, user_id=None):
 def upload_pin_job(kind, access_tokens, title, description, board_id, publish_now, timee, user_id, account_ids,mime_prefix, suffix_default, size_limit, check_video):
     files = request.files.getlist("file")
     if not files:
-        return jsonify({"error": f"a {mime_prefix} file is required"}), 400
+        logger.error(f"a {mime_prefix} file is required")
     if len(files) > 1:
-        return jsonify({"error": f"only one {mime_prefix} allowed per pin"}), 400
+        logger.error(f"only one {mime_prefix} allowed per pin")
     f = files[0]
     if not (f.mimetype or "").startswith(f"{mime_prefix}/"):
-        return jsonify({"error": "unsupported file type in upload"}), 400
+        logger.error("unsupported file type in upload")
     tmp_path = None
     try:
         suffix = os.path.splitext(f.filename or "")[1] or suffix_default
@@ -446,17 +454,17 @@ def upload_pin_job(kind, access_tokens, title, description, board_id, publish_no
             f.save(tmp_path)
         if os.path.getsize(tmp_path) > size_limit:
             _remove_quietly(tmp_path)
-            return jsonify({"error": f"{mime_prefix} exceeds max size"}), 400
+            logger.error(f"{mime_prefix} exceeds max size")
         if check_video:
             try:
                 video_length = get_video_duration(tmp_path)
             except Exception:
                 logger.exception("could not read video duration")
                 _remove_quietly(tmp_path)
-                return jsonify({"error": "invalid video file"}), 400
+                logger.error("invalid video file")
             if video_length > duation:
                 _remove_quietly(tmp_path)
-                return jsonify({"error": "video exceeds allowed duration or size"}), 400
+                logger.error("video exceeds allowed duration or size")
     except Exception:
         logger.exception(f"failed to queue {kind} upload for user {user_id}")
         _remove_quietly(tmp_path)
