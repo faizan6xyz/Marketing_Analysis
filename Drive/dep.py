@@ -45,7 +45,7 @@ table_name = "drive"
 APP_FOLDER = "Leo_Social"
 PLATFORM_FOLDERS = ["whatsapp", "instagram", "gmail", "youtube","x","pinterst","threads"]
 BASE_URL = os.environ.get("BASE_URL")
-SUBFOLDERS = "Analytics"
+SUBFOLDERS = "Analytics"    
 campaigns_content = "email,capaign_name,send_time,recieve_time,interest"
 campaigns_content1 = "phone_no,capaign_name,send_time,recieve_time,interest"
 campaigns_content2 = "media_id,views,likes,comments,saved,shares,total_interaction,profile_activity,time,follows,thumbnail,media_id,posted"
@@ -79,18 +79,29 @@ def mark_disconnected(user_id):
     dbimp.update_rows(table_name , {"connected" : 0 } , {"id" : user_id} )
 
 def download_drive_file_to_temp(drive_service, file_id):
-    meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
-    mimetype = meta.get("mimeType") or "video/*"
-    name = meta.get("name") or "video"
-    suffix = os.path.splitext(name)[1] or ".mp4"
-    media_request = drive_service.files().get_media(fileId=file_id)
-    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
-    with os.fdopen(fd, "wb") as tmp_file:
-        downloader = MediaIoBaseDownload(tmp_file, media_request, chunksize=10 * 1024 * 1024)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-    return tmp_path, mimetype, name
+    tmp_path = None
+    try:
+        meta = drive_service.files().get(fileId=file_id, fields="size,mimeType,name").execute()
+        mimetype = meta.get("mimeType") or "video/*"
+        name = meta.get("name") or "video"
+        suffix = os.path.splitext(name)[1] or ".mp4"
+        media_request = drive_service.files().get_media(fileId=file_id)
+        fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+        with os.fdopen(fd, "wb") as tmp_file:
+            downloader = MediaIoBaseDownload(tmp_file, media_request, chunksize=10 * 1024 * 1024)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+        if os.path.getsize(tmp_path) == 0:
+            raise RuntimeError(f"Downloaded file is empty: {name} ({file_id})")
+        return tmp_path, mimetype, name
+    except Exception as e:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise RuntimeError(f"Unable to download Drive file {file_id}: {e}") from e
 
 def upload_path_to_drive(service, file_path, filename, mimetype):
     make_public = True

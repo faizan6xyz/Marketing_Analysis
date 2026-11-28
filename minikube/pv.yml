@@ -5,7 +5,7 @@ metadata:
   name: server-volume
 spec:
   capacity:
-    storage: 110Gi
+    storage: 99Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain

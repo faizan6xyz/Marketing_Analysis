@@ -18,13 +18,13 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 70     # 70% of the 100m request
+          averageUtilization: 100     
     - type: Resource
       resource:
         name: memory
         target:
           type: AverageValue
-          averageValue: 300Mi
+          averageUtilization: 100
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 2
